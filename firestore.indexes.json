@@ -20,18 +20,44 @@
       "collectionGroup": "clients",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "searchTokens", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "clients",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "archived", "order": "ASCENDING" },
         { "fieldPath": "name", "order": "ASCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     },
     {
-      "collectionGroup": "users",
+      "collectionGroup": "clients",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "email", "order": "ASCENDING" },
-        { "fieldPath": "role", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
+        { "fieldPath": "archived", "order": "ASCENDING" },
+        { "fieldPath": "jobCount", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "clients",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "archived", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "historySearchScopes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "startTime", "order": "DESCENDING" }
       ]
     },
     {
@@ -62,7 +88,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "employeeIds", "arrayConfig": "CONTAINS" },
-        { "fieldPath": "endTime", "order": "ASCENDING" }
+        { "fieldPath": "startTime", "order": "ASCENDING" }
       ]
     },
     {
@@ -70,7 +96,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "employeeIds", "arrayConfig": "CONTAINS" },
-        { "fieldPath": "startTime", "order": "ASCENDING" }
+        { "fieldPath": "endTime", "order": "ASCENDING" }
       ]
     },
     {
@@ -93,8 +119,41 @@
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "employeeIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "startTime", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "endTime", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "clientId", "order": "ASCENDING" },
         { "fieldPath": "startTime", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "clientId", "order": "ASCENDING" },
+        { "fieldPath": "startTime", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "clientId", "order": "ASCENDING" },
+        { "fieldPath": "dayIndex", "order": "ASCENDING" }
       ]
     },
     {
@@ -115,6 +174,162 @@
     }
   ],
   "fieldOverrides": [
+    {
+      "collectionGroup": "appointments",
+      "fieldPath": "pictures",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "appointments",
+      "fieldPath": "employeeNames",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "appointments",
+      "fieldPath": "title",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "appointments",
+      "fieldPath": "notes",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "appointments",
+      "fieldPath": "materialsNeeded",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "appointments",
+      "fieldPath": "address",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "appointments",
+      "fieldPath": "clientName",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "appointments",
+      "fieldPath": "clientPhone",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "appointments",
+      "fieldPath": "seriesOpId",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "images",
+      "fieldPath": "url",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "images",
+      "fieldPath": "fileName",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clients",
+      "fieldPath": "contacts",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clients",
+      "fieldPath": "firstName",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clients",
+      "fieldPath": "lastName",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clients",
+      "fieldPath": "businessName",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clients",
+      "fieldPath": "mobile",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clients",
+      "fieldPath": "address",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clients",
+      "fieldPath": "apt",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clients",
+      "fieldPath": "city",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clients",
+      "fieldPath": "province",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clients",
+      "fieldPath": "country",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clients",
+      "fieldPath": "postalCode",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clients",
+      "fieldPath": "accessNotes",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clients",
+      "fieldPath": "onSiteManager",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clients",
+      "fieldPath": "billingTerms",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clients",
+      "fieldPath": "wave.problems",
+      "ttl": false,
+      "indexes": []
+    },
     {
       "collectionGroup": "appointments",
       "fieldPath": "clientId",
@@ -257,6 +472,24 @@
       ]
     },
     {
+      "collectionGroup": "appointmentRecountClaims",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" }
+      ]
+    },
+    {
+      "collectionGroup": "clientRecountClaims",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" }
+      ]
+    },
+    {
       "collectionGroup": "liveActivityTokens",
       "fieldPath": "expiresAt",
       "ttl": true,
@@ -282,6 +515,17 @@
       "indexes": [
         { "order": "ASCENDING", "queryScope": "COLLECTION" },
         { "order": "DESCENDING", "queryScope": "COLLECTION" }
+      ]
+    },
+    {
+      "collectionGroup": "presence",
+      "fieldPath": "updatedAt",
+      "ttl": false,
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" },
+        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION_GROUP" }
       ]
     }
   ]

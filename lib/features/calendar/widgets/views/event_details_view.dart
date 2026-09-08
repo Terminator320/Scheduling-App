@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:scheduling/core/analytics/analytics_providers.dart';
+import 'package:scheduling/core/analytics/analytics_screens.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
@@ -9,15 +10,19 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_edit_body.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_view_body.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
+import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
 class EventDetailsView extends ConsumerStatefulWidget {
   const EventDetailsView({
     required this.appointment,
+    required this.analyticsSource,
     super.key,
     // Defaults CLOSED — a default of true once exposed admin-only Edit/Cancel/
-    // Delete affordances to employees. Never re-add a `true` default.
+    // Delete affordances to employees.
     this.showActions = false,
     this.initialEditing = false,
     this.scrollController,
@@ -26,6 +31,9 @@ class EventDetailsView extends ConsumerStatefulWidget {
   });
 
   final AppointmentRecord appointment;
+
+  /// Which surface opened this sheet (see `AnalyticsSources`).
+  final String analyticsSource;
   final bool showActions;
   final bool initialEditing;
   final ScrollController? scrollController;
@@ -41,9 +49,18 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
   // these.
   AppointmentFormControllers? _editControllers;
 
+  /// `showActions` is this sheet's admin signal — it is exactly what gates
+  /// edit, cancel, push back and book again in [DetailsViewBody], so it is
+  /// what splits the catalog too.
+  late final _tour = TourSteps(
+    const FormTour(TourForm.jobDetails),
+    isAdmin: widget.showActions,
+  );
+
   @override
   void initState() {
     super.initState();
+    _logView();
     if (widget.initialEditing) {
       Future.microtask(() {
         if (!mounted) return;
@@ -56,6 +73,23 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
             .enterEditing();
       });
     }
+  }
+
+  /// One view per sheet open.
+  ///
+  /// The appointment's SHAPE goes out and nothing else — never its title,
+  /// client, address or notes. The role that opened it is already on every
+  /// event as the `user_role` user property, so it is not repeated here.
+  void _logView() {
+    final a = widget.appointment;
+    ref.read(analyticsServiceProvider)
+      ..logScreenView(AnalyticsScreens.appointmentDetails)
+      ..logAppointmentViewed(
+        source: widget.analyticsSource,
+        status: a.status,
+        isPersonal: a.isPersonal,
+        hasPhotos: a.pictureCount > 0,
+      );
   }
 
   AppointmentFormControllers _ensureControllers() {
@@ -112,17 +146,28 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
         onClose: _handleClose,
       );
     }
-    return DetailSheetListView(
-      scrollController: widget.scrollController,
-      showHandle: widget.showHandle,
-      handleGap: AppSpacing.sp8,
-      children: [
-        DetailsViewBody(
-          appointment: widget.appointment,
-          showActions: widget.showActions,
-          onClose: _handleClose,
-        ),
-      ],
+    // autoScroll: every target below the client block is off-fold on a phone,
+    // and showcase has to bring one into view before it can highlight it.
+    return FeatureTourHost(
+      scope: _tour.scope,
+      isAdmin: widget.showActions,
+      stepKeys: _tour.keys,
+      autoScroll: true,
+      child: DetailSheetListView(
+        scrollController: widget.scrollController,
+        showHandle: widget.showHandle,
+        handleGap: AppSpacing.sp8,
+        children: [
+          DetailsViewBody(
+            appointment: widget.appointment,
+            showActions: widget.showActions,
+            onClose: _handleClose,
+            // Closes with the draft; `showEventDetails` opens the add sheet.
+            onBookAgain: _handleClose,
+            tourWrap: _tour.stepIf,
+          ),
+        ],
+      ),
     );
   }
 }

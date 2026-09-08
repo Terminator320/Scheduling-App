@@ -28,46 +28,6 @@
   "@auth_finishSetup": {
     "description": "Primary button on the account setup screen"
   },
-  "auth_signedInAs": "SIGNED IN",
-  "@auth_signedInAs": {
-    "description": "Mono chip beside the locked email on the setup screen"
-  },
-  "auth_verifyEmailTitle": "Verify your email",
-  "@auth_verifyEmailTitle": {
-    "description": "Heading of the email-verification step on the setup screen"
-  },
-  "auth_verifyEmailBody": "Open the link we email you, then tap Check again. Setup can't finish until your address is verified.",
-  "@auth_verifyEmailBody": {
-    "description": "Explains the email-verification step on the setup screen"
-  },
-  "auth_sendVerificationEmail": "Send verification email",
-  "@auth_sendVerificationEmail": {
-    "description": "Button that sends the verification email for the first time"
-  },
-  "auth_resendVerificationEmail": "Resend email",
-  "@auth_resendVerificationEmail": {
-    "description": "Button that sends the verification email again"
-  },
-  "auth_verificationEmailSent": "Email sent. Check your inbox and your spam folder.",
-  "@auth_verificationEmailSent": {
-    "description": "Confirmation shown after the verification email is sent"
-  },
-  "auth_checkVerification": "Check again",
-  "@auth_checkVerification": {
-    "description": "Button that re-reads the account to pick up a just-clicked verification link"
-  },
-  "auth_emailNotVerifiedYet": "Not verified yet. Open the link in the email, then tap Check again.",
-  "@auth_emailNotVerifiedYet": {
-    "description": "Shown when the verification check ran and the address is still unverified"
-  },
-  "auth_emailVerified": "VERIFIED",
-  "@auth_emailVerified": {
-    "description": "Mono chip beside the locked email once the address is verified"
-  },
-  "auth_accountReadySignInAgain": "Your account is ready. Sign in with your new password.",
-  "@auth_accountReadySignInAgain": {
-    "description": "Success banner when the profile is not readable yet after setup"
-  },
   "auth_signIn": "Sign In",
   "@auth_signIn": {
     "description": "Sign In"
@@ -221,14 +181,82 @@
   "@calendar_allDay": {
     "description": "Switch in the job form, and the label shown in place of a time range on a job that runs the whole day."
   },
-  "calendar_closedCount": "Done · {count}",
-  "@calendar_closedCount": {
-    "description": "Label on the rule that separates the day's remaining work from the jobs that are finished or cancelled, in the calendar agenda. Cancelled visits sink into the same block, so this one word covers both (owner call).",
+  "calendar_dayOff": "Day off",
+  "@calendar_dayOff": {
+    "description": "Chip in the job form marking a personal block as time off, and the chip shown in place of the status on that block's card. A day off is never counted as a job."
+  },
+  "calendar_dayOffIsOff": "{name} is off",
+  "@calendar_dayOffIsOff": {
+    "description": "The day-off strip in the agenda, for a block that has not finished yet. {name} is the crew member the time off is for.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_dayOffWasOff": "{name} was off",
+  "@calendar_dayOffWasOff": {
+    "description": "The day-off strip in the agenda once the last day has passed. Past tense, because a day off completes itself at the end of its span.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_dayOffLength": "{count, plural, =1{1 day} other{{count} days}}",
+  "@calendar_dayOffLength": {
+    "description": "How long a day off runs, on its detail view.",
     "placeholders": {
       "count": {
         "type": "int"
       }
     }
+  },
+  "calendar_closedCount": "Done · {count}",
+  "@calendar_closedCount": {
+    "description": "Label on the rule that separates the day's remaining work from the jobs that are finished, in the calendar agenda. Cancelled visits still sink into the same block and render below this rule, but are NOT counted by it (owner call 2026-08-25) — a cancelled job is work that is not happening, so it is not work behind you either. The rule is suppressed entirely when the count would be zero.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_showJobsFor": "Show jobs for",
+  "@calendar_showJobsFor": {
+    "description": "Title of the action sheet the calendar's crew-filter button opens, listing every assignable crew member plus 'All crew'."
+  },
+  "calendar_allCrew": "All crew",
+  "@calendar_allCrew": {
+    "description": "The crew-filter sheet's first option, which clears the per-person calendar filter so every job shows again."
+  },
+  "calendar_crewFilter": "Filter by crew member",
+  "@calendar_crewFilter": {
+    "description": "Tooltip and semantics label of the calendar header's crew-filter button (admin only)."
+  },
+  "calendar_showingCrewMember": "Showing {name}",
+  "@calendar_showingCrewMember": {
+    "description": "Banner above the agenda while the calendar is filtered to one crew member's jobs, naming that person.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_clearFilter": "Clear",
+  "@calendar_clearFilter": {
+    "description": "The crew-filter banner's action that removes the per-person calendar filter."
+  },
+  "calendar_agendaDayView": "Day view",
+  "@calendar_agendaDayView": {
+    "description": "Semantics label of the agenda header's icon-only toggle segment that shows one selected day's jobs."
+  },
+  "calendar_agendaWeekView": "Week view",
+  "@calendar_agendaWeekView": {
+    "description": "Semantics label of the agenda header's icon-only toggle segment that shows the whole selected week, day by day."
+  },
+  "calendar_noJobsThisDay": "No jobs",
+  "@calendar_noJobsThisDay": {
+    "description": "One quiet line under a day bar of the week agenda when that day has nothing booked."
   },
   "calendar_dayOfCount": "Day {index} of {count}",
   "@calendar_dayOfCount": {
@@ -321,6 +349,72 @@
   "@calendar_assignedLabel": {
     "description": "Mono all-caps label above the assignee panel in the appointment detail sheet. Already uppercase in source."
   },
+  "calendar_hasPhotos": "Has photos",
+  "@calendar_hasPhotos": {
+    "description": "Spoken form of the photo icon on an appointment card, appended to the card's semantics label when the job carries pictures."
+  },
+  "calendar_fieldRecordLabel": "WHAT YOU FOUND",
+  "@calendar_fieldRecordLabel": {
+    "description": "Section header over the crew-facing notes field and Add photos button on a technician's job view. Deliberately not 'NOTES', which is the dispatcher's brief above it."
+  },
+  "calendar_fieldNotesLabel": "Your notes",
+  "@calendar_fieldNotesLabel": {
+    "description": "Label on the crew notes field. 'Your' distinguishes it from the dispatcher's booking notes, which the crew cannot edit."
+  },
+  "calendar_fieldNotesHint": "What you found, what you did, anything to quote",
+  "@calendar_fieldNotesHint": {
+    "description": "Hint under the crew notes field. Names the upsell case explicitly because that is the one most likely to travel by phone call instead."
+  },
+  "calendar_photosLimitReached": "{count, plural, =1{Only 1 more photo can be added to this job.} other{Only {count} more photos can be added to this job.}}",
+  "@calendar_photosLimitReached": {
+    "description": "Notice shown when a photo pick is trimmed because the job is near its photo limit. Count is the room LEFT on the job, never the total cap.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_photosLimitFull": "This job already holds all the photos it can.",
+  "@calendar_photosLimitFull": {
+    "description": "Notice shown when a photo pick is refused outright because the job is at its photo limit."
+  },
+  "calendar_crewNotesLabel": "CREW NOTES",
+  "@calendar_crewNotesLabel": {
+    "description": "Mono all-caps section label over the thread of notes the crew wrote on a job, shown to admins and crew alike. Already uppercase in source."
+  },
+  "calendar_crewNotesTruncated": "Showing the most recent {count} notes. Older notes on this job aren't shown here.",
+  "@calendar_crewNotesTruncated": {
+    "description": "Warning shown under the crew notes thread when the job has more notes than one read returns, so the oldest are omitted.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_crewNotesUnread": "Couldn't load the crew notes. Close and reopen the job to try again — anything already added is still there.",
+  "@calendar_crewNotesUnread": {
+    "description": "Inline caveat under the crew notes section when the notes read failed. Says the thread may be incomplete rather than letting an empty section read as a job with no notes."
+  },
+  "calendar_addANote": "Add a note",
+  "@calendar_addANote": {
+    "description": "Button that posts the text in the crew notes field as a new note. Replaced a Save button when notes became append-only."
+  },
+  "calendar_notePosted": "Note added",
+  "@calendar_notePosted": {
+    "description": "Success notice after a technician posts a crew note."
+  },
+  "calendar_noteBy": "{name} · {when}",
+  "@calendar_noteBy": {
+    "description": "Byline over one crew note: who wrote it and when.",
+    "placeholders": {
+      "name": { "type": "String" },
+      "when": { "type": "String" }
+    }
+  },
+  "calendar_addPhotos": "Add photos",
+  "@calendar_addPhotos": {
+    "description": "Button on a technician's job view that opens the camera/gallery picker."
+  },
   "calendar_photosLabel": "PHOTOS",
   "@calendar_photosLabel": {
     "description": "Mono all-caps label above the photo row in the appointment detail sheet. Already uppercase in source."
@@ -344,6 +438,15 @@
   "calendar_jobsCount": "{count, plural, =1{1 JOB} other{{count} JOBS}}",
   "@calendar_jobsCount": {
     "description": "Mono all-caps count of the selected day's jobs, shown right-aligned in the agenda header. Already uppercase in source.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_jobsDoneCount": "{count, plural, =1{1 DONE} other{{count} DONE}}",
+  "@calendar_jobsDoneCount": {
+    "description": "Appended to the agenda header's job count once some of the day's jobs are FINISHED, reading '3 JOBS · 1 DONE'. Counts finished visits only — a cancelled one is neither a job on the day nor done, and is excluded from this and from the job count beside it (owner call 2026-08-25), matching both the 'Done' rule in the list below and the month grid's dots. Already uppercase in source.",
     "placeholders": {
       "count": {
         "type": "int"
@@ -537,9 +640,21 @@
   "@clients_typeCommercial": {
     "description": "Client type chip for a business customer"
   },
-  "clients_typePropertyManagement": "Property mgmt",
-  "@clients_typePropertyManagement": {
-    "description": "Client type chip for a property-management company"
+  "clients_filterByAddress": "Address",
+  "@clients_filterByAddress": {
+    "description": "Label on the clients list menu that filters to one shared street address"
+  },
+  "clients_noClientsAtAddress": "No clients at this address.",
+  "@clients_noClientsAtAddress": {
+    "description": "Empty state when the address filter matches nothing"
+  },
+  "clients_typeBuilding": "Building",
+  "@clients_typeBuilding": {
+    "description": "Client type chip for an apartment or condo building customer"
+  },
+  "common_saving": "Saving…",
+  "@common_saving": {
+    "description": "Busy label on a save button while the write is in flight."
   },
   "common_save": "Save",
   "@common_save": {
@@ -565,6 +680,15 @@
   "@clients_addAnotherContact": {
     "description": "Add another contact"
   },
+  "clients_additionalContactsLimit": "Maximum {count} contacts",
+  "@clients_additionalContactsLimit": {
+    "description": "Helper text shown when the client form reaches the additional-contact limit",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "clients_contact": "Contact",
   "@clients_contact": {
     "description": "Contact"
@@ -585,6 +709,10 @@
   "@validation_phoneOrEmailIsRequired": {
     "description": "Phone or email is required"
   },
+  "validation_enterAValidPhone": "Enter a valid phone number",
+  "@validation_enterAValidPhone": {
+    "description": "Validation message when a phone field has too few digits or unsupported characters"
+  },
   "validation_addressIsRequired": "Address is required",
   "@validation_addressIsRequired": {
     "description": "Address is required"
@@ -596,6 +724,14 @@
   "calendar_selectDate": "Select date",
   "@calendar_selectDate": {
     "description": "Select date"
+  },
+  "calendar_previousMonth": "Previous month",
+  "@calendar_previousMonth": {
+    "description": "Tooltip and screen-reader label of the back chevron on the inline month calendar that drops down under an appointment's date row."
+  },
+  "calendar_nextMonth": "Next month",
+  "@calendar_nextMonth": {
+    "description": "Tooltip and screen-reader label of the forward chevron on the inline month calendar that drops down under an appointment's date row."
   },
   "calendar_startDate": "Start date",
   "@calendar_startDate": {
@@ -691,6 +827,15 @@
   "@calendar_repeatEveryYear": {
     "description": "Repeat option: the appointment repeats every year"
   },
+  "calendar_appointmentCreatedRunDays": "{count, plural, =1{Appointment created} other{Job booked — {count} days}}",
+  "@calendar_appointmentCreatedRunDays": {
+    "description": "Success notice after booking a multi-day job, which creates one appointment per work day. Deliberately NOT the repeat wording: the days are ONE job, not future visits.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "calendar_appointmentCreatedWithRepeats": "{count, plural, =1{Appointment created — 1 future visit booked} other{Appointment created — {count} future visits booked}}",
   "@calendar_appointmentCreatedWithRepeats": {
     "description": "Success notice after creating a repeating appointment; count is the number of pre-booked future occurrences",
@@ -721,6 +866,84 @@
   "calendar_deleteSeriesScopeMessage": "Delete this visit only, or this and all future visits in the series?",
   "@calendar_deleteSeriesScopeMessage": {
     "description": "Body of the delete dialog for a repeating appointment, stating that the delete-all option removes every future visit in the series"
+  },
+  "calendar_runDayLabel": "DAY {index} OF {count}",
+  "@calendar_runDayLabel": {
+    "description": "Mono all-caps context label at the top of the scope dialog for one day of a multi-day run, e.g. DAY 3 OF 5.",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_editThisDayOnly": "Save this day only",
+  "@calendar_editThisDayOnly": {
+    "description": "Edit dialog option: apply the edit to only the opened day of a multi-day run"
+  },
+  "calendar_editThisAndFollowingDays": "Save this and the following days",
+  "@calendar_editThisAndFollowingDays": {
+    "description": "Edit dialog option: apply the edit to the opened day plus the rest of the run"
+  },
+  "calendar_thisDayKeepsRun": "{date} — the rest of the run keeps its old details",
+  "@calendar_thisDayKeepsRun": {
+    "description": "Consequence line under the this-day-only option in the run-scope dialog.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_remainingDaysThrough": "{count, plural, =1{1 remaining day through {date}} other{{count} remaining days through {date}}}",
+  "@calendar_remainingDaysThrough": {
+    "description": "Consequence line under the this-and-following option in the run-scope dialog.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_saveThisDay": "Save this day",
+  "@calendar_saveThisDay": {
+    "description": "Primary button label in the run-scope dialog when only this day is selected."
+  },
+  "calendar_saveNDays": "{count, plural, =1{Save 1 day} other{Save {count} days}}",
+  "@calendar_saveNDays": {
+    "description": "Primary button label in the run-scope dialog when this day and the following ones are selected.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_deleteThisDayOnly": "Delete this day only",
+  "@calendar_deleteThisDayOnly": {
+    "description": "Delete dialog option: delete only the opened day of a multi-day run"
+  },
+  "calendar_deleteThisAndFollowingDays": "Delete this and the following days",
+  "@calendar_deleteThisAndFollowingDays": {
+    "description": "Delete dialog option: delete the opened day plus the rest of the run"
+  },
+  "calendar_deleteRunScopeMessage": "Delete this day only, or this day and the rest of the run?",
+  "@calendar_deleteRunScopeMessage": {
+    "description": "Body of the delete dialog for one day of a multi-day run"
+  },
+  "calendar_cancelThisDayOnly": "Cancel this day only",
+  "@calendar_cancelThisDayOnly": {
+    "description": "Cancel dialog option: cancel only the opened day of a multi-day run"
+  },
+  "calendar_cancelThisAndFollowingDays": "Cancel this and the following days",
+  "@calendar_cancelThisAndFollowingDays": {
+    "description": "Cancel dialog option: cancel the opened day plus the rest of the run"
+  },
+  "calendar_cancelRunScopeMessage": "Cancel this day only, or this day and the rest of the run?",
+  "@calendar_cancelRunScopeMessage": {
+    "description": "Body of the cancel dialog for one day of a multi-day run"
   },
   "calendar_deleteThisVisitOnly": "Delete this visit only",
   "@calendar_deleteThisVisitOnly": {
@@ -774,7 +997,11 @@
   "validation_spanTooLong": "A job can run at most {days} days. Shorten the end date or book a second job.",
   "@validation_spanTooLong": {
     "description": "Shown on the appointment form when the booked span exceeds the maximum.",
-    "placeholders": { "days": { "type": "int" } }
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
   },
   "calendar_mustBeAfterStartTime": "Must be after start time",
   "@calendar_mustBeAfterStartTime": {
@@ -923,17 +1150,29 @@
   "clients_archivedNotice": "Archived {name}",
   "@clients_archivedNotice": {
     "description": "Success notice after archiving a client.",
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "clients_unarchivedNotice": "Restored {name}",
   "@clients_unarchivedNotice": {
     "description": "Success notice after un-archiving a client.",
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "clients_deletedNotice": "Deleted {name}",
   "@clients_deletedNotice": {
     "description": "Success notice after deleting a client.",
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "clients_deleteTitle": "Delete client?",
   "@clients_deleteTitle": {
@@ -942,7 +1181,11 @@
   "clients_deleteMessage": "{name} will be removed permanently. This can't be undone.",
   "@clients_deleteMessage": {
     "description": "Body of the confirm dialog before deleting a client.",
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "error_introArchiveClient": "Couldn't archive the client",
   "@error_introArchiveClient": {
@@ -992,10 +1235,6 @@
   "@error_errorLoadingEmployees": {
     "description": "Error loading employees"
   },
-  "clients_searchByNameOrPhone": "Search by name or phone...",
-  "@clients_searchByNameOrPhone": {
-    "description": "Search by name or phone..."
-  },
   "clients_searchByClientOrEmployee": "Search by client, phone, or employee...",
   "@clients_searchByClientOrEmployee": {
     "description": "History search field hint — matches client name, client phone, or employee name"
@@ -1007,6 +1246,41 @@
   "clients_allStaff": "All staff",
   "@clients_allStaff": {
     "description": "History employee-filter chip option that clears the employee filter"
+  },
+  "clients_historyFilterYear": "Year",
+  "@clients_historyFilterYear": {
+    "description": "Title of the single-select sheet the History year chip opens"
+  },
+  "clients_historyFilterStaff": "Staff",
+  "@clients_historyFilterStaff": {
+    "description": "Title of the single-select sheet the History crew chip opens"
+  },
+  "clients_historyJobsCount": "{count, plural, =1{1 JOB} other{{count} JOBS}}",
+  "@clients_historyJobsCount": {
+    "description": "History list count, all caps — the first half of '18 JOBS · 2 CANCELLED'",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clients_historyResultsCount": "{count, plural, =1{1 RESULT} other{{count} RESULTS}}",
+  "@clients_historyResultsCount": {
+    "description": "History count in search, all caps — search spans every appointment, so its hits are results rather than the day's jobs",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clients_historyCancelledCount": "{count, plural, other{{count} CANCELLED}}",
+  "@clients_historyCancelledCount": {
+    "description": "How many of the counted History rows were cancelled, all caps — a subset of the total, not an addition",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "clients_noAppointmentsMatchFilters": "No appointments match your filters",
   "@clients_noAppointmentsMatchFilters": {
@@ -1064,6 +1338,10 @@
   "@error_networkErrorCheckYourConnectionAndTryAgain": {
     "description": "Network error. Check your connection and try again."
   },
+  "common_offlineFormNotice": "You're offline, so this can't be saved yet. Fill it in — saving will work once you're back on a connection.",
+  "@common_offlineFormNotice": {
+    "description": "Shown at the top of the add-appointment and add-client forms while the device is offline. The submit controllers already fail fast, so without this the person only finds out at Save; the global offline banner is hidden behind a modal sheet."
+  },
   "common_offlineBanner": "Offline — changes will sync when you're back online",
   "@common_offlineBanner": {
     "description": "Persistent app-wide banner shown while the device has no network connection."
@@ -1117,13 +1395,13 @@
   "@error_yourAccountIsAlreadySetUp": {
     "description": "Shown when completeEmployeeSetup refuses because the account is already active"
   },
+  "error_setupNotAvailableYet": "Account setup isn't available just yet. Try again in a few minutes — if it keeps happening, ask your administrator.",
+  "@error_setupNotAvailableYet": {
+    "description": "Setup was refused by a backend that predates the simplified-auth deploy. The person cannot act on it beyond retrying, so the message does not mention email verification."
+  },
   "error_noAccountRecordContactAdmin": "We couldn't find your employee record. Ask your admin to check your account.",
   "@error_noAccountRecordContactAdmin": {
     "description": "Shown when the signed-in uid resolves to no users doc during setup"
-  },
-  "error_verifyYourEmailBeforeFinishing": "Verify your email address before finishing setup.",
-  "@error_verifyYourEmailBeforeFinishing": {
-    "description": "Setup was attempted before the signed-in address was verified"
   },
   "error_sessionExpiredSignInAgain": "Your session expired. Sign in again to finish setting up.",
   "@error_sessionExpiredSignInAgain": {
@@ -1160,10 +1438,6 @@
   "@validation_passwordDoesNotMeetAllRequirements": {
     "description": "Field error on the create-account password when one or more checklist requirements are unmet."
   },
-  "validation_passwordMustDifferFromStarting": "Choose a different password from the one you were given",
-  "@validation_passwordMustDifferFromStarting": {
-    "description": "Field error on the account-setup password when the employee re-enters the shared starting password instead of choosing their own."
-  },
   "validation_passwordReqMinLength": "At least 8 characters",
   "@validation_passwordReqMinLength": {
     "description": "Password requirement checklist row: minimum length."
@@ -1179,10 +1453,6 @@
   "validation_passwordReqNumber": "A number (0–9)",
   "@validation_passwordReqNumber": {
     "description": "Password requirement checklist row: at least one digit."
-  },
-  "validation_passwordReqSymbol": "A symbol (!@#%&*…)",
-  "@validation_passwordReqSymbol": {
-    "description": "Password requirement checklist row: at least one symbol/special character."
   },
   "common_clientAdded": "Client added",
   "@common_clientAdded": {
@@ -1244,6 +1514,10 @@
   "@validation_passwordsDoNotMatch": {
     "description": "Passwords do not match"
   },
+  "validation_passwordMustDifferFromStarting": "Choose a different password from the one you were given",
+  "@validation_passwordMustDifferFromStarting": {
+    "description": "Field error on the account-setup password when the employee re-enters the starting password the admin issued instead of choosing their own."
+  },
   "validation_enterAValidEmail": "Enter a valid email",
   "@validation_enterAValidEmail": {
     "description": "Enter a valid email"
@@ -1268,23 +1542,9 @@
   "@common_search": {
     "description": "Generic search field placeholder (default AppSearchBar hint)"
   },
-  "clients_searchByNameBusinessPhoneEmailAddress": "Search by name, phone, email, address...",
-  "@clients_searchByNameBusinessPhoneEmailAddress": {
-    "description": "Hint text for the client list search field"
-  },
   "clients_noClientsFound": "No clients found",
   "@clients_noClientsFound": {
     "description": "No clients found"
-  },
-  "clients_addNamedClient": "Add \"{name}\" as a new client",
-  "@clients_addNamedClient": {
-    "description": "Action in the appointment client picker that creates a new client from the typed search text (which prefills the new client's name).",
-    "placeholders": {
-      "name": {
-        "type": "String",
-        "example": "John Smith"
-      }
-    }
   },
   "common_employeeRoleValue": "Employee",
   "@common_employeeRoleValue": {
@@ -1534,6 +1794,10 @@
   "@error_colorAlreadyUsed": {
     "description": "This color is already used by another employee."
   },
+  "common_loadingEmployees": "Loading staff…",
+  "@common_loadingEmployees": {
+    "description": "Shown in the assignee picker while the roster read is still in flight. An assignee is required to save, so an empty chip row with no explanation makes the booking form look like the business has no staff."
+  },
   "common_retry": "Retry",
   "@common_retry": {
     "description": "Retry"
@@ -1546,9 +1810,22 @@
   "@calendar_photoUploadFailedSnackbar": {
     "description": "Photo upload failed. Open the appointment to retry."
   },
+  "calendar_photoUnavailable": "Photo unavailable",
+  "@calendar_photoUnavailable": {
+    "description": "Shown in place of an appointment photo the app could not load from Storage. The read-only carousel would otherwise render a blank page, which reads as an empty photo rather than a failed one."
+  },
   "calendar_photoFailedBadge": "Failed",
   "@calendar_photoFailedBadge": {
     "description": "Compact badge overlaid on a photo whose upload failed."
+  },
+  "calendar_nPhotosWaitingToUpload": "{count, plural, =1{1 photo waiting to upload.} other{{count} photos waiting to upload.}}",
+  "@calendar_nPhotosWaitingToUpload": {
+    "description": "Shown under the photo strip while photos sit in the offline upload queue. Nothing has failed — the phone has no signal yet — so this is not error-coloured. Without it a queued photo is indistinguishable from an uploaded one, because the strip renders the local files either way.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "calendar_nPhotosFailedToUpload": "{count, plural, =1{1 photo failed to upload.} other{{count} photos failed to upload.}}",
   "@calendar_nPhotosFailedToUpload": {
@@ -1676,6 +1953,116 @@
   "@settings_myDetailsEmergencyBlurb": {
     "description": "Caption under the emergency-contact section on My details, stating who can read it"
   },
+  "settings_myDetailsIdentity": "YOU CAN CHANGE THESE",
+  "@settings_myDetailsIdentity": {
+    "description": "Section header over the fields a person may edit about themselves on My details"
+  },
+  "settings_myDetailsIdentityBlurb": "Your manager sets everything else.",
+  "@settings_myDetailsIdentityBlurb": {
+    "description": "Caption under the editable-fields section on My details"
+  },
+  "settings_myDetailsEmailReadOnly": "Ask your manager to change this.",
+  "@settings_myDetailsEmailReadOnly": {
+    "description": "Caption under the read-only sign-in email row on My details"
+  },
+  "settings_myAvailability": "MY AVAILABILITY",
+  "@settings_myAvailability": {
+    "description": "Section header over the working-days and hours controls on My details"
+  },
+  "settings_myAvailabilityBlurb": "Changes apply right away.",
+  "@settings_myAvailabilityBlurb": {
+    "description": "Caption telling the user availability toggles save immediately, unlike the explicitly-saved fields above"
+  },
+  "settings_availabilityConflict": "{days} already has booked work — the jobs stay until someone moves them.",
+  "@settings_availabilityConflict": {
+    "description": "Amber warning shown when a person turns off a working day that still holds appointments",
+    "placeholders": {
+      "days": {
+        "type": "String",
+        "example": "Mon, Wed"
+      }
+    }
+  },
+  "settings_myScheduling": "SCHEDULING",
+  "@settings_myScheduling": {
+    "description": "Admin-only section header on My details for scheduling limits"
+  },
+  "settings_travelAlerts": "Time-to-leave alerts",
+  "@settings_travelAlerts": {
+    "description": "Settings toggle for the traffic-aware departure push; off still leaves the fixed 30-minute reminder"
+  },
+  "error_introSaveTravelAlerts": "Couldn't change your alert setting",
+  "@error_introSaveTravelAlerts": {
+    "description": "Error intro when the time-to-leave toggle fails to save"
+  },
+  "settings_locationSharing": "Staff map location",
+  "@settings_locationSharing": {
+    "description": "Settings toggle for live location sharing used by the admin staff map and travel-time presence"
+  },
+  "settings_locationSharingBlurb": "This controls live location uploads for the staff map and time-to-leave checks.",
+  "@settings_locationSharingBlurb": {
+    "description": "Short body copy on the location sharing privacy settings view"
+  },
+  "settings_locationLastUploaded": "Last uploaded",
+  "@settings_locationLastUploaded": {
+    "description": "Label for the most recent staff-map location upload timestamp"
+  },
+  "settings_clearMyLocation": "Clear and pause location",
+  "@settings_clearMyLocation": {
+    "description": "Button that removes the current location document and turns location sharing off"
+  },
+  "settings_locationCleared": "Location sharing is paused and your last location was cleared.",
+  "@settings_locationCleared": {
+    "description": "Success notice after clearing the current staff-map location"
+  },
+  "settings_locationNone": "No location uploaded",
+  "@settings_locationNone": {
+    "description": "Shown when the signed-in user has no staff-map location document"
+  },
+  "settings_locationLoading": "Checking location status...",
+  "@settings_locationLoading": {
+    "description": "Shown while loading the signed-in user's staff-map location document"
+  },
+  "settings_locationUnavailable": "Unavailable",
+  "@settings_locationUnavailable": {
+    "description": "Shown when the signed-in user's staff-map location document cannot be read"
+  },
+  "error_introSaveLocationSharing": "Couldn't change your location sharing",
+  "@error_introSaveLocationSharing": {
+    "description": "Error intro when the staff map location sharing toggle fails to save"
+  },
+  "settings_changeEmail": "Change sign-in email",
+  "@settings_changeEmail": {
+    "description": "Title of the dialog where a person changes their own sign-in email"
+  },
+  "settings_changeEmailBlurb": "You'll sign in with the new address from now on. Type it twice — a typo locks you out until an admin fixes it.",
+  "@settings_changeEmailBlurb": {
+    "description": "Explains why the change-email dialog asks for the address twice"
+  },
+  "settings_confirmNewEmail": "Confirm new email",
+  "@settings_confirmNewEmail": {
+    "description": "Label of the second email field in the change-email dialog"
+  },
+  "settings_emailsDoNotMatch": "The two addresses don't match.",
+  "@settings_emailsDoNotMatch": {
+    "description": "Shown under the confirm field when the two typed addresses differ"
+  },
+  "error_introChangeEmail": "Couldn't change your sign-in email",
+  "@error_introChangeEmail": {
+    "description": "Error intro for ME-EMAIL (a person changing their own sign-in address)"
+  },
+  "settings_unsavedChanges": "Unsaved changes",
+  "@settings_unsavedChanges": {
+    "description": "Label on the save/discard bar that appears once the My details identity form is edited"
+  },
+  "common_discard": "Discard",
+  "@common_discard": {
+    "description": "Button that throws away unsaved edits and restores the stored values"
+  },
+  "error_introSaveAvailability": "Couldn't save your availability",
+  "@error_introSaveAvailability": {
+    "description": "Error intro for ME-SAVE when the immediate availability write fails"
+  },
   "error_introSaveAppLock": "Couldn't change the app lock setting",
   "@error_introSaveAppLock": {
     "description": "Intro for a failed App Lock toggle (keychain write failed)"
@@ -1708,7 +2095,15 @@
   "@error_introLoadAppointments": {
     "description": "Error intro for APPT-LOAD"
   },
+  "error_introOpenAppointment": "Couldn't open the appointment",
+  "@error_introOpenAppointment": {
+    "description": "Error intro for APPT-OPEN"
+  },
   "error_introDeleteAccount": "Couldn't delete your account",
+  "error_introSignOut": "Couldn't sign out",
+  "@error_introSignOut": {
+    "description": "Error notice intro shown when signing out fails."
+  },
   "@error_introDeleteAccount": {
     "description": "Error intro for ACCT-DEL"
   },
@@ -1719,6 +2114,10 @@
   "error_introSaveClient": "Couldn't save the client changes",
   "@error_introSaveClient": {
     "description": "Error intro for CLI-SAVE"
+  },
+  "error_introSaveFieldNotes": "Couldn't save your notes",
+  "@error_introSaveFieldNotes": {
+    "description": "Error intro for a failed crew field-notes write. First sentence of error_noticeWithCause, so capitalized with no trailing punctuation."
   },
   "error_introLoadHistory": "Couldn't load the appointment history",
   "@error_introLoadHistory": {
@@ -1898,6 +2297,38 @@
   "@dashboard_title": {
     "description": "Admin dashboard screen title, drawer nav item, and settings tile label"
   },
+  "dashboard_summary": "Summary",
+  "@dashboard_summary": {
+    "description": "Section label above the dashboard's KPI tiles and their period control"
+  },
+  "dashboard_periodLabel": "Summary period",
+  "@dashboard_periodLabel": {
+    "description": "Accessibility label for the Today/Week/Month segmented control that scopes the KPI tiles"
+  },
+  "dashboard_periodToday": "Today",
+  "@dashboard_periodToday": {
+    "description": "Segmented control option counting the KPI tiles over today only"
+  },
+  "dashboard_periodWeek": "Week",
+  "@dashboard_periodWeek": {
+    "description": "Segmented control option counting the KPI tiles from Monday through the end of today"
+  },
+  "dashboard_periodMonth": "Month",
+  "@dashboard_periodMonth": {
+    "description": "Segmented control option counting the KPI tiles from the 1st through the end of today"
+  },
+  "dashboard_kpiBooked": "Booked",
+  "@dashboard_kpiBooked": {
+    "description": "KPI tile label for jobs running in the selected period, excluding cancelled ones"
+  },
+  "dashboard_kpiCompleted": "Completed",
+  "@dashboard_kpiCompleted": {
+    "description": "KPI tile label for jobs in the selected period whose stored status is done"
+  },
+  "dashboard_kpiCancelled": "Cancelled",
+  "@dashboard_kpiCancelled": {
+    "description": "KPI tile label for cancelled jobs in the selected period"
+  },
   "dashboard_visitsToday": "{count, plural, =1{visit today} other{visits today}}",
   "@dashboard_visitsToday": {
     "description": "Label rendered beside the hero's big count of today's visits; the number itself is a separate Text",
@@ -1922,6 +2353,27 @@
         "type": "int"
       }
     }
+  },
+  "dashboard_jobsPerDay": "Jobs booked per day — this week",
+  "@dashboard_jobsPerDay": {
+    "description": "Title of the dashboard chart showing how many jobs are booked on each day of the current week"
+  },
+  "dashboard_jobsPerDaySemantics": "{day}: {count} booked",
+  "@dashboard_jobsPerDaySemantics": {
+    "description": "Screen-reader label for one bar of the jobs-per-day chart",
+    "placeholders": {
+      "day": {
+        "type": "String",
+        "example": "Monday"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_overCapacity": "over capacity",
+  "@dashboard_overCapacity": {
+    "description": "Appended to a jobs-per-day bar's screen-reader label when the day is booked past the roster's capacity"
   },
   "dashboard_businessTrends": "Business trends",
   "@dashboard_businessTrends": {
@@ -1956,13 +2408,63 @@
   "@dashboard_completedVsCancelled": {
     "description": "Title of the grouped weekly bar chart of done vs cancelled visits"
   },
+  "dashboard_newClientsEmpty": "No new clients in the last 8 weeks",
+  "@dashboard_newClientsEmpty": {
+    "description": "Shown in the dashboard's New clients card when no client was added over the window"
+  },
   "dashboard_newClients": "New clients",
   "@dashboard_newClients": {
     "description": "Caption of the new-clients sparkline inside the trends card"
   },
-  "dashboard_newClientsTotal": "{count, plural, =1{1 in the last 8 weeks} other{{count} in the last 8 weeks}}",
-  "@dashboard_newClientsTotal": {
-    "description": "Total line under the new-clients caption, summing the 8 weekly buckets",
+  "dashboard_newClientsWindow": "{weeks, plural, =1{In the last week} other{In the last {weeks} weeks}}",
+  "@dashboard_newClientsWindow": {
+    "description": "Caption under the new-clients headline number, naming the window the count and the sparkline cover",
+    "placeholders": {
+      "weeks": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_newClientsTrendUp": "{count, plural, =1{1 more than the previous {weeks} weeks} other{{count} more than the previous {weeks} weeks}}",
+  "@dashboard_newClientsTrendUp": {
+    "description": "Screen-reader and tooltip text for the new-clients trend chip when the recent half of the window beat the half before it",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "weeks": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_newClientsTrendDown": "{count, plural, =1{1 fewer than the previous {weeks} weeks} other{{count} fewer than the previous {weeks} weeks}}",
+  "@dashboard_newClientsTrendDown": {
+    "description": "Screen-reader and tooltip text for the new-clients trend chip when the recent half of the window fell behind the half before it",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "weeks": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_newClientsTrendFlat": "Same as the previous {weeks} weeks",
+  "@dashboard_newClientsTrendFlat": {
+    "description": "Screen-reader and tooltip text for the new-clients trend chip when both halves of the window are equal",
+    "placeholders": {
+      "weeks": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_newClientsThisWeek": "This week",
+  "@dashboard_newClientsThisWeek": {
+    "description": "Micro label under the last bar of the new-clients sparkline, marking which end is the current week"
+  },
+  "dashboard_newClientsMore": "{count, plural, =1{1 more} other{{count} more}}",
+  "@dashboard_newClientsMore": {
+    "description": "Footer line of the new-clients card when more clients were added than the card lists",
     "placeholders": {
       "count": {
         "type": "int"
@@ -1975,6 +2477,34 @@
     "placeholders": {
       "day": {
         "type": "String"
+      }
+    }
+  },
+  "dashboard_neverSetUpHeader": "{count, plural, =1{1 account was never set up} other{{count} accounts were never set up}}",
+  "@dashboard_neverSetUpHeader": {
+    "description": "Attention group header for accounts an admin created that the person never completed setup for, so they still hold the starting password the admin handed over",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_availabilityConflictHeader": "{count, plural, =1{1 person is booked outside their availability} other{{count} people are booked outside their availability}}",
+  "@dashboard_availabilityConflictHeader": {
+    "description": "Attention group header for staff holding booked work on weekdays they are marked unavailable for",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_availabilityConflictDays": "Booked on {days}",
+  "@dashboard_availabilityConflictDays": {
+    "description": "Row subtitle naming the weekdays a person is booked on despite being unavailable",
+    "placeholders": {
+      "days": {
+        "type": "String",
+        "example": "Sat, Sun"
       }
     }
   },
@@ -1994,6 +2524,15 @@
   "dashboard_overdueOpenHeader": "{count, plural, =1{1 past visit was never closed} other{{count} past visits were never closed}}",
   "@dashboard_overdueOpenHeader": {
     "description": "Attention flag group header for ended visits never marked done or cancelled",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_andMoreVisits": "{count, plural, =1{1 more not shown} other{{count} more not shown}}",
+  "@dashboard_andMoreVisits": {
+    "description": "Footer under a capped attention-flag group, naming how many visits are not rendered",
     "placeholders": {
       "count": {
         "type": "int"
@@ -2198,7 +2737,7 @@
   "@tour_clientsSearchTitle": {
     "description": "Tour step title: clients search bar"
   },
-  "tour_clientsSearchDesc": "Search by name, phone, or address — results update as you type.",
+  "tour_clientsSearchDesc": "Search every client by name, phone or address — the whole list, not just the ones on screen.",
   "@tour_clientsSearchDesc": {
     "description": "Tour step description: clients search bar"
   },
@@ -2230,7 +2769,7 @@
   "@tour_historySearchTitle": {
     "description": "Tour step title: history search bar"
   },
-  "tour_historySearchDesc": "Completed and cancelled visits live here — search by client or employee, and filter by year.",
+  "tour_historySearchDesc": "Completed and cancelled visits live here. Search covers the whole archive, and you can filter by year.",
   "@tour_historySearchDesc": {
     "description": "Tour step description: history search bar"
   },
@@ -2262,7 +2801,7 @@
   "@tour_settingsNotificationsTitle": {
     "description": "Tour step title: settings notifications card"
   },
-  "tour_settingsNotificationsDesc": "Check push permission and the on-the-road Live Activity card here.",
+  "tour_settingsNotificationsDesc": "Notifications are off until you turn them on here — job assignments, \"time to leave\" and the daily digest all come through this row.",
   "@tour_settingsNotificationsDesc": {
     "description": "Tour step description: settings notifications card"
   },
@@ -2282,11 +2821,11 @@
   "@tour_calendarCollapseDesc": {
     "description": "Tour step description: calendar collapse handle"
   },
-  "tour_clientsFilterTitle": "Filter by type",
+  "tour_clientsFilterTitle": "Narrow the list",
   "@tour_clientsFilterTitle": {
     "description": "Tour step title: clients type filter chips"
   },
-  "tour_clientsFilterDesc": "Show only residential, commercial or archived clients. Search still looks everywhere.",
+  "tour_clientsFilterDesc": "Open Filter to show one type, one shared address, or your archived clients. Search still looks everywhere.",
   "@tour_clientsFilterDesc": {
     "description": "Tour step description: clients type filter chips"
   },
@@ -2310,7 +2849,7 @@
   "@tour_historyFilterTitle": {
     "description": "Tour step title: history filter bar"
   },
-  "tour_historyFilterDesc": "Filter past jobs by team member, status or date range.",
+  "tour_historyFilterDesc": "Filter past jobs by team member, status or year.",
   "@tour_historyFilterDesc": {
     "description": "Tour step description: history filter bar"
   },
@@ -2398,7 +2937,7 @@
   "@tour_apptClientTitle": {
     "description": "Tour step title: appointment form client picker"
   },
-  "tour_apptClientDesc": "Search your clients by name, phone or address, or add a new one without leaving this form.",
+  "tour_apptClientDesc": "Type the client's phone number and tap the match that comes up. Switch to Name or address to search another way, or add a new client without leaving this form.",
   "@tour_apptClientDesc": {
     "description": "Tour step description: appointment form client picker"
   },
@@ -2406,7 +2945,7 @@
   "@tour_apptCrewTitle": {
     "description": "Tour step title: appointment form employee picker"
   },
-  "tour_apptCrewDesc": "Assign your team. Only the people you pick here can see this job in their calendar.",
+  "tour_apptCrewDesc": "Assign your team. Only the people you pick here can see this job in their calendar, and anyone already booked at that time is dimmed.",
   "@tour_apptCrewDesc": {
     "description": "Tour step description: appointment form employee picker, which is also the visibility rule"
   },
@@ -2422,7 +2961,7 @@
   "@tour_apptDetailsTitle": {
     "description": "Tour step title: appointment form details section"
   },
-  "tour_apptDetailsDesc": "Address, notes, materials and photos. All optional, and you can add them later.",
+  "tour_apptDetailsDesc": "Notes, materials and photos. All optional, and you can add them later.",
   "@tour_apptDetailsDesc": {
     "description": "Tour step description: appointment form details section"
   },
@@ -2490,14 +3029,6 @@
   "@tour_personColourDesc": {
     "description": "Tour step description: invite form colour picker"
   },
-  "tour_personAccessTitle": "What they can do",
-  "@tour_personAccessTitle": {
-    "description": "Tour step title: invite form access role toggle"
-  },
-  "tour_personAccessDesc": "This is the real permission switch. An admin manages everything; an employee sees only the jobs they are assigned.",
-  "@tour_personAccessDesc": {
-    "description": "Tour step description: invite form access role toggle, the real permission switch as opposed to the job title"
-  },
   "tour_personCreateTitle": "Create the account",
   "@tour_personCreateTitle": {
     "description": "Tour step title: invite form create button"
@@ -2537,10 +3068,6 @@
   "nav_dashboard": "Dashboard",
   "@nav_dashboard": {
     "description": "Navigation label for the admin dashboard destination"
-  },
-  "nav_myDetails": "My details",
-  "@nav_myDetails": {
-    "description": "Navigation label for the signed-in user's own profile destination"
   },
   "nav_groupToday": "TODAY",
   "@nav_groupToday": {
@@ -2663,10 +3190,6 @@
         "example": "Apr 2023"
       }
     }
-  },
-  "clients_filterByType": "Filter clients by type",
-  "@clients_filterByType": {
-    "description": "Accessibility label for the type filter chip row above the clients list"
   },
   "clients_noClientsOfType": "No {type} clients",
   "@clients_noClientsOfType": {
@@ -2953,6 +3476,14 @@
   "@employees_copyBoth": {
     "description": "Copies the email and password together"
   },
+  "employees_copyEmail": "Copy email",
+  "@employees_copyEmail": {
+    "description": "Copy control on a pending-account row that has no password to show"
+  },
+  "employees_passwordHiddenUntilReset": "Reset password to issue a new one",
+  "@employees_passwordHiddenUntilReset": {
+    "description": "Hint under the masked password on a pending-account roster row whose starting password the app no longer holds"
+  },
   "employees_signInDetails": "SIGN-IN DETAILS",
   "@employees_signInDetails": {
     "description": "Mono section label on the expanded pending-account row"
@@ -2976,5 +3507,548 @@
   "employees_newPasswordIssued": "New temporary password — the previous one no longer works",
   "@employees_newPasswordIssued": {
     "description": "Caption under the credentials stating the password was just re-issued"
+  },
+  "wave_outboxPending": "{count, plural, =1{1 client waiting to sync} other{{count} clients waiting to sync}}",
+  "@wave_outboxPending": {
+    "description": "Settings > Wave: how many client edits are queued for Wave.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_outboxFailed": "{count, plural, =1{1 client failed to sync} other{{count} clients failed to sync}}",
+  "@wave_outboxFailed": {
+    "description": "Settings > Wave: how many client edits permanently failed to reach Wave.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_retryFailedButton": "Retry failed",
+  "@wave_retryFailedButton": {
+    "description": "Settings > Wave: button that returns failed client edits to the sync queue."
+  },
+  "wave_retryNoneRecovered": "Nothing to retry — those clients were already back in the queue.",
+  "@wave_retryNoneRecovered": {
+    "description": "Settings > Wave: notice when Retry failed found nothing left to requeue."
+  },
+  "wave_retryQueued": "{count, plural, =1{1 client queued for Wave again} other{{count} clients queued for Wave again}}",
+  "@wave_retryQueued": {
+    "description": "Settings > Wave: notice naming how many client edits were returned to the queue.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_retryPushed": "{count, plural, =1{1 client sent to Wave} other{{count} clients sent to Wave}}",
+  "@wave_retryPushed": {
+    "description": "Settings > Wave: notice naming how many requeued client edits reached Wave.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_retryStillFailed": "{count, plural, =1{1 client still couldn't be sent — open it to see the error} other{{count} clients still couldn't be sent — open them to see the error}}",
+  "@wave_retryStillFailed": {
+    "description": "Settings > Wave: notice naming how many requeued client edits failed again on the push right after Retry failed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_assigneeOnAnotherJob": "{name} is on another job",
+  "@calendar_assigneeOnAnotherJob": {
+    "description": "Assignee-picker line under a dimmed chip: this person is booked on another appointment during the chosen window. {name} is their short name, matching the chip above.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_assigneeOffStillOnJob": "{name} is off — still on this job",
+  "@calendar_assigneeOffStillOnJob": {
+    "description": "Assignee-picker line for someone already assigned who has since booked time off. Their chip stays selected and tappable, so this explains rather than forbids.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_assigneeBookedStillOnJob": "{name} is on another job — still on this one",
+  "@calendar_assigneeBookedStillOnJob": {
+    "description": "Assignee-picker line for someone already on this job who also has another booking in the window — typically because the date was moved after they were picked. Their chip stays selected and tappable, so this explains rather than forbids.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_assigneesMoreNotFree": "{count, plural, =1{1 more isn't free} other{{count} more aren't free}}",
+  "@calendar_assigneesMoreNotFree": {
+    "description": "Tappable row that expands the remaining assignee-availability lines; count is how many are hidden.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_nobodyFreeThen": "Nobody is free on {when}. Try another time, or book the job and assign someone later.",
+  "@calendar_nobodyFreeThen": {
+    "description": "Replaces the per-person availability lines when every offered assignee clashes. {when} is the chosen span, for example '26 Aug, 8:00 AM - 12:00 PM'.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_timeOffClashTitle": "{name} still has jobs booked",
+  "@calendar_timeOffClashTitle": {
+    "description": "Title of the dialog shown after saving a personal block for one person who already has client jobs inside it.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_timeOffClashTitleMany": "{count, plural, =1{1 person still has jobs booked} other{{count} people still have jobs booked}}",
+  "@calendar_timeOffClashTitleMany": {
+    "description": "Title of the same dialog when the personal block covers several people; count is how many of them have clashing jobs.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_personalBlockClashBody": "The block is saved. These jobs still have {name} on them.",
+  "@calendar_personalBlockClashBody": {
+    "description": "Body line of the clash dialog for a single person. Says plainly that nothing was blocked. {name} is their short name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_personalBlockClashBodyMany": "The block is saved. These jobs still have the crew on them.",
+  "@calendar_personalBlockClashBodyMany": {
+    "description": "Body line of the clash dialog when the personal block covers several people."
+  },
+  "calendar_clashJobsCount": "{count, plural, =1{1 JOB} other{{count} JOBS}}",
+  "@calendar_clashJobsCount": {
+    "description": "Mono count in the clash dialog header, beside the dates the block covers. Uppercase to match the mono ramp.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_swapPersonFor": "Swap {name} for",
+  "@calendar_swapPersonFor": {
+    "description": "Label above the free-crew strip in an opened clash row. {name} is the person being taken off that job.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_swap": "Swap",
+  "@calendar_swap": {
+    "description": "Button on a clash row that opens the free-crew strip."
+  },
+  "calendar_takesThisJob": "{name} takes this one",
+  "@calendar_takesThisJob": {
+    "description": "Settled clash row: the swap has been written and {name} is now on that job.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_everyoneElseBooked": "Everyone else is booked",
+  "@calendar_everyoneElseBooked": {
+    "description": "Clash row that cannot be fixed by swapping - no other crew member is free in that job's window."
+  },
+  "calendar_openJob": "Open job",
+  "@calendar_openJob": {
+    "description": "Button on a stuck clash row; opens that appointment's detail sheet."
+  },
+  "calendar_leaveThem": "Leave them",
+  "@calendar_leaveThem": {
+    "description": "Dismiss button on the clash dialog. Never 'Cancel' - nothing here is undone by dismissing."
+  },
+  "common_undo": "Undo",
+  "@common_undo": {
+    "description": "Reverts a single settled swap back to the original assignee, while the clash dialog is open."
+  },
+  "calendar_holidayNewYear": "New Year's Day",
+  "@calendar_holidayNewYear": {
+    "description": "Québec statutory holiday, January 1."
+  },
+  "calendar_holidayGoodFriday": "Good Friday",
+  "@calendar_holidayGoodFriday": {
+    "description": "Québec statutory holiday, two days before Gregorian Easter."
+  },
+  "calendar_holidayEasterMonday": "Easter Monday",
+  "@calendar_holidayEasterMonday": {
+    "description": "Québec statutory holiday, the day after Gregorian Easter."
+  },
+  "calendar_holidayOrthodoxGoodFriday": "Orthodox Good Friday",
+  "@calendar_holidayOrthodoxGoodFriday": {
+    "description": "Greek Orthodox observance, two days before Julian Easter."
+  },
+  "calendar_holidayOrthodoxEaster": "Orthodox Easter",
+  "@calendar_holidayOrthodoxEaster": {
+    "description": "Greek Orthodox observance: Pascha, Julian Easter Sunday."
+  },
+  "calendar_holidayOrthodoxEasterMonday": "Orthodox Easter Monday",
+  "@calendar_holidayOrthodoxEasterMonday": {
+    "description": "Greek Orthodox observance, the day after Julian Easter."
+  },
+  "calendar_holidayPatriotes": "National Patriots' Day",
+  "@calendar_holidayPatriotes": {
+    "description": "Québec statutory holiday, the Monday before May 25."
+  },
+  "calendar_holidayNationalHoliday": "Saint-Jean-Baptiste",
+  "@calendar_holidayNationalHoliday": {
+    "description": "Québec statutory holiday, June 24. The Fête nationale."
+  },
+  "calendar_holidayCanadaDay": "Canada Day",
+  "@calendar_holidayCanadaDay": {
+    "description": "Québec statutory holiday, July 1 (July 2 when the 1st is a Sunday)."
+  },
+  "calendar_holidayConstruction": "Construction holiday",
+  "@calendar_holidayConstruction": {
+    "description": "The CCQ industry shutdown: 14 days from the Sunday before July's last Saturday."
+  },
+  "calendar_holidayLabourDay": "Labour Day",
+  "@calendar_holidayLabourDay": {
+    "description": "Québec statutory holiday, the first Monday of September."
+  },
+  "calendar_holidayThanksgiving": "Thanksgiving",
+  "@calendar_holidayThanksgiving": {
+    "description": "Québec statutory holiday, the second Monday of October."
+  },
+  "calendar_holidayChristmas": "Christmas",
+  "@calendar_holidayChristmas": {
+    "description": "Québec statutory holiday, December 25."
+  },
+  "calendar_holidaySetStatutory": "Québec statutory holiday",
+  "@calendar_holidaySetStatutory": {
+    "description": "Caption under a statutory holiday's name in the day agenda."
+  },
+  "calendar_holidaySetOrthodox": "Greek Orthodox",
+  "@calendar_holidaySetOrthodox": {
+    "description": "Caption under a Greek Orthodox day's name in the day agenda."
+  },
+  "calendar_holidayTag": "Holiday",
+  "@calendar_holidayTag": {
+    "description": "Mono all-caps tag on a statutory or construction holiday row in the day agenda."
+  },
+  "calendar_holidayTagObservance": "Observance",
+  "@calendar_holidayTagObservance": {
+    "description": "Mono all-caps tag on a Greek Orthodox row in the day agenda, which is not a statutory holiday."
+  },
+  "calendar_startJob": "Start job",
+  "@calendar_startJob": {
+    "description": "Action bar button on an open, not-yet-started job: moves it to in progress and stamps its start time."
+  },
+  "calendar_jobStarted": "Job started",
+  "@calendar_jobStarted": {
+    "description": "Success notice after Start job."
+  },
+  "calendar_timeRecordStarted": "Started {time}",
+  "@calendar_timeRecordStarted": {
+    "description": "First segment of the mono time-record line under the detail header.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_timeRecordFinished": "Finished {time}",
+  "@calendar_timeRecordFinished": {
+    "description": "Second segment of the mono time-record line under the detail header.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_elapsedHoursMinutes": "{hours} h {minutes} min",
+  "@calendar_elapsedHoursMinutes": {
+    "description": "Elapsed time between a job's start and finish, when it ran an hour or more.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_elapsedMinutes": "{minutes} min",
+  "@calendar_elapsedMinutes": {
+    "description": "Elapsed time between a job's start and finish, when it ran under an hour.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_pushBack": "Push back",
+  "@calendar_pushBack": {
+    "description": "Admin quick action on an open job's detail sheet: shifts the job later by a few minutes."
+  },
+  "calendar_pushBackTitle": "Push back by",
+  "@calendar_pushBackTitle": {
+    "description": "Title of the action sheet listing the push-back offsets."
+  },
+  "calendar_pushBackBy": "+{minutes} min",
+  "@calendar_pushBackBy": {
+    "description": "One push-back option, e.g. '+30 min'.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_pushedBack": "Pushed back by {minutes} min",
+  "@calendar_pushedBack": {
+    "description": "Success notice after a push-back saved.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_bookAgain": "Book again",
+  "@calendar_bookAgain": {
+    "description": "Action bar button on a client job's detail sheet (admin only, open or closed job): opens the new-appointment sheet pre-filled with this job's client, address, title, notes, materials, crew and length, with no date or time."
+  },
+  "nav_invalidLink": "This link can't be opened.",
+  "@nav_invalidLink": {
+    "description": "Shown when a route is opened without the arguments it needs."
+  },
+  "settings_locationPaused": "Location sharing is paused. Your last location could not be cleared — try again in a moment.",
+  "@settings_locationPaused": {
+    "description": "Shown when location sharing is turned off but the stored position could not be deleted."
+  },
+  "tour_calendarWeekToggleTitle": "One day, or the whole week",
+  "@tour_calendarWeekToggleTitle": {
+    "description": "Tour step title: calendar day/week agenda toggle"
+  },
+  "tour_calendarWeekToggleDesc": "Switch the agenda between the selected day and the whole week, each day under its own bar with its job count.",
+  "@tour_calendarWeekToggleDesc": {
+    "description": "Tour step description: calendar day/week agenda toggle"
+  },
+  "tour_calendarCrewFilterTitle": "Follow one person",
+  "@tour_calendarCrewFilterTitle": {
+    "description": "Tour step title: calendar crew filter button"
+  },
+  "tour_calendarCrewFilterDesc": "Narrow the whole calendar to one crew member. A banner names who, and Clear brings everyone back.",
+  "@tour_calendarCrewFilterDesc": {
+    "description": "Tour step description: calendar crew filter button"
+  },
+  "tour_settingsLocationSharingTitle": "Sharing your location",
+  "@tour_settingsLocationSharingTitle": {
+    "description": "Tour step title: settings location sharing row"
+  },
+  "tour_settingsLocationSharingDesc": "Your position reaches the staff map only while this is on. Turning it off also erases the position already stored.",
+  "@tour_settingsLocationSharingDesc": {
+    "description": "Tour step description: settings location sharing row"
+  },
+  "tour_jobPushBackTitle": "Running late",
+  "@tour_jobPushBackTitle": {
+    "description": "Tour step title: job details push back action"
+  },
+  "tour_jobPushBackDesc": "Move this job later by a set amount without opening the edit form.",
+  "@tour_jobPushBackDesc": {
+    "description": "Tour step description: job details push back action"
+  },
+  "tour_jobFieldRecordTitle": "What you found",
+  "@tour_jobFieldRecordTitle": {
+    "description": "Tour step title: job details crew field record"
+  },
+  "tour_jobFieldRecordDesc": "Your own notes and photos for this job, kept separate from the brief the office wrote so neither can overwrite the other.",
+  "@tour_jobFieldRecordDesc": {
+    "description": "Tour step description: job details crew field record"
+  },
+  "tour_jobStartTitle": "Say you have arrived",
+  "@tour_jobStartTitle": {
+    "description": "Tour step title: job details start button"
+  },
+  "tour_jobStartDesc": "Start stamps your arrival and begins the clock, so the job shows when it started, when it finished and how long it took.",
+  "@tour_jobStartDesc": {
+    "description": "Tour step description: job details start button"
+  },
+  "tour_jobMarkDoneTitle": "Closing the job",
+  "@tour_jobMarkDoneTitle": {
+    "description": "Tour step title: job details mark complete button"
+  },
+  "tour_jobMarkDoneDesc": "Marks the job finished and records the time. Closed one by mistake? The confirmation carries an Undo for as long as it is on screen.",
+  "@tour_jobMarkDoneDesc": {
+    "description": "Tour step description: job details mark complete button"
+  },
+  "tour_jobBookAgainTitle": "Book it again",
+  "@tour_jobBookAgainTitle": {
+    "description": "Tour step title: job details book again action"
+  },
+  "tour_jobBookAgainDesc": "Opens a new appointment already carrying the client, address, crew and brief — you only pick the date and time.",
+  "@tour_jobBookAgainDesc": {
+    "description": "Tour step description: job details book again action"
+  },
+  "clients_filter": "Filter",
+  "@clients_filter": {
+    "description": "Label of the button that opens the clients filter sheet."
+  },
+  "clients_filterTitle": "Filter clients",
+  "@clients_filterTitle": {
+    "description": "Title of the clients filter sheet."
+  },
+  "clients_filterSectionType": "Type",
+  "@clients_filterSectionType": {
+    "description": "Heading of the type section inside the clients filter sheet."
+  },
+  "clients_filterSectionAddress": "Shared address",
+  "@clients_filterSectionAddress": {
+    "description": "Heading of the shared-address section inside the clients filter sheet."
+  },
+  "clients_filterAll": "All clients",
+  "@clients_filterAll": {
+    "description": "The option that clears every clients filter."
+  },
+  "clients_clearFilter": "Clear filter",
+  "@clients_clearFilter": {
+    "description": "Semantic label of the dismiss control on the active filter chip."
+  },
+  "clients_searchAllFields": "Name, phone, address, email…",
+  "@clients_searchAllFields": {
+    "description": "Hint of the clients search field, naming what the search matches."
+  },
+  "clients_countLabel": "{count, plural, =0{No clients} =1{1 client} other{{count} clients}}",
+  "@clients_countLabel": {
+    "description": "How many clients the list is currently showing.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clients_sort": "Sort",
+  "@clients_sort": {
+    "description": "Label of the control that changes the clients list order."
+  },
+  "clients_sortByName": "Name",
+  "@clients_sortByName": {
+    "description": "Sort the clients list alphabetically by name."
+  },
+  "clients_sortMostJobs": "Most jobs",
+  "@clients_sortMostJobs": {
+    "description": "Sort the clients list by job count, highest first."
+  },
+  "clients_sortRecentlyAdded": "Recently added",
+  "@clients_sortRecentlyAdded": {
+    "description": "Sort the clients list by creation date, newest first."
+  },
+  "clients_modePhone": "Phone",
+  "@clients_modePhone": {
+    "description": "Segment of the client picker's mode switch that opens the phone keypad."
+  },
+  "clients_modeNameOrAddress": "Name or address",
+  "@clients_modeNameOrAddress": {
+    "description": "Segment of the client picker's mode switch that opens the text keyboard and searches names, addresses, emails and contacts."
+  },
+  "clients_tapPhoneToStart": "Tap Phone to start",
+  "@clients_tapPhoneToStart": {
+    "description": "Placeholder in the add-job client field before it has focus."
+  },
+  "clients_digitsTyped": "{typed} of {total}",
+  "@clients_digitsTyped": {
+    "description": "Digit counter beside the client picker's number field.",
+    "placeholders": {
+      "typed": { "type": "int", "example": "8" },
+      "total": { "type": "int", "example": "10" }
+    }
+  },
+  "clients_keepGoing": "Keep going",
+  "@clients_keepGoing": {
+    "description": "Shown beside the digit pips while the typed number is still too short to search."
+  },
+  "clients_noExactMatchClosest": "NO EXACT MATCH · CLOSEST NUMBERS",
+  "@clients_noExactMatchClosest": {
+    "description": "Caption inside the client search dropdown when the results are a fallback rung rather than hits. They answer a query nobody typed, so they must never read as matches. Already uppercase in source."
+  },
+  "clients_attach": "Attach",
+  "@clients_attach": {
+    "description": "Button on a client result row that attaches that client to the job."
+  },
+  "clients_searchFailed": "Couldn't check that number",
+  "@clients_searchFailed": {
+    "description": "Shown in the client picker when the search itself failed, so an empty result is not mistaken for a new customer."
+  },
+  "clients_retrySearch": "Try again",
+  "@clients_retrySearch": {
+    "description": "Action beside the client picker's failed-search message."
+  },
+  "clients_noneOfTheseNewClient": "None of these — new client",
+  "@clients_noneOfTheseNewClient": {
+    "description": "Last row of the client picker when near misses were offered, creating a client from the typed number."
+  },
+  "clients_changeClient": "Change",
+  "@clients_changeClient": {
+    "description": "Action on the attached-client card that reopens the picker."
+  },
+  "clients_removeClient": "Remove",
+  "@clients_removeClient": {
+    "description": "Destructive action on the attached-client card that detaches the client from the job."
+  },
+  "clients_jobsAndLastVisit": "{jobs, plural, =1{1 job} other{{jobs} jobs}} · last {date}",
+  "@clients_jobsAndLastVisit": {
+    "description": "Second line of the attached-client card: how many jobs this client has had and when the last one was.",
+    "placeholders": {
+      "jobs": { "type": "int", "example": "12" },
+      "date": { "type": "String", "example": "14 Aug" }
+    }
+  },
+  "calendar_jobAddress": "Job address",
+  "@calendar_jobAddress": {
+    "description": "Label of the address field in the add-job sheet's WHO section, under the attached client."
+  },
+  "calendar_useThisAddressForTheJob": "Use this address for the job",
+  "@calendar_useThisAddressForTheJob": {
+    "description": "Switch on the attached-client card that copies the client's own address into the job."
+  },
+  "calendar_beenHereBefore": "{name} has been here before",
+  "@calendar_beenHereBefore": {
+    "description": "Header above previous job addresses for the attached client, offered before a billed address lookup.",
+    "placeholders": { "name": { "type": "String", "example": "Marie" } }
+  },
+  "calendar_unitsBilledToThisClient": "Units billed to this client",
+  "@calendar_unitsBilledToThisClient": {
+    "description": "Header above previous job addresses when they share a street and differ only by unit."
+  },
+  "calendar_searchForAnotherAddress": "Search for another address…",
+  "@calendar_searchForAnotherAddress": {
+    "description": "Row that opens the address autocomplete, below the client's previous job addresses."
+  },
+  "tour_apptJobAddressTitle": "Where the work is",
+  "@tour_apptJobAddressTitle": {
+    "description": "Title of the add-job tour step highlighting the job address, which sits under the attached client."
+  },
+  "tour_apptJobAddressDesc": "The job's own address, which need not be the client's. If they have been here before, those addresses are offered first so you don't have to search.",
+  "@tour_apptJobAddressDesc": {
+    "description": "Description of the add-job tour step highlighting the job address."
+  },
+  "tour_clientsSortTitle": "Order the list",
+  "@tour_clientsSortTitle": {
+    "description": "Title of the clients tour step highlighting the sort control above the list."
+  },
+  "tour_clientsSortDesc": "Sort by name, by who has had the most jobs, or by who was added most recently.",
+  "@tour_clientsSortDesc": {
+    "description": "Description of the clients tour step highlighting the sort control."
   }
 }

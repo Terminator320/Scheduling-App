@@ -1,0 +1,110 @@
+#!/usr/bin/env node
+// One-off, READ-ONLY: replays the Wave customer contract over every client and
+// reports what it would refuse.
+
+"use strict";
+
+const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
+const {scanByName} = require("./_scan");
+const {bootstrapScript} = require("./_project");
+const {buildCustomerPayload} = require("../wave/customer_contract");
+
+/** Bare switches, matched EXACTLY - see `_flags.js`. */
+const EXACT_FLAGS = ["--verbose"];
+
+/**
+ * Rejects any argument this script does not recognize.
+ * @param {!Array<string>} argv Arguments after the node + script paths.
+ */
+function assertKnownFlags(argv) {
+  rejectUnknownFlags(argv, {exact: EXACT_FLAGS});
+}
+
+/** Read-only, so this is a round-trip dial rather than a write bound. */
+const PAGE_SIZE = 500;
+
+/**
+ * Replays the contract over every client document.
+ * @param {!Object} db The Firestore handle.
+ * @return {!Promise<{scanned: number, refused: number, flagged: number,
+ * byCode: !Object<string, number>, offenders: !Array<!Object>}>} The tally.
+ * `refused` counts clients with a BLOCKING problem (the push would
+ * dead-letter); `flagged` also counts advisory-only ones, which sync fine
+ * but carry data worth fixing.
+ */
+async function audit(db) {
+  const byCode = {};
+  const offenders = [];
+  let scanned = 0;
+  let refused = 0;
+
+  // Paged on `__name__` so this needs no index and no orderBy field, which
+  // matters: an orderBy makes Firestore EXCLUDE any doc missing that field, and
+  // a legacy doc missing one is exactly the shape most likely to fail.
+  for await (const doc of scanByName(
+      db.collection("clients"),
+      {pageSize: PAGE_SIZE},
+  )) {
+    scanned += 1;
+    // NOT gated on `ok`: an ADVISORY problem rides along on a perfectly good
+    // result, and reporting only the blocked clients would hide the case this
+    // audit first turned up.
+    const {ok, problems} = buildCustomerPayload(doc.data() || {});
+    const found = Array.isArray(problems) ? problems : [];
+    if (found.length === 0) continue;
+    if (!ok) refused += 1;
+    offenders.push({id: doc.id, blocked: !ok, problems: found});
+    for (const problem of found) {
+      const key = `${problem.severity}  ${problem.field}:${problem.code}`;
+      byCode[key] = (byCode[key] || 0) + 1;
+    }
+  }
+
+  return {scanned, refused, flagged: offenders.length, byCode, offenders};
+}
+
+/**
+ * Entry point.
+ * @return {!Promise<void>}
+ */
+async function main() {
+  const argv = process.argv.slice(2);
+  // Read-only: `--dry-run` is not in this script's flag allowlist, so `dryRun`
+  // comes back false and the banner carries no misleading "[dry-run]" prefix —
+  // see `bootstrapScript`.
+  const {app, db} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
+  const verbose = argv.includes("--verbose");
+
+  const {scanned, refused, flagged, byCode, offenders} = await audit(db);
+
+  console.log(`\nScanned ${scanned} clients.`);
+  console.log(`${refused} would be REFUSED by Wave (blocking).`);
+  console.log(`${flagged - refused} sync fine but carry advisory problems.\n`);
+
+  const keys = Object.keys(byCode).sort();
+  if (keys.length === 0) {
+    console.log("  No client fails the contract.");
+  } else {
+    for (const key of keys) console.log(`  ${key}: ${byCode[key]}`);
+  }
+
+  if (verbose && offenders.length > 0) {
+    console.log("\nAffected clients:");
+    for (const {id, blocked, problems} of offenders) {
+      const summary = problems.map((p) => `${p.field}:${p.code}`).join(", ");
+      console.log(`  ${blocked ? "BLOCKED " : "advisory"}  ${id}  ${summary}`);
+    }
+  }
+
+  await app.delete();
+}
+
+// Only run when invoked directly.
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err && err.message ? err.message : err);
+    process.exit(1);
+  });
+}
+
+module.exports = {audit, assertKnownFlags};

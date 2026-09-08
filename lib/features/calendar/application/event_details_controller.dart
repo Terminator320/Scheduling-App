@@ -1,19 +1,21 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
+import 'package:scheduling/features/calendar/application/appointment_conflict_checker.dart';
 import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart';
 import 'package:scheduling/features/calendar/application/appointment_series_editor.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_details_outcome.dart';
+import 'package:scheduling/features/calendar/application/event_details_save_pipeline.dart';
 import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
@@ -23,8 +25,10 @@ import 'package:scheduling/features/calendar/domain/models/appointment_image.dar
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
+import 'package:scheduling/features/calendar/domain/policies/custom_address_policy.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
@@ -46,15 +50,18 @@ abstract class EventDetailsState
     required String editingStatus,
     @Default(false) bool isEditing,
 
-    /// An existing record already has a real end date, so unlike the add flow
-    /// this starts true: moving the start date must preserve the run's LENGTH
-    /// rather than collapse it to a single day.
+    /// Existing appointments preserve run length when the start date moves.
     @Default(true) bool endDateTouched,
     @Default(RepeatInterval.none) RepeatInterval repeat,
-    // The repeat value as last saved — if the user changes it, that triggers new bookings.
+    // Changing this value triggers repeat rebooking.
     @Default(RepeatInterval.none) RepeatInterval savedRepeat,
     @Default(<EmployeeRecord>[]) List<EmployeeRecord> selectedEmployees,
     @Default(<AppointmentImage>[]) List<AppointmentImage> existingImages,
+
+    /// A subcollection re-read is in flight. Without it the photos section
+    /// unmounted between a successful upload dropping the pending count and
+    /// the re-read landing, so the crew watched their photo blink away.
+    @Default(false) bool isLoadingPictures,
     @Default(<AppointmentImage>[]) List<AppointmentImage> removedExistingImages,
     @Default(<File>[]) List<File> newImages,
     @Default(false) bool isSaving,
@@ -62,10 +69,12 @@ abstract class EventDetailsState
     ClientRecord? selectedClient,
     @Default(<ClientRecord>[]) List<ClientRecord> clientResults,
     @Default(false) bool isSearchingClient,
+    @Default(ClientSearchStatus()) ClientSearchStatus clientSearchStatus,
     @Default(false) bool useCustomAddress,
     @Default(false) bool isPersonal,
+    @Default(false) bool isDayOff,
     @Default(false) bool isAllDay,
-    // Set when the user explicitly removes the client, so we don't fall back to a placeholder.
+    // Prevents fallback to the original client.
     @Default(false) bool clientCleared,
     @Default(<String, AppointmentFormError>{})
     Map<String, AppointmentFormError> errors,
@@ -81,30 +90,81 @@ class EventDetailsController extends Notifier<EventDetailsState>
   // Settles when employee enrichment completes, so save() runs on warm data.
   Future<void>? _seedFuture;
 
+  /// Last photo list adopted by this controller.
+  List<AppointmentImage> _lastKnownImages = const [];
+
   @override
   EventDetailsState build() {
+    // Reset the photo baseline for this build.
+    _lastKnownImages = const [];
     Future.microtask(() => _loadClientIfNeeded(appointment.clientId));
+    Future.microtask(_loadStoredPictures);
+    // A background photo upload appends its rows through this same singleton
+    // repository, so its local-write poke is how this sheet learns the photo
+    // landed. Without it the crew saw nothing until they closed and reopened.
+    // Resolved here (before any await) rather than inside `onError`: `ref` is
+    // not safe to touch once this notifier may be disposed.
+    final logger = ref.read(loggerProvider);
+    final writes = ref
+        .read(appointmentsRepositoryProvider)
+        .onLocalWrite
+        .listen(
+          // `showLoading` holds the section on screen across the gap between
+          // the pending count dropping to 0 and the refreshed list arriving.
+          // The BUILD-time read passes false: a job with no photos would
+          // otherwise raise the PHOTOS header over an empty strip on every
+          // open and collapse it a round trip later.
+          (_) => unawaited(_loadStoredPictures(showLoading: true)),
+          onError: (Object e, StackTrace st) =>
+              logger.warn('APPT-IMG local write poke', e, st),
+        );
+    ref.onDispose(writes.cancel);
     _seedFuture = Future.microtask(_enrichSelectedEmployees);
     return EventDetailsState(
       selectedDate: appointment.startTime,
       endDate: lastWorkDayOf(appointment),
       selectedStartTime: TimeOfDay.fromDateTime(appointment.startTime),
       selectedEndTime: TimeOfDay.fromDateTime(appointment.endTime),
-      // storedRaw normalizes legacy/unknown status so save won't fail rules validation.
+      // Normalize status before later writes.
       editingStatus: AppointmentStatus.storedRaw(appointment.status),
       repeat: appointment.repeat,
       savedRepeat: appointment.repeat,
       isPersonal: appointment.isPersonal,
+      isDayOff: appointment.isDayOff,
       isAllDay: appointment.isAllDay,
-      // Seeded synchronously to avoid a race with the async load below — employee
-      // visibility depends on employeeIds being set right away.
+      // Seed assignees before async enrichment.
       selectedEmployees: _assigneesFromRecord(appointment),
-      existingImages: List.of(appointment.pictures),
     );
   }
 
-  /// Builds placeholder employees from the stored ids and names. They get
-  /// swapped for the full records once those load.
+  /// Reads this job's photos from `appointments/{id}/images`.
+  Future<void> _loadStoredPictures({bool showLoading = false}) async {
+    final id = appointment.id;
+    if (id == null || id.isEmpty) return;
+    final repo = ref.read(appointmentsRepositoryProvider);
+    // Read the logger before this notifier can be disposed.
+    final logger = ref.read(loggerProvider);
+    if (showLoading && ref.mounted) {
+      state = state.copyWith(isLoadingPictures: true);
+    }
+    List<AppointmentImage> stored;
+    try {
+      stored = await repo.fetchAppointmentPictures(id);
+    } catch (e, st) {
+      logger.warn('APPT-IMG subcollection read failed', e, st);
+      return;
+    } finally {
+      if (showLoading && ref.mounted) {
+        state = state.copyWith(isLoadingPictures: false);
+      }
+    }
+    if (stored.isEmpty || !ref.mounted) return;
+    // Adopt only if the user has not edited the photo list.
+    if (!listEquals(state.existingImages, _lastKnownImages)) return;
+    state = state.copyWith(existingImages: _lastKnownImages = stored);
+  }
+
+  /// Builds assignee placeholders from stored ids and names.
   static List<EmployeeRecord> _assigneesFromRecord(AppointmentRecord a) => [
     for (var i = 0; i < a.employeeIds.length; i++)
       EmployeeRecord(
@@ -113,8 +173,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
       ),
   ];
 
-  /// Fills in the seeded placeholders with full employee records, for display
-  /// only — whatever the user has toggled still wins.
+  /// Enriches placeholder assignees for display.
   Future<void> _enrichSelectedEmployees() async {
     if (state.selectedEmployees.isEmpty) return;
     final logger = ref.read(loggerProvider);
@@ -128,45 +187,60 @@ class EventDetailsController extends Notifier<EventDetailsState>
         ],
       );
     } catch (e, st) {
-      logger.warn('enrichSelectedEmployees failed', e, st);
+      logger.warn('APPT-LOAD enrichSelectedEmployees failed', e, st);
     }
   }
 
-  /// Resolves the active staff set the same way for both seeding and
-  /// assignee resolution.
+  /// Resolves active staff for seeding and assignee saves.
   Future<List<EmployeeRecord>> _resolveActiveEmployees() =>
       ref.read(employeesRepositoryProvider).watchEmployees().first;
 
   Future<void> _loadClientIfNeeded(String clientId) async {
     final id = clientId.trim();
     if (id.isEmpty || state.client != null) return;
-    // The clients read rule is admin-only, so skip this load for employees —
-    // otherwise it just logs a permission-denied error.
-    if (ref.exists(currentUserDocProvider)) {
-      final role = ref.read(userRoleProvider).value ?? '';
-      if (role.isNotEmpty && role != 'admin') return;
-    }
+    // Resolved BEFORE the first await: `ref.read` on an unmounted consumer
+    // throws under Riverpod 3, and the role gate below now awaits.
     final logger = ref.read(loggerProvider);
     final clientsRepo = ref.read(clientsRepositoryProvider);
+    // Employees cannot read client documents.
+    if (ref.exists(currentUserDocProvider)) {
+      final docState = ref.read(currentUserDocProvider);
+      if (docState.hasError) return;
+      final Map<String, dynamic> doc;
+      try {
+        doc = docState.isLoading
+            ? await ref.read(currentUserDocProvider.future)
+            : (docState.value ?? const <String, dynamic>{});
+      } on Object catch (e, st) {
+        // `.future` genuinely rejects when the stream errors before its first
+        // value — the `hasError` guard above only covers an ALREADY-settled
+        // error, not one arriving during this await.
+        logger.warn('APPT-OPEN user doc read failed', e, st);
+        return;
+      }
+      if (!ref.mounted) return;
+      final role = (doc['role'] ?? '').toString().trim();
+      if (role != 'admin') return;
+    }
     try {
       final client = await clientsRepo.getClientById(id);
-      // Check again after the await, since the user might have picked a client while this was loading.
+      // Do not overwrite a client picked during the read.
       if (!ref.mounted) return;
       if (client == null || state.client != null) return;
       if (state.selectedClient == null && !state.clientCleared) {
         state = state.copyWith(
           client: client,
           selectedClient: client,
-          // No-fixed-address clients always use custom mode.
-          useCustomAddress:
-              client.noFixedAddress ||
-              appointment.address.trim() != client.address.trim(),
+          useCustomAddress: usesCustomAddress(
+            appointmentAddress: appointment.address,
+            client: client,
+          ),
         );
       } else {
         state = state.copyWith(client: client);
       }
     } catch (e, st) {
-      logger.warn('loadClientIfNeeded failed', e, st);
+      logger.warn('APPT-LOAD loadClientIfNeeded failed', e, st);
     }
   }
 
@@ -178,7 +252,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     state = state.copyWith(
       selectedDate: date,
       endDate: addCalendarDays(date, length < 0 ? 0 : length),
-      errors: withoutKey(withoutKey(state.errors, 'date'), 'endDate'),
+      errors: withoutKeys(state.errors, const ['date', 'endDate']),
     );
   }
 
@@ -207,7 +281,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
   void setAllDay({required bool value}) {
     state = state.copyWith(
       isAllDay: value,
-      errors: withoutKey(withoutKey(state.errors, 'startTime'), 'endTime'),
+      errors: withoutKeys(state.errors, const ['startTime', 'endTime']),
     );
   }
 
@@ -219,20 +293,27 @@ class EventDetailsController extends Notifier<EventDetailsState>
     state = state.copyWith(repeat: value);
   }
 
-  /// Flipping this on drops the client the same way the add flow does — the
-  /// picker is hidden from here on, and `clientCleared` keeps `save()` from
-  /// falling back to the stored one.
+  /// Marks a personal block as all-day time off.
+  void setDayOff({required bool value}) {
+    state = state.copyWith(
+      isDayOff: value,
+      isAllDay: value || state.isAllDay,
+      errors: withoutKeys(state.errors, const ['startTime', 'endTime']),
+    );
+  }
+
+  /// Toggles personal mode and clears hidden client-only fields.
   void setPersonal({required bool value}) {
     state = state.copyWith(
       isPersonal: value,
+      // Client visits cannot keep a hidden day-off flag.
+      isDayOff: value && state.isDayOff,
       selectedClient: value ? null : state.selectedClient,
       client: value ? null : state.client,
       clientCleared: value || state.clientCleared,
       clientResults: value ? const [] : state.clientResults,
       useCustomAddress: !value && state.useCustomAddress,
-      // isAllDay is deliberately NOT cleared here. The all-day switch is shown
-      // on every job now, not just personal ones, so the flag stays reachable
-      // and repairable — clearing it would discard a deliberate choice.
+      // All-day stays user-controlled for every job type.
       errors: withoutKey(state.errors, 'client'),
     );
   }
@@ -247,13 +328,14 @@ class EventDetailsController extends Notifier<EventDetailsState>
     var next = current.copyWith(
       clientResults: update.clientResults ?? current.clientResults,
       isSearchingClient: update.isSearchingClient ?? current.isSearchingClient,
+      clientSearchStatus:
+          update.clientSearchStatus ?? current.clientSearchStatus,
       useCustomAddress: update.useCustomAddress ?? current.useCustomAddress,
       selectedEmployees: update.selectedEmployees ?? current.selectedEmployees,
       errors: update.errors ?? current.errors,
       newImages: update.pendingImages ?? current.newImages,
     );
-    // Unlike the add flow, this state also tracks the loaded `client` and the
-    // explicit-clear flag (which blocks the placeholder fallback in save()).
+    // Keep the loaded client and explicit-clear flag in sync.
     if (update.selectedClient != null) {
       next = next.copyWith(
         selectedClient: update.selectedClient,
@@ -288,16 +370,105 @@ class EventDetailsController extends Notifier<EventDetailsState>
     );
   }
 
-  /// Writes `status: 'done'`. If it fails, the widget layer builds a failure
-  /// notice from the returned outcome.
   Future<EventDetailsActionOutcome> markAsDone(AppointmentRecord appointment) {
     return _setStatusOnRepo(appointment, 'done');
   }
 
+  /// Moves an open job into `in_progress`.
+  Future<EventDetailsActionOutcome> startJob(AppointmentRecord appointment) {
+    return _setStatusOnRepo(appointment, 'in_progress');
+  }
+
+  /// Shifts the whole job later by [minutes], keeping its length.
+  Future<EventDetailsSaveOutcome> delayAppointment(
+    AppointmentRecord appointment, {
+    required int minutes,
+    bool forceBusy = false,
+  }) async {
+    final id = appointment.id;
+    if (id == null) {
+      return EventDetailsFailed(
+        StateError('Cannot push back an appointment without an id.'),
+      );
+    }
+    if (state.isSaving) return const EventDetailsSaveBusy();
+    // Offline writes would wait forever for a server ack.
+    if (ref.read(isOfflineProvider)) {
+      return const EventDetailsFailed(SocketException('offline'));
+    }
+    state = state.copyWith(isSaving: true);
+    // Read dependencies before any await.
+    final repo = ref.read(appointmentsRepositoryProvider);
+    final logger = ref.read(loggerProvider);
+    final selectedEmployees = state.selectedEmployees;
+    final shift = Duration(minutes: minutes);
+    final updated = appointment.copyWith(
+      startTime: appointment.startTime.add(shift),
+      endTime: appointment.endTime.add(shift),
+      // A legacy status re-serialized verbatim is refused by the rules.
+      status: AppointmentStatus.storedRaw(appointment.status),
+    );
+    try {
+      if (!forceBusy && !appointment.isPersonal) {
+        final conflict = await findFirstAppointmentConflict(
+          repo: repo,
+          candidates: selectedEmployees,
+          bookings: [updated],
+          excludeOwnBookingIds: true,
+        );
+        if (conflict != null) return _busyEmployees(conflict);
+      }
+      await repo.updateAppointment(updated);
+      return EventDetailsSaved(updated);
+    } catch (e, st) {
+      logger.warn('APPT-SAVE delayAppointment failed', e, st);
+      return EventDetailsFailed(e);
+    } finally {
+      if (ref.mounted) state = state.copyWith(isSaving: false);
+    }
+  }
+
   Future<EventDetailsActionOutcome> cancelAppointment(
-    AppointmentRecord appointment,
-  ) {
-    return _setStatusOnRepo(appointment, 'cancelled');
+    AppointmentRecord appointment, {
+    bool includeFuture = false,
+  }) async {
+    final id = appointment.id;
+    if (id == null) {
+      return EventDetailsActionFailed(StateError('appointment has no id'));
+    }
+    if (!includeFuture || appointment.seriesId.isEmpty) {
+      return await _setStatusOnRepo(appointment, 'cancelled');
+    }
+    if (state.isSaving) return const EventDetailsActionBusy();
+    // Offline writes would wait forever for a server ack.
+    if (ref.read(isOfflineProvider)) {
+      return const EventDetailsActionFailed(SocketException('offline'));
+    }
+    state = state.copyWith(isSaving: true);
+    // Read dependencies before any await.
+    final repo = ref.read(appointmentsRepositoryProvider);
+    final logger = ref.read(loggerProvider);
+    try {
+      final series = await repo.getSeries(appointment.seriesId);
+      final futureIds = futureSeriesIds(
+        series,
+        excludeId: id,
+        after: appointment.startTime,
+        anchor: appointment,
+      );
+      await repo.updateAppointmentStatuses(
+        ids: [id, ...futureIds],
+        status: 'cancelled',
+      );
+      return const EventDetailsActionOk();
+    } catch (e, st) {
+      logger.warn('APPT-STATUS cancel run tail failed', e, st);
+      return EventDetailsActionFailed(e);
+    } finally {
+      // One owner for the flag: an early return added to the try body used to
+      // leak it and disable this sheet's actions for good.
+      if (ref.mounted) state = state.copyWith(isSaving: false);
+    }
   }
 
   Future<EventDetailsActionOutcome> _setStatusOnRepo(
@@ -308,40 +479,51 @@ class EventDetailsController extends Notifier<EventDetailsState>
     if (id == null) {
       return EventDetailsActionFailed(StateError('appointment has no id'));
     }
-    // Reject a double-tap on the status write — same reentrancy guard save() uses.
+    // Reject duplicate status writes.
     if (state.isSaving) return const EventDetailsActionBusy();
+    // Offline writes would wait forever for a server ack, so Mark as complete
+    // would spin until reconnect — the one action a technician out of signal is
+    // most likely to press.
+    if (ref.read(isOfflineProvider)) {
+      return const EventDetailsActionFailed(SocketException('offline'));
+    }
     state = state.copyWith(isSaving: true);
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
     try {
       await repo.updateAppointmentStatus(id: id, status: status);
-      // The live activity card gets ended server-side via the liveActivityCards
-      // marker, so don't end it locally here.
-      if (ref.mounted) state = state.copyWith(isSaving: false);
+      // Live activity cleanup is server-owned.
       return const EventDetailsActionOk();
     } catch (e, st) {
       logger.warn('APPT-STATUS updateAppointmentStatus($status) failed', e, st);
-      if (ref.mounted) state = state.copyWith(isSaving: false);
       return EventDetailsActionFailed(e);
+    } finally {
+      if (ref.mounted) state = state.copyWith(isSaving: false);
     }
   }
 
-  /// Toggles the busy flag while a confirmation dialog is open to prevent duplicate prompts.
-  void setSaving({required bool busy}) =>
-      state = state.copyWith(isSaving: busy);
+  void setSaving({required bool busy}) {
+    if (!ref.mounted) return;
+    state = state.copyWith(isSaving: busy);
+  }
 
-  /// Builds the final assignee list: the selected employees plus any original
-  /// assignees that weren't in the picker, so we don't silently unassign them.
+  EventDetailsSavePipeline _pipeline() => EventDetailsSavePipeline(
+    repo: ref.read(appointmentsRepositoryProvider),
+    resolveStorage: () => ref.mounted ? ref.read(imageStorageProvider) : null,
+    logger: ref.read(loggerProvider),
+  );
+
+  /// Resolves final assignees against the active staff list.
   Future<({List<String> ids, List<String> names})> _resolveAssignees(
     AppointmentRecord appointment,
+    EventDetailsSavePipeline pipeline,
+    List<EmployeeRecord> selectedEmployees,
   ) async {
     final activeEmployees = await _resolveActiveEmployees();
-    return mergeRetainedAssignees(
-      originalIds: appointment.employeeIds,
-      originalNames: appointment.employeeNames,
-      selectedIds: state.selectedEmployees.map((e) => e.id).toList(),
-      selectedNames: state.selectedEmployees.map((e) => e.name).toList(),
-      activeIds: activeEmployees.map((e) => e.id).toSet(),
+    return pipeline.resolveAssignees(
+      appointment: appointment,
+      selected: selectedEmployees,
+      activeEmployees: activeEmployees,
     );
   }
 
@@ -354,28 +536,41 @@ class EventDetailsController extends Notifier<EventDetailsState>
     bool applyToSeries = false,
     bool forceBusy = false,
   }) async {
-    // Mark this in-flight before the seed-settle await, so a double-tap can't
-    // start a concurrent save.
-    if (state.isSaving) return const EventDetailsInvalid();
+    // Duplicate saves are busy, not invalid.
+    if (state.isSaving) return const EventDetailsSaveBusy();
 
-    // Bail out early if we're offline, before setting the flag — otherwise
-    // Save just spins waiting for a server ack that isn't coming.
+    // Offline writes would wait forever for a server ack.
     if (ref.read(isOfflineProvider)) {
       return const EventDetailsFailed(SocketException('offline'));
     }
     state = state.copyWith(isSaving: true);
 
-    // Resolve dependencies before the first await, so they survive the sheet
-    // being dismissed (Riverpod 3).
+    final isAllDay = state.isAllDay;
+
+    // Read dependencies before any await.
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
-    // Only resolve the upload service if there are photos, so we skip
-    // initializing FirebaseStorage otherwise.
+    final pipeline = _pipeline();
+    // Avoid touching Storage when no new photos exist.
     final uploader = state.newImages.isEmpty
         ? null
         : ref.read(appointmentImageUploadProvider);
 
-    final invalid = await _settleAndValidate(appointment, title: title);
+    // Guarded because `isSaving` is already true: the seed settle awaits a
+    // `Future.microtask` that throws when the notifier is disposed under it,
+    // and an un-caught throw here leaves Save disabled for the sheet's life.
+    final EventDetailsSaveOutcome? invalid;
+    try {
+      invalid = await _settleAndValidate(
+        appointment,
+        title: title,
+        isAllDay: isAllDay,
+      );
+    } on Object catch (e, st) {
+      logger.warn('APPT-SAVE validation failed', e, st);
+      if (ref.mounted) state = state.copyWith(isSaving: false);
+      return EventDetailsFailed(e);
+    }
     if (invalid != null) return invalid;
 
     final id = appointment.id;
@@ -389,39 +584,29 @@ class EventDetailsController extends Notifier<EventDetailsState>
     final (:start, :end) = appointmentSpan(
       date: state.selectedDate,
       endDate: state.endDate,
-      isAllDay: state.isAllDay,
+      isAllDay: isAllDay,
       startTime: state.selectedStartTime,
       endTime: state.selectedEndTime,
     );
 
-    // Snapshot the photo state before writing, so it survives the sheet being dismissed.
+    // Snapshot form state before async writes.
     final removedImages = state.removedExistingImages;
     final newImages = state.newImages;
+    final selectedEmployees = state.selectedEmployees;
+    final selectedClient = state.selectedClient;
+    final editingStatus = state.editingStatus;
+    final repeat = state.repeat;
+    final savedRepeat = state.savedRepeat;
+    final isPersonal = state.isPersonal;
+    final isDayOff = state.isDayOff;
 
     try {
-      if (!forceBusy) {
-        final busy = await repo.findBusyEmployees(
-          candidates: state.selectedEmployees,
-          start: start,
-          end: end,
-          // Without this the job collides with itself and every one of its own
-          // assignees reports as busy.
-          excludeAppointmentId: id,
-        );
-        if (busy.isNotEmpty) {
-          // Not an error — hand the decision back to the user. The flag has to
-          // clear here or Save stays stuck after the dialog is dismissed.
-          if (ref.mounted) state = state.copyWith(isSaving: false);
-          return EventDetailsBusyEmployees(
-            busyEmployees: busy,
-            start: start,
-            end: end,
-          );
-        }
-      }
-
-      final assignees = await _resolveAssignees(appointment);
-      final updated = _buildUpdatedRecord(
+      final assignees = await _resolveAssignees(
+        appointment,
+        pipeline,
+        selectedEmployees,
+      );
+      final updated = pipeline.buildUpdatedRecord(
         appointment,
         id: id,
         title: title,
@@ -431,6 +616,12 @@ class EventDetailsController extends Notifier<EventDetailsState>
         start: start,
         end: end,
         assignees: assignees,
+        selectedClient: selectedClient,
+        status: editingStatus,
+        repeat: repeat,
+        isPersonal: isPersonal,
+        isDayOff: isDayOff,
+        isAllDay: isAllDay,
       );
 
       final saved = await _applySeriesChange(
@@ -441,14 +632,25 @@ class EventDetailsController extends Notifier<EventDetailsState>
         start: start,
         end: end,
         applyToSeries: applyToSeries,
+        repeat: repeat,
+        savedRepeat: savedRepeat,
+        selectedEmployees: selectedEmployees,
+        checkConflicts: !forceBusy && !isPersonal,
       );
+      if (saved is! EventDetailsSaved) {
+        if (ref.mounted) state = state.copyWith(isSaving: false);
+        return saved;
+      }
 
-      await _applyPhotoChanges(
+      await pipeline.applyPhotoChanges(
         id: id,
-        repo: repo,
         uploader: uploader,
         removedImages: removedImages,
         newImages: newImages,
+        // Move the repeat baseline after the record write.
+        onRecordWritten: () {
+          if (ref.mounted) state = state.copyWith(savedRepeat: repeat);
+        },
       );
 
       if (ref.mounted) state = state.copyWith(isSaving: false);
@@ -460,37 +662,97 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
   }
 
-  /// Applies photo changes after the record write — this ordering matters.
-  Future<void> _applyPhotoChanges({
-    required String id,
+  Future<EventDetailsSaveOutcome> _applySeriesChange(
+    AppointmentRecord appointment, {
     required AppointmentsRepository repo,
-    required AppointmentImageUploadService? uploader,
-    required List<AppointmentImage> removedImages,
-    required List<File> newImages,
+    required AppointmentRecord updated,
+    required String id,
+    required DateTime start,
+    required DateTime end,
+    required bool applyToSeries,
+    required RepeatInterval repeat,
+    required RepeatInterval savedRepeat,
+    required List<EmployeeRecord> selectedEmployees,
+    required bool checkConflicts,
   }) async {
-    // Use arrayRemove only for removed photos to avoid clobbering concurrent uploads.
-    if (removedImages.isNotEmpty) {
-      await repo.removeAppointmentPictures(id, removedImages);
+    final seriesEditor = AppointmentSeriesEditor(repo);
+    // A run member never rewrites its series.
+    if (repeat != savedRepeat && !appointment.isRunMember) {
+      final plan = await seriesEditor.planRewrite(
+        updated: updated,
+        appointment: appointment,
+        id: id,
+        start: start,
+        end: end,
+        repeat: repeat,
+      );
+      if (checkConflicts) {
+        final conflict = await findFirstAppointmentConflict(
+          repo: repo,
+          candidates: selectedEmployees,
+          bookings: [plan.updated, ...plan.copies],
+          excludeAppointmentIds: plan.deleteIds.toSet(),
+          excludeOwnBookingIds: true,
+        );
+        if (conflict != null) return _busyEmployees(conflict);
+      }
+      final result = await seriesEditor.commitRewrite(plan);
+      return EventDetailsSaved(
+        result.updated,
+        futureBookings: result.futureBookings,
+        removedBookings: result.removedBookings,
+      );
     }
 
-    // Update baseline for next edit.
-    if (ref.mounted) state = state.copyWith(savedRepeat: state.repeat);
-
-    // Clean up images only after the doc stops referencing them.
-    await _deleteOrphanedImages(removedImages, tag: 'APPT-SAVE');
-
-    if (newImages.isNotEmpty) {
-      uploader?.uploadInBackground(appointmentId: id, newImages: newImages);
+    if (applyToSeries && appointment.seriesId.isNotEmpty) {
+      final plan = await seriesEditor.planPropagate(
+        updated: updated,
+        appointment: appointment,
+        id: id,
+        start: start,
+        end: end,
+      );
+      if (checkConflicts) {
+        final conflict = await findFirstAppointmentConflict(
+          repo: repo,
+          candidates: selectedEmployees,
+          bookings: [plan.updated, ...plan.propagated],
+          excludeOwnBookingIds: true,
+        );
+        if (conflict != null) return _busyEmployees(conflict);
+      }
+      final updatedSiblings = await seriesEditor.commitPropagate(plan);
+      return EventDetailsSaved(updated, updatedSiblings: updatedSiblings);
     }
+
+    if (checkConflicts) {
+      final conflict = await findFirstAppointmentConflict(
+        repo: repo,
+        candidates: selectedEmployees,
+        bookings: [updated],
+        excludeOwnBookingIds: true,
+      );
+      if (conflict != null) return _busyEmployees(conflict);
+    }
+
+    await repo.updateAppointment(updated);
+    return EventDetailsSaved(updated);
   }
 
-  /// Waits for the seed to settle, then validates the form. Returns a stop
-  /// outcome if it's invalid, or null to keep going.
+  EventDetailsBusyEmployees _busyEmployees(AppointmentConflictHit conflict) =>
+      EventDetailsBusyEmployees(
+        busyEmployees: conflict.busyEmployees,
+        start: conflict.start,
+        end: conflict.end,
+      );
+
+  /// Waits for seeding, validates the saved snapshot, and returns a stop
+  /// outcome on errors.
   Future<EventDetailsSaveOutcome?> _settleAndValidate(
     AppointmentRecord appointment, {
     required String title,
+    required bool isAllDay,
   }) async {
-    // Wait for enrichment to finish, so assignee resolution reads a warm active-employee list.
     await _seedFuture;
     if (!ref.mounted) return const EventDetailsInvalid();
 
@@ -511,7 +773,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
         client: clientForValidation,
         selectedEmployees: state.selectedEmployees,
         isPersonal: state.isPersonal,
-        isAllDay: state.isAllDay,
+        isAllDay: isAllDay,
       ),
     );
     state = state.copyWith(errors: errors);
@@ -522,154 +784,48 @@ class EventDetailsController extends Notifier<EventDetailsState>
     return null;
   }
 
-  // Build the edited record from the form fields and the resolved assignees.
-  AppointmentRecord _buildUpdatedRecord(
-    AppointmentRecord appointment, {
-    required String id,
-    required String title,
-    required String address,
-    required String notes,
-    required String materialsNeeded,
-    required DateTime start,
-    required DateTime end,
-    required ({List<String> ids, List<String> names}) assignees,
-  }) {
-    final isPersonal = state.isPersonal;
-    // A personal job carries no client and no address — including when an
-    // existing client visit is converted into one, so the stored copies are
-    // cleared rather than left behind on a job that no longer shows them.
-    final pickedClient = isPersonal ? null : state.selectedClient;
-    return AppointmentRecord(
-      id: id,
-      title: title.trim(),
-      startTime: start,
-      endTime: end,
-      clientId: isPersonal ? '' : pickedClient?.id ?? appointment.clientId,
-      clientName: isPersonal
-          ? ''
-          : pickedClient?.displayName ?? appointment.clientName,
-      clientPhone: isPersonal
-          ? ''
-          : pickedClient?.phone ?? appointment.clientPhone,
-      address: isPersonal ? '' : address.trim(),
-      isPersonal: isPersonal,
-      isAllDay: state.isAllDay,
-      employeeIds: assignees.ids,
-      employeeNames: assignees.names,
-      notes: notes.trim(),
-      materialsNeeded: materialsNeeded.trim(),
-      // Pictures are included here only for the outcome/UI — actual updates
-      // go through append/remove instead.
-      pictures: state.existingImages,
-      status: state.editingStatus,
-      repeat: state.repeat,
-      seriesId: appointment.seriesId,
-    );
-  }
-
-  // Apply the edit: rewrite the series if the repeat changed, propagate it if
-  // applyToSeries is set, or otherwise just update the single appointment.
-  Future<EventDetailsSaved> _applySeriesChange(
-    AppointmentRecord appointment, {
-    required AppointmentsRepository repo,
-    required AppointmentRecord updated,
-    required String id,
-    required DateTime start,
-    required DateTime end,
-    required bool applyToSeries,
-  }) async {
-    final seriesEditor = AppointmentSeriesEditor(repo);
-    if (state.repeat != state.savedRepeat) {
-      final result = await seriesEditor.rewrite(
-        updated: updated,
-        appointment: appointment,
-        id: id,
-        start: start,
-        end: end,
-        repeat: state.repeat,
-      );
-      return EventDetailsSaved(
-        result.updated,
-        futureBookings: result.futureBookings,
-        removedBookings: result.removedBookings,
-      );
-    }
-    if (applyToSeries && appointment.seriesId.isNotEmpty) {
-      final updatedSiblings = await seriesEditor.propagate(
-        updated: updated,
-        appointment: appointment,
-        id: id,
-        start: start,
-        end: end,
-      );
-      return EventDetailsSaved(updated, updatedSiblings: updatedSiblings);
-    }
-    await repo.updateAppointment(updated);
-    return EventDetailsSaved(updated);
-  }
-
-  /// Returns null on success, or the failure error otherwise. When
-  /// [includeFuture] is set, this also deletes the series' future visits in
-  /// one batch (done/cancelled visits are preserved).
-  Future<Object?> deleteAppointment(
+  /// Deletes this appointment, optionally including future series visits.
+  Future<EventDetailsActionOutcome> deleteAppointment(
     AppointmentRecord appointment, {
     bool includeFuture = false,
   }) async {
     final id = appointment.id;
     if (id == null) {
-      return StateError('Cannot delete an appointment without an id.');
+      return EventDetailsActionFailed(
+        StateError('Cannot delete an appointment without an id.'),
+      );
+    }
+    // Reuse the save/status busy guard for delete taps.
+    if (state.isSaving) return const EventDetailsActionBusy();
+    // Offline writes would wait forever for a server ack.
+    if (ref.read(isOfflineProvider)) {
+      return const EventDetailsActionFailed(SocketException('offline'));
     }
     state = state.copyWith(isSaving: true);
     // Resolve these before the first await, so they survive the sheet being dismissed.
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
     try {
-      final orphanedImages = <AppointmentImage>[...appointment.pictures];
+      // Server cascade deletes appointment photo documents and bytes.
       if (includeFuture && appointment.seriesId.isNotEmpty) {
         final series = await repo.getSeries(appointment.seriesId);
         final futureIds = futureSeriesIds(
           series,
           excludeId: id,
           after: appointment.startTime,
+          anchor: appointment,
         );
-        // Only the visits we're deleting contribute orphaned bytes — the
-        // preserved visits keep their pictures.
-        final futureIdSet = futureIds.toSet();
-        for (final a in series) {
-          if (a.id != null && futureIdSet.contains(a.id)) {
-            orphanedImages.addAll(a.pictures);
-          }
-        }
         await repo.deleteAppointments([id, ...futureIds]);
       } else {
         await repo.deleteAppointment(id);
       }
 
-      // Delete orphaned images after docs are gone.
-      await _deleteOrphanedImages(orphanedImages, tag: 'APPT-DEL');
-
-      if (ref.mounted) state = state.copyWith(isSaving: false);
-      return null;
+      return const EventDetailsActionOk();
     } catch (e, st) {
       logger.warn('APPT-DEL deleteAppointment failed', e, st);
+      return EventDetailsActionFailed(e);
+    } finally {
       if (ref.mounted) state = state.copyWith(isSaving: false);
-      return e;
-    }
-  }
-
-  /// Best-effort cleanup — if it fails, the orphaned bytes are harmless, so
-  /// we just log it.
-  Future<void> _deleteOrphanedImages(
-    List<AppointmentImage> images, {
-    required String tag,
-  }) async {
-    if (images.isEmpty || !ref.mounted) return;
-    final storage = ref.read(imageStorageProvider);
-    final logger = ref.read(loggerProvider);
-    try {
-      await storage.deleteImages(images);
-    } catch (e, st) {
-      logger.warn('$tag deleteImages failed (orphaned bytes)', e, st);
     }
   }
 }

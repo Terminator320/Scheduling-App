@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
+import 'package:scheduling/features/calendar/widgets/fields/appointment_address_field.dart';
+import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
 import 'package:scheduling/shared/widgets/fields/sheet_field_row.dart';
@@ -18,17 +22,28 @@ void main() {
     String clientQuery = '',
     List<ClientRecord> clientResults = const [],
     ValueChanged<ClientRecord>? onSelectClient,
+    ClientRecord? selectedClient,
+    bool useCustomAddress = true,
     Future<ClientRecord?> Function(String initialName)? onRequestAddClient,
     ValueChanged<JobTemplate>? onApplyTemplate,
     Map<String, AppointmentFormError> errors = const {},
     bool isPersonal = false,
+    bool isDayOff = false,
     ValueChanged<bool>? onPersonalChanged,
+    ValueChanged<bool>? onDayOffChanged,
     bool showPersonalSwitch = true,
     bool isAllDay = false,
     ValueChanged<bool>? onAllDayChanged,
     bool isMultiDay = false,
+    bool isRunMember = false,
+    bool canSpanDays = true,
     bool isOvernight = false,
     int spanLength = 1,
+    DateTime? selectedDate,
+    DateTime? endDate,
+    ValueChanged<DateTime>? onSelectStartDate,
+    ValueChanged<DateTime>? onSelectEndDate,
+    ClientSearchStatus clientSearchStatus = const ClientSearchStatus(),
   }) async {
     tester.view.physicalSize = Size(width, 740);
     tester.view.devicePixelRatio = 1.0;
@@ -50,51 +65,66 @@ void main() {
     addTearDown(controllers.dispose);
 
     await tester.pumpWidget(
-      MaterialApp(
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: AppointmentFormFields(
-              controllers: controllers,
-              allEmployees: const [],
-              selectedClient: null,
-              clientResults: clientResults,
-              isSearchingClient: false,
-              selectedEmployees: const [],
-              repeat: RepeatInterval.none,
-              useCustomAddress: true,
-              isPersonal: isPersonal,
-              onPersonalChanged: showPersonalSwitch
-                  ? (onPersonalChanged ?? (_) {})
-                  : null,
-              isAllDay: isAllDay,
-              onAllDayChanged: onAllDayChanged ?? (_) {},
-              isMultiDay: isMultiDay,
-              isOvernight: isOvernight,
-              spanLength: spanLength,
-              errors: errors,
-              employeeLabel: 'Employee',
-              employeeRequired: false,
-              materialsHint: 'Materials',
-              photosSection: const SizedBox.shrink(),
-              onSearchClients: (_) {},
-              onSelectClient: onSelectClient ?? (_) {},
-              onClearClient: () {},
-              onToggleEmployee: (_) {},
-              onPickDate: () {},
-              onPickEndDate: () {},
-              onPickStartTime: () {},
-              onPickEndTime: () {},
-              onSelectRepeat: (_) {},
-              onUseCustomAddress: (_) {},
-              onRequestAddClient: onRequestAddClient,
-              onApplyTemplate: onApplyTemplate,
+      // The address field is a ConsumerStatefulWidget that resolves its logger
+      // in initState, so the tree needs a real scope.
+      ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: AppointmentFormFields(
+                controllers: controllers,
+                allEmployees: const [],
+                selectedClient: selectedClient,
+                clientResults: clientResults,
+                isSearchingClient: false,
+                clientSearchStatus: clientSearchStatus,
+                selectedEmployees: const [],
+                repeat: RepeatInterval.none,
+                useCustomAddress: useCustomAddress,
+                selectedDate: selectedDate,
+                endDate: endDate,
+                isPersonal: isPersonal,
+                isDayOff: isDayOff,
+                onPersonalChanged: showPersonalSwitch
+                    ? (onPersonalChanged ?? (_) {})
+                    : null,
+                isAllDay: isAllDay,
+                isMultiDay: isMultiDay,
+                isRunMember: isRunMember,
+                canSpanDays: canSpanDays,
+                isOvernight: isOvernight,
+                spanLength: spanLength,
+                errors: errors,
+                employeeLabel: 'Employee',
+                employeeRequired: false,
+                materialsHint: 'Materials',
+                photosSection: const SizedBox.shrink(),
+                callbacks: AppointmentFormCallbacks(
+                  onSearchClients: (_) {},
+                  onClientQueryModeChanged: (_) {},
+                  onRetryClientSearch: () {},
+                  onSelectClient: onSelectClient ?? (_) {},
+                  onClearClient: () {},
+                  onToggleEmployee: (_) {},
+                  onSelectStartDate: onSelectStartDate ?? (_) {},
+                  onSelectEndDate: onSelectEndDate ?? (_) {},
+                  onPickStartTime: () {},
+                  onPickEndTime: () {},
+                  onSelectRepeat: (_) {},
+                  onUseCustomAddress: (_) {},
+                  onDayOffChanged: onDayOffChanged ?? (_) {},
+                  onAllDayChanged: onAllDayChanged ?? (_) {},
+                ),
+                onRequestAddClient: onRequestAddClient,
+                onApplyTemplate: onApplyTemplate,
+              ),
             ),
           ),
         ),
@@ -244,18 +274,68 @@ void main() {
     expect(find.text('End Time'), findsOneWidget);
   });
 
-  testWidgets('a personal job hides the client picker and the address', (
+  testWidgets(
+    'a personal job hides the client picker but keeps the address, optional',
+    (tester) async {
+      await pumpAppointmentForm(tester, width: 400, isPersonal: true);
+
+      expect(find.text('Personal job'), findsOneWidget);
+      expect(find.text('Client'), findsNothing);
+      // A personal block can still have somewhere to be — the field stays, and
+      // says so rather than reading as an unfinished required one.
+      expect(find.text('Address'), findsWidgets);
+      expect(
+        tester
+            .widget<AppointmentAddressField>(
+              find.byType(AppointmentAddressField),
+            )
+            .optional,
+        isTrue,
+      );
+      // The rest of the form is untouched.
+      expect(find.text('WHO'), findsOneWidget);
+      expect(find.text('DETAILS'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('the Day off chip is offered only on a personal job', (
     tester,
   ) async {
-    await pumpAppointmentForm(tester, width: 400, isPersonal: true);
+    await pumpAppointmentForm(tester, width: 400);
+    expect(find.widgetWithText(FilterChip, 'Day off'), findsNothing);
 
-    expect(find.text('Personal job'), findsOneWidget);
-    expect(find.text('Client'), findsNothing);
-    expect(find.text('Address'), findsNothing);
-    // The rest of the form is untouched.
-    expect(find.text('WHO'), findsOneWidget);
-    expect(find.text('DETAILS'), findsOneWidget);
+    await pumpAppointmentForm(tester, width: 400, isPersonal: true);
+    expect(find.widgetWithText(FilterChip, 'Day off'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tapping the Day off chip reports the new value', (tester) async {
+    final changes = <bool>[];
+    await pumpAppointmentForm(
+      tester,
+      width: 400,
+      isPersonal: true,
+      onDayOffChanged: changes.add,
+    );
+
+    await tester.tap(find.widgetWithText(FilterChip, 'Day off'));
+    await tester.pumpAndSettle();
+
+    expect(changes, [true]);
+  });
+
+  testWidgets('a client visit does not mark its address optional', (
+    tester,
+  ) async {
+    await pumpAppointmentForm(tester, width: 400);
+
+    expect(
+      tester
+          .widget<AppointmentAddressField>(find.byType(AppointmentAddressField))
+          .optional,
+      isFalse,
+    );
   });
 
   testWidgets('switching a job to personal clears the hidden fields', (
@@ -274,9 +354,56 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(toggled, [true]);
-    // Neither field is visible any more, so neither may keep its value.
+    // The client picker is gone, so it may not keep its value.
     expect(controllers.clientSearch.text, isEmpty);
+    // A HAND-TYPED address survives: a personal block may well have somewhere
+    // to be, and this is the case the field exists for.
+    expect(controllers.address.text, '9 Rue Test');
+  });
+
+  testWidgets('switching to personal drops the CLIENT address', (tester) async {
+    // `_selectClient` writes the client's address into the controller and it
+    // renders as a read-only pill, so the admin never typed it. The switch is
+    // the first row of WHO while the field is far below in DETAILS, so leaving
+    // it behind silently gave the personal block a client's street — which the
+    // travel sweep then uses as the crew's destination.
+    final controllers = await pumpAppointmentForm(
+      tester,
+      width: 400,
+      selectedClient: const ClientRecord(
+        id: 'c1',
+        name: 'Marchetti',
+        address: '12 Rue Principale',
+      ),
+      useCustomAddress: false,
+      onPersonalChanged: (_) {},
+    );
+    controllers.address.text = '12 Rue Principale';
+
+    await tester.tap(find.byType(SwitchListTile).first);
+    await tester.pumpAndSettle();
+
     expect(controllers.address.text, isEmpty);
+  });
+
+  testWidgets('an address typed before any client is picked survives', (
+    tester,
+  ) async {
+    // `useCustomAddress` is still false at this point — it only flips when the
+    // admin taps "Change" on the pill — so testing that flag ALONE would wipe
+    // an address the user typed themselves. Both halves of the guard matter.
+    final controllers = await pumpAppointmentForm(
+      tester,
+      width: 400,
+      useCustomAddress: false,
+      onPersonalChanged: (_) {},
+    );
+    controllers.address.text = '400 Rue Mine';
+
+    await tester.tap(find.byType(SwitchListTile).first);
+    await tester.pumpAndSettle();
+
+    expect(controllers.address.text, '400 Rue Mine');
   });
 
   testWidgets('an all-day personal job drops the start and end rows', (
@@ -299,9 +426,7 @@ void main() {
 
   testWidgets(
     'a personal job drops the templates, repeat and job-site fields',
-    (
-      tester,
-    ) async {
+    (tester) async {
       await pumpAppointmentForm(
         tester,
         width: 400,
@@ -321,11 +446,7 @@ void main() {
     tester,
   ) async {
     // The edit flow passes null on a job that was never personal.
-    await pumpAppointmentForm(
-      tester,
-      width: 400,
-      showPersonalSwitch: false,
-    );
+    await pumpAppointmentForm(tester, width: 400, showPersonalSwitch: false);
     expect(find.text('Personal job'), findsNothing);
     expect(find.text('Client'), findsOneWidget);
   });
@@ -339,5 +460,81 @@ void main() {
 
     // The row surfaces the validator's message inline, not a bare red border.
     expect(find.text('Please select a date'), findsOneWidget);
+  });
+
+  testWidgets('the repeat picker is hidden once the job spans days', (
+    tester,
+  ) async {
+    await pumpAppointmentForm(tester, width: 400, isMultiDay: true);
+    expect(find.byType(RepeatIntervalPicker), findsNothing);
+  });
+
+  testWidgets('the repeat picker is offered on a one-day job', (tester) async {
+    await pumpAppointmentForm(tester, width: 400);
+    expect(find.byType(RepeatIntervalPicker), findsOneWidget);
+  });
+
+  testWidgets('a run member does not offer an end date', (tester) async {
+    // Each day of a run IS one appointment, so its length is not editable.
+    await pumpAppointmentForm(tester, width: 400, isRunMember: true);
+    expect(find.text('End date'), findsNothing);
+    expect(find.text('Start date'), findsOneWidget);
+  });
+
+  testWidgets('an ordinary job still offers an end date', (tester) async {
+    await pumpAppointmentForm(tester, width: 400);
+    expect(find.text('End date'), findsOneWidget);
+  });
+
+  testWidgets('editing a client job cannot widen it into a run', (
+    tester,
+  ) async {
+    // Only the ADD path fans a span into one document per day. Offering the
+    // row on edit wrote the single WIDE document the split exists to remove —
+    // it renders "Day 3 of 5" but marking one day complete closes the week.
+    await pumpAppointmentForm(tester, width: 400, canSpanDays: false);
+    expect(find.text('End date'), findsNothing);
+    expect(find.text('Start date'), findsOneWidget);
+  });
+
+  const withAddress = ClientRecord(
+    id: 'c1',
+    name: 'Groupe Lemieux',
+    phone: '5145550142',
+    address: '4188 Rue Sainte-Catherine E',
+  );
+  const noAddress = ClientRecord(
+    id: 'c2',
+    name: 'Anne Roy',
+    phone: '5145550199',
+  );
+
+  testWidgets('the toggle ON hides the Job address section', (tester) async {
+    await pumpAppointmentForm(
+      tester,
+      width: 400,
+      selectedClient: withAddress,
+      useCustomAddress: false,
+    );
+    expect(find.text('Job address'), findsNothing);
+  });
+
+  testWidgets('the toggle OFF shows the Job address section', (tester) async {
+    await pumpAppointmentForm(tester, width: 400, selectedClient: withAddress);
+    expect(find.text('Job address'), findsOneWidget);
+  });
+
+  testWidgets('a client with NO address on file keeps the field', (
+    tester,
+  ) async {
+    // This client sits at useCustomAddress == false too, and shows no toggle -
+    // hiding here would make the job unable to get an address at all.
+    await pumpAppointmentForm(
+      tester,
+      width: 400,
+      selectedClient: noAddress,
+      useCustomAddress: false,
+    );
+    expect(find.text('Job address'), findsOneWidget);
   });
 }

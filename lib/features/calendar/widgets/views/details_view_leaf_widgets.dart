@@ -72,10 +72,7 @@ class DetailsHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final title = Text(
-      appointment.title,
-      style: theme.textTheme.headlineLarge,
-    );
+    final title = Text(appointment.title, style: theme.textTheme.headlineLarge);
     final chip = StatusChip(status: status);
 
     return Padding(
@@ -109,8 +106,8 @@ class DetailsHeader extends StatelessWidget {
                   ? context.l10n.calendar_allDay
                   : null,
               // The sheet is not day-scoped, so it names the whole run rather
-              // than a "Day N of M" counter — otherwise a 5-day job opened
-              // from its day 3 card still read as day 1 with no hint it ran on.
+              // than a "Day N of M" counter — otherwise a 5-day job opened from
+              // its day 3 card still read as day 1 with no hint it ran on.
               lastDay: lastWorkDayOf(appointment),
             ),
             style: theme.monoType.data,
@@ -120,11 +117,7 @@ class DetailsHeader extends StatelessWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.repeat,
-                  size: 13,
-                  color: theme.palette.textTertiary,
-                ),
+                Icon(Icons.repeat, size: 13, color: theme.palette.textTertiary),
                 const SizedBox(width: AppSpacing.sp4),
                 Flexible(
                   child: Text(
@@ -141,6 +134,61 @@ class DetailsHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+/// "Started 9:12 AM · Finished 11:40 AM · 2 h 28 min" — the job's time record,
+/// one mono line under the header.
+class DetailsTimeRecordRow extends StatelessWidget {
+  const DetailsTimeRecordRow({
+    required this.startedAt,
+    required this.completedAt,
+    super.key,
+  });
+
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+
+  /// The segments, joined by the same middot the when-line uses.
+  static String label(
+    AppLocalizations l10n,
+    DateTime? started,
+    DateTime? done,
+  ) {
+    final parts = <String>[
+      if (started != null)
+        l10n.calendar_timeRecordStarted(DateUtilsHelper.formatTime(started)),
+      if (done != null)
+        l10n.calendar_timeRecordFinished(DateUtilsHelper.formatTime(done)),
+      if (started != null && done != null && done.isAfter(started))
+        elapsedLabel(l10n, done.difference(started)),
+    ];
+    return parts.join(' · ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(
+        left: AppSpacing.sp4,
+        right: AppSpacing.sp4,
+        top: AppSpacing.sp4,
+      ),
+      child: Text(
+        label(context.l10n, startedAt, completedAt),
+        style: theme.monoType.data.copyWith(color: theme.palette.textTertiary),
+      ),
+    );
+  }
+}
+
+/// "2 h 28 min" / "45 min".
+String elapsedLabel(AppLocalizations l10n, Duration elapsed) {
+  final hours = elapsed.inHours;
+  final minutes = elapsed.inMinutes % 60;
+  return hours > 0
+      ? l10n.calendar_elapsedHoursMinutes(hours, minutes)
+      : l10n.calendar_elapsedMinutes(minutes);
 }
 
 class DetailsMaterialsRow extends StatelessWidget {
@@ -228,7 +276,10 @@ class DetailsPhotosView extends ConsumerWidget {
 
   final AppointmentRecord appointment;
   final bool isCancelled;
-  final VoidCallback onRetry;
+
+  /// Null when the viewer has no action that could retry — a dead Retry that
+  /// only cleared the failure record is worse than none.
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -237,42 +288,66 @@ class DetailsPhotosView extends ConsumerWidget {
     );
     final existingImages = ref.watch(provider.select((s) => s.existingImages));
     final newImages = ref.watch(provider.select((s) => s.newImages));
+    final loading = ref.watch(provider.select((s) => s.isLoadingPictures));
     final notifier = ref.watch(photoUploadNotifierProvider);
     final appointmentId = appointment.id;
-    final failure = appointmentId != null
-        ? notifier.failureFor(appointmentId)
-        : null;
-    final failedCount = failure?.failedCount ?? 0;
-    final hasPhotos =
-        existingImages.isNotEmpty || newImages.isNotEmpty || failedCount > 0;
-    if (!hasPhotos) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SizedBox(height: AppSpacing.sp16),
-        DetailsSectionRow(
-          label: context.l10n.calendar_photosLabel,
-          value: '',
-          customValue: PhotoPickerSection(
-            existingImages: existingImages,
-            newImages: newImages,
-            isEditing: false,
-            onPickImages: () {},
-            onRemoveExisting: (_) {},
-            onRemoveNew: (_) {},
-            failedCount: failedCount,
-            tooLargeFileNames: failure?.tooLargeFileNames ?? const [],
-            onRetry: failedCount > 0 && !isCancelled
-                ? () {
-                    if (appointmentId != null) {
-                      notifier.clearFailure(appointmentId);
-                    }
-                    onRetry();
-                  }
-                : null,
-          ),
-        ),
-      ],
+    // The GATE itself must watch the queue, not just read it once: a
+    // background upload can be started from view mode
+    // (DetailsFieldRecordView.uploadInBackground) with no remount of this
+    // widget, and none of the other watches above (existingImages, newImages,
+    // the notifier singleton) fire when only the pending count changes.
+    // Without this outer listener the FIRST photo on a job with none left the
+    // whole section a SizedBox.shrink for the entire upload, so the crew saw
+    // no sign their photo existed. This also now supplies the value the old
+    // inner listener read, so there is only one — the per-drain rebuild stays
+    // scoped to this row rather than the whole detail body.
+    return ListenableBuilder(
+      listenable: Listenable.merge([notifier.pending, notifier.failures]),
+      builder: (context, _) {
+        final pendingCount = appointmentId == null
+            ? 0
+            : notifier.pending.value[appointmentId] ?? 0;
+        final failure = appointmentId == null
+            ? null
+            : notifier.failureFor(appointmentId);
+        final failedCount = failure?.failedCount ?? 0;
+        final hasPhotos =
+            existingImages.isNotEmpty ||
+            newImages.isNotEmpty ||
+            failedCount > 0 ||
+            pendingCount > 0 ||
+            loading;
+        if (!hasPhotos) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: AppSpacing.sp16),
+            DetailsSectionRow(
+              label: context.l10n.calendar_photosLabel,
+              value: '',
+              customValue: PhotoPickerSection(
+                existingImages: existingImages,
+                newImages: newImages,
+                isEditing: false,
+                onPickImages: () {},
+                onRemoveExisting: (_) {},
+                onRemoveNew: (_) {},
+                failedCount: failedCount,
+                pendingCount: pendingCount,
+                tooLargeFileNames: failure?.tooLargeFileNames ?? const [],
+                onRetry: failedCount > 0 && !isCancelled && onRetry != null
+                    ? () {
+                        if (appointmentId != null) {
+                          notifier.clearFailure(appointmentId);
+                        }
+                        onRetry!();
+                      }
+                    : null,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

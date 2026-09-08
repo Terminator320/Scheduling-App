@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'client_record.dart';
@@ -9,6 +9,7 @@ part of 'client_record.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
@@ -25,16 +26,21 @@ $ClientContactCopyWith<ClientContact> get copyWith => _$ClientContactCopyWithImp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ClientContact&&(identical(other.name, name) || other.name == name)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.email, email) || other.email == email));
+  final _this = this as ClientContact;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ClientContact&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.phone, _this.phone) || other.phone == _this.phone)&&(identical(other.email, _this.email) || other.email == _this.email));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,name,phone,email);
+int get hashCode {
+  final _this = this as ClientContact;
+  return Object.hash(runtimeType,_this.name,_this.phone,_this.email);
+}
 
 @override
 String toString() {
-  return 'ClientContact(name: $name, phone: $phone, email: $email)';
+  final _this = this as ClientContact;
+  return 'ClientContact(name: ${_this.name}, phone: ${_this.phone}, email: ${_this.email})';
 }
 
 
@@ -63,7 +69,7 @@ class _$ClientContactCopyWithImpl<$Res>
 /// Create a copy of ClientContact
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? name = null,Object? phone = null,Object? email = null,}) {
-  return _then(_self.copyWith(
+  return _then(ClientContact(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,phone: null == phone ? _self.phone : phone // ignore: cast_nullable_to_non_nullable
 as String,email: null == email ? _self.email : email // ignore: cast_nullable_to_non_nullable
@@ -225,16 +231,18 @@ _$ClientContactCopyWith<_ClientContact> get copyWith => __$ClientContactCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ClientContact&&(identical(other.name, name) || other.name == name)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.email, email) || other.email == email));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ClientContact&&(identical(other.name, name) || other.name == name)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.email, email) || other.email == email));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,name,phone,email);
+int get hashCode {
+    return Object.hash(runtimeType,name,phone,email);
+}
 
 @override
 String toString() {
-  return 'ClientContact(name: $name, phone: $phone, email: $email)';
+    return 'ClientContact(name: $name, phone: $phone, email: $email)';
 }
 
 
@@ -277,19 +285,7 @@ as String,
 /// @nodoc
 mixin _$ClientRecord {
 
- String get id; String get name; String get firstName; String get lastName; String get address; String get apt; String get city; String get province; String get country; String get postalCode; String get phone; String get mobile; String get email; List<ClientContact> get contacts; bool get noFixedAddress;// Hidden from the paginated list, still searchable and still bookable. The
-// list filters on it SERVER-side, and Firestore excludes docs missing a
-// filtered field — so every client doc has to carry it, always.
- bool get archived; ClientType get type; String get accessNotes; String get onSiteManager; String get billingTerms; bool get autoInvoice;// Legacy pre-Wave-reshape field, READ-ONLY — never emitted in toMap, and
-// no UI edits it. Carried only so search can still reach it: `name` falls
-// back to it when blank, but a legacy doc holding BOTH a name and a
-// different business name would otherwise be unfindable by the business.
- String get businessName;// Function-owned absolute recount — never emitted in toMap, and null until
-// the trigger has written it once.
- int? get jobCount;// Read-only server timestamp used for dashboard trends — never emitted in toMap.
- DateTime? get createdAt;// Wave projection — read-only and function-owned, so it's omitted from toMap
-// per firestore.rules.
- String? get waveCustomerId; String get waveSyncState; String? get waveSyncError;
+ String get id; String get name; String get firstName; String get lastName; String get address; String get apt; String get city; String get province; String get country; String get postalCode; String get phone; String get mobile; String get email; List<ClientContact> get contacts; bool get noFixedAddress; bool get archived; ClientType get type; String get accessNotes; String get onSiteManager; String get billingTerms; bool get autoInvoice; String get businessName; int? get jobCount; DateTime? get createdAt; String? get waveCustomerId; String get waveSyncState; String? get waveSyncError;
 /// Create a copy of ClientRecord
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -300,16 +296,21 @@ $ClientRecordCopyWith<ClientRecord> get copyWith => _$ClientRecordCopyWithImpl<C
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ClientRecord&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.firstName, firstName) || other.firstName == firstName)&&(identical(other.lastName, lastName) || other.lastName == lastName)&&(identical(other.address, address) || other.address == address)&&(identical(other.apt, apt) || other.apt == apt)&&(identical(other.city, city) || other.city == city)&&(identical(other.province, province) || other.province == province)&&(identical(other.country, country) || other.country == country)&&(identical(other.postalCode, postalCode) || other.postalCode == postalCode)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.mobile, mobile) || other.mobile == mobile)&&(identical(other.email, email) || other.email == email)&&const DeepCollectionEquality().equals(other.contacts, contacts)&&(identical(other.noFixedAddress, noFixedAddress) || other.noFixedAddress == noFixedAddress)&&(identical(other.archived, archived) || other.archived == archived)&&(identical(other.type, type) || other.type == type)&&(identical(other.accessNotes, accessNotes) || other.accessNotes == accessNotes)&&(identical(other.onSiteManager, onSiteManager) || other.onSiteManager == onSiteManager)&&(identical(other.billingTerms, billingTerms) || other.billingTerms == billingTerms)&&(identical(other.autoInvoice, autoInvoice) || other.autoInvoice == autoInvoice)&&(identical(other.businessName, businessName) || other.businessName == businessName)&&(identical(other.jobCount, jobCount) || other.jobCount == jobCount)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.waveCustomerId, waveCustomerId) || other.waveCustomerId == waveCustomerId)&&(identical(other.waveSyncState, waveSyncState) || other.waveSyncState == waveSyncState)&&(identical(other.waveSyncError, waveSyncError) || other.waveSyncError == waveSyncError));
+  final _this = this as ClientRecord;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ClientRecord&&(identical(other.id, _this.id) || other.id == _this.id)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.firstName, _this.firstName) || other.firstName == _this.firstName)&&(identical(other.lastName, _this.lastName) || other.lastName == _this.lastName)&&(identical(other.address, _this.address) || other.address == _this.address)&&(identical(other.apt, _this.apt) || other.apt == _this.apt)&&(identical(other.city, _this.city) || other.city == _this.city)&&(identical(other.province, _this.province) || other.province == _this.province)&&(identical(other.country, _this.country) || other.country == _this.country)&&(identical(other.postalCode, _this.postalCode) || other.postalCode == _this.postalCode)&&(identical(other.phone, _this.phone) || other.phone == _this.phone)&&(identical(other.mobile, _this.mobile) || other.mobile == _this.mobile)&&(identical(other.email, _this.email) || other.email == _this.email)&&const DeepCollectionEquality().equals(other.contacts, _this.contacts)&&(identical(other.noFixedAddress, _this.noFixedAddress) || other.noFixedAddress == _this.noFixedAddress)&&(identical(other.archived, _this.archived) || other.archived == _this.archived)&&(identical(other.type, _this.type) || other.type == _this.type)&&(identical(other.accessNotes, _this.accessNotes) || other.accessNotes == _this.accessNotes)&&(identical(other.onSiteManager, _this.onSiteManager) || other.onSiteManager == _this.onSiteManager)&&(identical(other.billingTerms, _this.billingTerms) || other.billingTerms == _this.billingTerms)&&(identical(other.autoInvoice, _this.autoInvoice) || other.autoInvoice == _this.autoInvoice)&&(identical(other.businessName, _this.businessName) || other.businessName == _this.businessName)&&(identical(other.jobCount, _this.jobCount) || other.jobCount == _this.jobCount)&&(identical(other.createdAt, _this.createdAt) || other.createdAt == _this.createdAt)&&(identical(other.waveCustomerId, _this.waveCustomerId) || other.waveCustomerId == _this.waveCustomerId)&&(identical(other.waveSyncState, _this.waveSyncState) || other.waveSyncState == _this.waveSyncState)&&(identical(other.waveSyncError, _this.waveSyncError) || other.waveSyncError == _this.waveSyncError));
 }
 
 
 @override
-int get hashCode => Object.hashAll([runtimeType,id,name,firstName,lastName,address,apt,city,province,country,postalCode,phone,mobile,email,const DeepCollectionEquality().hash(contacts),noFixedAddress,archived,type,accessNotes,onSiteManager,billingTerms,autoInvoice,businessName,jobCount,createdAt,waveCustomerId,waveSyncState,waveSyncError]);
+int get hashCode {
+  final _this = this as ClientRecord;
+  return Object.hashAll([runtimeType,_this.id,_this.name,_this.firstName,_this.lastName,_this.address,_this.apt,_this.city,_this.province,_this.country,_this.postalCode,_this.phone,_this.mobile,_this.email,const DeepCollectionEquality().hash(_this.contacts),_this.noFixedAddress,_this.archived,_this.type,_this.accessNotes,_this.onSiteManager,_this.billingTerms,_this.autoInvoice,_this.businessName,_this.jobCount,_this.createdAt,_this.waveCustomerId,_this.waveSyncState,_this.waveSyncError]);
+}
 
 @override
 String toString() {
-  return 'ClientRecord(id: $id, name: $name, firstName: $firstName, lastName: $lastName, address: $address, apt: $apt, city: $city, province: $province, country: $country, postalCode: $postalCode, phone: $phone, mobile: $mobile, email: $email, contacts: $contacts, noFixedAddress: $noFixedAddress, archived: $archived, type: $type, accessNotes: $accessNotes, onSiteManager: $onSiteManager, billingTerms: $billingTerms, autoInvoice: $autoInvoice, businessName: $businessName, jobCount: $jobCount, createdAt: $createdAt, waveCustomerId: $waveCustomerId, waveSyncState: $waveSyncState, waveSyncError: $waveSyncError)';
+  final _this = this as ClientRecord;
+  return 'ClientRecord(id: ${_this.id}, name: ${_this.name}, firstName: ${_this.firstName}, lastName: ${_this.lastName}, address: ${_this.address}, apt: ${_this.apt}, city: ${_this.city}, province: ${_this.province}, country: ${_this.country}, postalCode: ${_this.postalCode}, phone: ${_this.phone}, mobile: ${_this.mobile}, email: ${_this.email}, contacts: ${_this.contacts}, noFixedAddress: ${_this.noFixedAddress}, archived: ${_this.archived}, type: ${_this.type}, accessNotes: ${_this.accessNotes}, onSiteManager: ${_this.onSiteManager}, billingTerms: ${_this.billingTerms}, autoInvoice: ${_this.autoInvoice}, businessName: ${_this.businessName}, jobCount: ${_this.jobCount}, createdAt: ${_this.createdAt}, waveCustomerId: ${_this.waveCustomerId}, waveSyncState: ${_this.waveSyncState}, waveSyncError: ${_this.waveSyncError})';
 }
 
 
@@ -338,7 +339,7 @@ class _$ClientRecordCopyWithImpl<$Res>
 /// Create a copy of ClientRecord
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? firstName = null,Object? lastName = null,Object? address = null,Object? apt = null,Object? city = null,Object? province = null,Object? country = null,Object? postalCode = null,Object? phone = null,Object? mobile = null,Object? email = null,Object? contacts = null,Object? noFixedAddress = null,Object? archived = null,Object? type = null,Object? accessNotes = null,Object? onSiteManager = null,Object? billingTerms = null,Object? autoInvoice = null,Object? businessName = null,Object? jobCount = freezed,Object? createdAt = freezed,Object? waveCustomerId = freezed,Object? waveSyncState = null,Object? waveSyncError = freezed,}) {
-  return _then(_self.copyWith(
+  return _then(ClientRecord(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,firstName: null == firstName ? _self.firstName : firstName // ignore: cast_nullable_to_non_nullable
@@ -507,7 +508,7 @@ return $default(_that.id,_that.name,_that.firstName,_that.lastName,_that.address
 
 
 class _ClientRecord extends ClientRecord {
-  const _ClientRecord({required this.id, this.name = '', this.firstName = '', this.lastName = '', this.address = '', this.apt = '', this.city = '', this.province = '', this.country = '', this.postalCode = '', this.phone = '', this.mobile = '', this.email = '', final  List<ClientContact> contacts = const <ClientContact>[], this.noFixedAddress = false, this.archived = false, this.type = ClientType.unset, this.accessNotes = '', this.onSiteManager = '', this.billingTerms = '', this.autoInvoice = false, this.businessName = '', this.jobCount = null, this.createdAt, this.waveCustomerId = null, this.waveSyncState = '', this.waveSyncError = null}): _contacts = contacts,super._();
+  const _ClientRecord({required this.id, this.name = '', this.firstName = '', this.lastName = '', this.address = '', this.apt = '', this.city = '', this.province = '', this.country = '', this.postalCode = '', this.phone = '', this.mobile = '', this.email = '',  List<ClientContact> contacts = const <ClientContact>[], this.noFixedAddress = false, this.archived = false, this.type = ClientType.unset, this.accessNotes = '', this.onSiteManager = '', this.billingTerms = '', this.autoInvoice = false, this.businessName = '', this.jobCount = null, this.createdAt, this.waveCustomerId = null, this.waveSyncState = '', this.waveSyncError = null}): _contacts = contacts,super._();
   
 
 @override final  String id;
@@ -531,27 +532,15 @@ class _ClientRecord extends ClientRecord {
 }
 
 @override@JsonKey() final  bool noFixedAddress;
-// Hidden from the paginated list, still searchable and still bookable. The
-// list filters on it SERVER-side, and Firestore excludes docs missing a
-// filtered field — so every client doc has to carry it, always.
 @override@JsonKey() final  bool archived;
 @override@JsonKey() final  ClientType type;
 @override@JsonKey() final  String accessNotes;
 @override@JsonKey() final  String onSiteManager;
 @override@JsonKey() final  String billingTerms;
 @override@JsonKey() final  bool autoInvoice;
-// Legacy pre-Wave-reshape field, READ-ONLY — never emitted in toMap, and
-// no UI edits it. Carried only so search can still reach it: `name` falls
-// back to it when blank, but a legacy doc holding BOTH a name and a
-// different business name would otherwise be unfindable by the business.
 @override@JsonKey() final  String businessName;
-// Function-owned absolute recount — never emitted in toMap, and null until
-// the trigger has written it once.
 @override@JsonKey() final  int? jobCount;
-// Read-only server timestamp used for dashboard trends — never emitted in toMap.
 @override final  DateTime? createdAt;
-// Wave projection — read-only and function-owned, so it's omitted from toMap
-// per firestore.rules.
 @override@JsonKey() final  String? waveCustomerId;
 @override@JsonKey() final  String waveSyncState;
 @override@JsonKey() final  String? waveSyncError;
@@ -566,16 +555,18 @@ _$ClientRecordCopyWith<_ClientRecord> get copyWith => __$ClientRecordCopyWithImp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ClientRecord&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.firstName, firstName) || other.firstName == firstName)&&(identical(other.lastName, lastName) || other.lastName == lastName)&&(identical(other.address, address) || other.address == address)&&(identical(other.apt, apt) || other.apt == apt)&&(identical(other.city, city) || other.city == city)&&(identical(other.province, province) || other.province == province)&&(identical(other.country, country) || other.country == country)&&(identical(other.postalCode, postalCode) || other.postalCode == postalCode)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.mobile, mobile) || other.mobile == mobile)&&(identical(other.email, email) || other.email == email)&&const DeepCollectionEquality().equals(other._contacts, _contacts)&&(identical(other.noFixedAddress, noFixedAddress) || other.noFixedAddress == noFixedAddress)&&(identical(other.archived, archived) || other.archived == archived)&&(identical(other.type, type) || other.type == type)&&(identical(other.accessNotes, accessNotes) || other.accessNotes == accessNotes)&&(identical(other.onSiteManager, onSiteManager) || other.onSiteManager == onSiteManager)&&(identical(other.billingTerms, billingTerms) || other.billingTerms == billingTerms)&&(identical(other.autoInvoice, autoInvoice) || other.autoInvoice == autoInvoice)&&(identical(other.businessName, businessName) || other.businessName == businessName)&&(identical(other.jobCount, jobCount) || other.jobCount == jobCount)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.waveCustomerId, waveCustomerId) || other.waveCustomerId == waveCustomerId)&&(identical(other.waveSyncState, waveSyncState) || other.waveSyncState == waveSyncState)&&(identical(other.waveSyncError, waveSyncError) || other.waveSyncError == waveSyncError));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ClientRecord&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.firstName, firstName) || other.firstName == firstName)&&(identical(other.lastName, lastName) || other.lastName == lastName)&&(identical(other.address, address) || other.address == address)&&(identical(other.apt, apt) || other.apt == apt)&&(identical(other.city, city) || other.city == city)&&(identical(other.province, province) || other.province == province)&&(identical(other.country, country) || other.country == country)&&(identical(other.postalCode, postalCode) || other.postalCode == postalCode)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.mobile, mobile) || other.mobile == mobile)&&(identical(other.email, email) || other.email == email)&&const DeepCollectionEquality().equals(other.contacts, _contacts)&&(identical(other.noFixedAddress, noFixedAddress) || other.noFixedAddress == noFixedAddress)&&(identical(other.archived, archived) || other.archived == archived)&&(identical(other.type, type) || other.type == type)&&(identical(other.accessNotes, accessNotes) || other.accessNotes == accessNotes)&&(identical(other.onSiteManager, onSiteManager) || other.onSiteManager == onSiteManager)&&(identical(other.billingTerms, billingTerms) || other.billingTerms == billingTerms)&&(identical(other.autoInvoice, autoInvoice) || other.autoInvoice == autoInvoice)&&(identical(other.businessName, businessName) || other.businessName == businessName)&&(identical(other.jobCount, jobCount) || other.jobCount == jobCount)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.waveCustomerId, waveCustomerId) || other.waveCustomerId == waveCustomerId)&&(identical(other.waveSyncState, waveSyncState) || other.waveSyncState == waveSyncState)&&(identical(other.waveSyncError, waveSyncError) || other.waveSyncError == waveSyncError));
 }
 
 
 @override
-int get hashCode => Object.hashAll([runtimeType,id,name,firstName,lastName,address,apt,city,province,country,postalCode,phone,mobile,email,const DeepCollectionEquality().hash(_contacts),noFixedAddress,archived,type,accessNotes,onSiteManager,billingTerms,autoInvoice,businessName,jobCount,createdAt,waveCustomerId,waveSyncState,waveSyncError]);
+int get hashCode {
+    return Object.hashAll([runtimeType,id,name,firstName,lastName,address,apt,city,province,country,postalCode,phone,mobile,email,const DeepCollectionEquality().hash(_contacts),noFixedAddress,archived,type,accessNotes,onSiteManager,billingTerms,autoInvoice,businessName,jobCount,createdAt,waveCustomerId,waveSyncState,waveSyncError]);
+}
 
 @override
 String toString() {
-  return 'ClientRecord(id: $id, name: $name, firstName: $firstName, lastName: $lastName, address: $address, apt: $apt, city: $city, province: $province, country: $country, postalCode: $postalCode, phone: $phone, mobile: $mobile, email: $email, contacts: $contacts, noFixedAddress: $noFixedAddress, archived: $archived, type: $type, accessNotes: $accessNotes, onSiteManager: $onSiteManager, billingTerms: $billingTerms, autoInvoice: $autoInvoice, businessName: $businessName, jobCount: $jobCount, createdAt: $createdAt, waveCustomerId: $waveCustomerId, waveSyncState: $waveSyncState, waveSyncError: $waveSyncError)';
+    return 'ClientRecord(id: $id, name: $name, firstName: $firstName, lastName: $lastName, address: $address, apt: $apt, city: $city, province: $province, country: $country, postalCode: $postalCode, phone: $phone, mobile: $mobile, email: $email, contacts: $contacts, noFixedAddress: $noFixedAddress, archived: $archived, type: $type, accessNotes: $accessNotes, onSiteManager: $onSiteManager, billingTerms: $billingTerms, autoInvoice: $autoInvoice, businessName: $businessName, jobCount: $jobCount, createdAt: $createdAt, waveCustomerId: $waveCustomerId, waveSyncState: $waveSyncState, waveSyncError: $waveSyncError)';
 }
 
 

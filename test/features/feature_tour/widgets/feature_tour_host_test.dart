@@ -101,13 +101,11 @@ void main() {
     expect(find.text('Find a client'), findsNothing);
     expect(
       container.read(tourSeenProvider),
-      isNot(contains(const DestinationTour(HubTab.clients))),
+      isNot(contains(TourStepId.clientsSearch)),
     );
   });
 
-  testWidgets('marks seen without starting when no target is mounted', (
-    tester,
-  ) async {
+  testWidgets('marks nothing seen when no target is mounted', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final container = newContainer();
     await tester.pumpWidget(
@@ -121,10 +119,8 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 1));
     expect(tester.takeException(), isNull);
-    expect(
-      container.read(tourSeenProvider),
-      contains(const DestinationTour(HubTab.clients)),
-    );
+    // Nothing rendered, so nothing was seen — the next visit retries.
+    expect(container.read(tourSeenProvider), isEmpty);
   });
 
   testWidgets('starts and shows the first step when visible and unseen', (
@@ -172,9 +168,14 @@ void main() {
     expect(find.text('1 of 2'), findsOneWidget);
   });
 
-  testWidgets('does not start when already seen', (tester) async {
+  testWidgets('does not start when every step is already seen', (tester) async {
     SharedPreferences.setMockInitialValues({
-      'tour_seen_tabs': ['clients'],
+      'tour_seen_steps': [
+        TourStepId.clientsSearch.name,
+        TourStepId.clientsFilter.name,
+        TourStepId.clientsAdd.name,
+        TourStepId.clientsRow.name,
+      ],
     });
     final container = newContainer();
     final key = GlobalKey();
@@ -199,6 +200,86 @@ void main() {
     expect(find.text('Find a client'), findsNothing);
   });
 
+  testWidgets('starts only the steps this device has not seen', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'tour_seen_steps': [TourStepId.clientsSearch.name],
+    });
+    final container = newContainer();
+    final searchKey = GlobalKey();
+    final addKey = GlobalKey();
+    await tester.pumpWidget(
+      harness(
+        current: HubTab.clients,
+        scope: const DestinationTour(HubTab.clients),
+        stepKeys: {
+          TourStepId.clientsSearch: searchKey,
+          TourStepId.clientsAdd: addKey,
+        },
+        container: container,
+        child: Column(
+          children: [
+            TourShowcase(
+              showcaseKey: searchKey,
+              scope: const DestinationTour(HubTab.clients),
+              id: TourStepId.clientsSearch,
+              index: 0,
+              count: 2,
+              child: const Text('search target'),
+            ),
+            TourShowcase(
+              showcaseKey: addKey,
+              scope: const DestinationTour(HubTab.clients),
+              id: TourStepId.clientsAdd,
+              index: 1,
+              count: 2,
+              child: const Text('add target'),
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    // The seen step is skipped, so the tour opens on the next one.
+    expect(find.text('Find a client'), findsNothing);
+    expect(find.text('Add a client'), findsOneWidget);
+  });
+
+  testWidgets('marks only the steps that actually ran', (tester) async {
+    SharedPreferences.setMockInitialValues({'tour_seen_steps': <String>[]});
+    final container = newContainer();
+    final searchKey = GlobalKey();
+    // Registered as a step, but never mounted — isTargetRendered drops it.
+    final addKey = GlobalKey();
+    await tester.pumpWidget(
+      harness(
+        current: HubTab.clients,
+        scope: const DestinationTour(HubTab.clients),
+        stepKeys: {
+          TourStepId.clientsSearch: searchKey,
+          TourStepId.clientsAdd: addKey,
+        },
+        container: container,
+        child: TourShowcase(
+          showcaseKey: searchKey,
+          scope: const DestinationTour(HubTab.clients),
+          id: TourStepId.clientsSearch,
+          index: 0,
+          count: 1,
+          child: const Text('search target'),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.tap(find.text('Skip'));
+    await tester.pump(const Duration(seconds: 1));
+    final seen = container.read(tourSeenProvider);
+    expect(seen, {TourStepId.clientsSearch});
+    // The dropped step stays unseen, so a later visit offers it again.
+    expect(seen, isNot(contains(TourStepId.clientsAdd)));
+  });
+
   testWidgets(
     'a pushed destination gates on its own route being current, not on the '
     'hub scope',
@@ -206,6 +287,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final container = newContainer();
       final navigatorKey = GlobalKey<NavigatorState>();
+      final appearanceKey = GlobalKey();
 
       await tester.pumpWidget(
         UncontrolledProviderScope(
@@ -226,24 +308,28 @@ void main() {
 
       // Both pushes in one batch, so the toured route is never momentarily
       // on top — otherwise it gets a legitimate window to start.
-      unawaited(
-        navigatorKey.currentState!.push(
-          MaterialPageRoute<void>(
-            builder: (_) => FeatureTourHost(
-              scope: const DestinationTour(PushedDestination.settings),
-              isAdmin: true,
-              // Never attached, so a start would mark seen instead.
-              stepKeys: {TourStepId.settingsAppearance: GlobalKey()},
-              child: const Scaffold(body: Text('settings-body')),
+      navigatorKey.currentState!.push(
+        MaterialPageRoute<void>(
+          builder: (_) => FeatureTourHost(
+            scope: const DestinationTour(PushedDestination.settings),
+            isAdmin: true,
+            stepKeys: {TourStepId.settingsAppearance: appearanceKey},
+            child: Scaffold(
+              body: TourShowcase(
+                showcaseKey: appearanceKey,
+                scope: const DestinationTour(PushedDestination.settings),
+                id: TourStepId.settingsAppearance,
+                index: 0,
+                count: 1,
+                child: const Text('settings-body'),
+              ),
             ),
           ),
         ),
       );
-      unawaited(
-        navigatorKey.currentState!.push(
-          MaterialPageRoute<void>(
-            builder: (_) => const Scaffold(body: Text('on-top')),
-          ),
+      navigatorKey.currentState!.push(
+        MaterialPageRoute<void>(
+          builder: (_) => const Scaffold(body: Text('on-top')),
         ),
       );
       await tester.pumpAndSettle();
@@ -251,21 +337,23 @@ void main() {
 
       expect(find.text('on-top'), findsOneWidget);
       expect(
-        container.read(tourSeenProvider),
-        isNot(contains(const DestinationTour(PushedDestination.settings))),
+        find.text('Make it yours'),
+        findsNothing,
         reason: 'a buried route must not start its tour',
       );
+      expect(container.read(tourSeenProvider), isEmpty);
 
       // Popping back makes the route current again, re-opening the gate.
+      // Bounded pumps, not pumpAndSettle: once a tour actually runs,
+      // showcaseview's tooltip animation repeats and never settles.
       navigatorKey.currentState!.pop();
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(const Duration(seconds: 1));
       await tester.pump(const Duration(seconds: 1));
 
       expect(tester.takeException(), isNull);
-      expect(
-        container.read(tourSeenProvider),
-        contains(const DestinationTour(PushedDestination.settings)),
-      );
+      expect(find.text('Make it yours'), findsOneWidget);
     },
   );
 
@@ -276,6 +364,7 @@ void main() {
     final container = newContainer();
     final navigatorKey = GlobalKey<NavigatorState>();
     const scope = FormTour(TourForm.addAppointment);
+    final templatesKey = GlobalKey();
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -296,7 +385,7 @@ void main() {
 
     expect(
       container.read(tourSeenProvider),
-      isNot(contains(scope)),
+      isEmpty,
       reason: 'nothing has opened the sheet yet',
     );
 
@@ -305,23 +394,33 @@ void main() {
     unawaited(
       showModalBottomSheet<void>(
         context: navigatorKey.currentContext!,
-        builder: (_) => const FeatureTourHost(
+        builder: (_) => FeatureTourHost(
           scope: scope,
           isAdmin: true,
-          // Never attached, so a start marks seen rather than showing a step.
-          stepKeys: {},
-          child: Text('sheet-body'),
+          stepKeys: {TourStepId.apptTemplates: templatesKey},
+          child: TourShowcase(
+            showcaseKey: templatesKey,
+            scope: scope,
+            id: TourStepId.apptTemplates,
+            index: 0,
+            count: 1,
+            child: const Text('sheet-body'),
+          ),
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    // Bounded pumps, not pumpAndSettle: the tour runs here, and
+    // showcaseview's tooltip animation repeats and never settles.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(seconds: 1));
     await tester.pump(const Duration(seconds: 1));
 
     expect(tester.takeException(), isNull);
     expect(find.text('sheet-body'), findsOneWidget);
     expect(
-      container.read(tourSeenProvider),
-      contains(scope),
+      find.text('Start from a job type'),
+      findsOneWidget,
       reason: 'the sheet route is current, so its tour ran',
     );
   });

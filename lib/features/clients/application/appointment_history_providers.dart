@@ -5,8 +5,8 @@ import 'package:scheduling/features/calendar/application/appointments_providers.
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 
-/// A thin facade over calendar-owned appointment history, so this file only needs
-/// the calendar domain import for the record type.
+/// A thin facade over calendar-owned appointment history, so this file only
+/// needs the calendar domain import for the record type.
 final historyPagerProvider = Provider<HistoryPager>(
   (ref) => HistoryPager(ref.watch(appointmentsRepositoryProvider)),
 );
@@ -17,43 +17,77 @@ class HistoryPager {
 
   final AppointmentsRepository _repo;
 
+  /// [employeeId] scopes the page to one assignee's jobs; null is the
+  /// business-wide archive.
   Future<List<AppointmentRecord>> fetchPage({
     required int limit,
     AppointmentRecord? after,
+    String? employeeId,
   }) {
-    return _repo.fetchHistoryPage(after: after, limit: limit);
+    return _repo.fetchHistoryPage(
+      after: after,
+      limit: limit,
+      employeeId: employeeId,
+    );
   }
 }
 
-/// Database-backed history search across the whole window. It's autoDispose, so each
-/// query instance gets freed once nothing's watching it anymore.
+/// One history search: the words, and whose history.
+typedef HistorySearchKey = ({String query, String? employeeId});
+
+/// Database-backed history search across the whole window.
 final historySearchProvider = FutureProvider.autoDispose
-    .family<List<AppointmentRecord>, String>((
-      ref,
-      query,
-    ) async {
+    .family<List<AppointmentRecord>, HistorySearchKey>((ref, key) async {
       final repo = ref.watch(appointmentsRepositoryProvider);
+      // Resolved HERE, not inside the callback: this is autoDispose, so the
+      // `Ref` is gone the moment the last listener does, and Riverpod 3's
+      // `ref.read` THROWS on a disposed one.
+      final logger = ref.read(loggerProvider);
       // Invalidate on local write so deleted visits don't linger in cached results.
       final sub = repo.onLocalWrite.listen(
         (_) => ref.invalidateSelf(),
-        onError: (Object e, StackTrace st) => ref
-            .read(loggerProvider)
-            .warn('HIST-SEARCH invalidate error', e, st),
+        onError: (Object e, StackTrace st) =>
+            logger.warn('HIST-SEARCH invalidate error', e, st),
       );
       ref.onDispose(sub.cancel);
-      return repo.searchHistory(query);
+      return await repo.searchHistory(key.query, employeeId: key.employeeId);
     });
 
-/// Client appointments for the Job history section. AutoDispose, keyed by clientId,
-/// and re-fetches whenever there's a local write.
+/// How far back the booking form looks for a client's previous addresses and
+/// last visit. The form renders two lines off this, so it must not buy the
+/// whole archive [clientJobHistoryProvider] pages through.
+const int kClientBookingHistoryVisits = 20;
+
+/// The newest [kClientBookingHistoryVisits] visits for the booking form.
+///
+/// Deliberately NOT self-invalidating on `onLocalWrite` the way the Job
+/// history section does: this backs hints on an open form, and re-reading on
+/// every local write re-fired the whole scan while the photo-upload queue
+/// drained.
+final clientBookingHistoryProvider = FutureProvider.autoDispose
+    .family<List<AppointmentRecord>, String>((ref, clientId) async {
+      final repo = ref.watch(appointmentsRepositoryProvider);
+      // Page one past the cap: `pageToCap` asks for `cap + 1 - fetched`, so a
+      // page size equal to the cap costs a second round trip to learn there
+      // are more — on the form-open path, for the repeat clients this serves.
+      return await repo.fetchClientHistory(
+        clientId: clientId,
+        limit: kClientBookingHistoryVisits + 1,
+        cap: kClientBookingHistoryVisits,
+      );
+    });
+
+/// Client appointments for the Job history section.
 final clientJobHistoryProvider = FutureProvider.autoDispose
     .family<List<AppointmentRecord>, String>((ref, clientId) async {
       final repo = ref.watch(appointmentsRepositoryProvider);
+      // Hoisted for the same reason as `historySearchProvider` above.
+      final logger = ref.read(loggerProvider);
       final sub = repo.onLocalWrite.listen(
         (_) => ref.invalidateSelf(),
         onError: (Object e, StackTrace st) =>
-            ref.read(loggerProvider).warn('HIST-LOAD invalidate error', e, st),
+            logger.warn('HIST-LOAD invalidate error', e, st),
       );
       ref.onDispose(sub.cancel);
-      return repo.fetchClientHistory(clientId: clientId);
+      return await repo.fetchClientHistory(clientId: clientId);
     });

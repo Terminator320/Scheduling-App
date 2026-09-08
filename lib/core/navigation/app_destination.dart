@@ -1,18 +1,12 @@
 import 'package:scheduling/routes/app_routes.dart';
 
-/// Anything the end drawer can navigate to. Sealed so switches stay
-/// exhaustive; `implements Enum` so only enums can implement it and
-/// `.name` works on the union type.
+/// Anything the end drawer can navigate to.
 sealed class AppDestination implements Enum {}
 
-/// The four persistent hub tabs (IndexedStack panes). The stack index is
-/// [HubTab.index] — safe, because the stack children iterate
-/// [HubTab.values], the same list the index derives from.
+/// The four persistent hub tabs.
 enum HubTab implements AppDestination { calendar, clients, employees, liveMap }
 
 /// Destinations that push a plain route above the hub.
-/// P5 adds `myDetails`; P6 adds `timeOff` — one member, one
-/// [destinationRoute] case and one drawer row each, no restructure.
 enum PushedDestination implements AppDestination {
   dayRoute,
   history,
@@ -26,8 +20,7 @@ const List<AppDestination> allDestinations = [
   ...PushedDestination.values,
 ];
 
-/// Route + typed args for a destination — the one mapping every nav surface
-/// uses, so the drawer and outside-shell navigation cannot drift.
+/// Maps each destination to its route and typed args.
 ({String route, Object arguments}) destinationRoute(
   AppDestination destination, {
   required bool isAdmin,
@@ -64,8 +57,8 @@ const List<AppDestination> allDestinations = [
     arguments: DashboardArgs(
       isAdmin: isAdmin,
       employeeId: employeeId,
-      userName: userName.isEmpty ? null : userName,
-      email: userEmail.isEmpty ? null : userEmail,
+      userName: _blankToNull(userName),
+      email: _blankToNull(userEmail),
     ),
   ),
   PushedDestination.settings => (
@@ -78,3 +71,5 @@ const List<AppDestination> allDestinations = [
     ),
   ),
 };
+
+String? _blankToNull(String value) => value.isEmpty ? null : value;

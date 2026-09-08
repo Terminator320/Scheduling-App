@@ -184,4 +184,115 @@ void main() {
       expect(doc.toMap().containsKey('businessName'), isFalse);
     });
   });
+
+  group('phone seam (F2)', () {
+    ClientRecord clientWith({
+      String phone = '',
+      String mobile = '',
+      List<ClientContact> contacts = const [],
+    }) => ClientRecord(
+      id: 'c1',
+      name: 'Marie Tremblay',
+      phone: phone,
+      mobile: mobile,
+      contacts: contacts,
+    );
+
+    test('a query straddling phone and mobile no longer matches', () {
+      final client = clientWith(phone: '5145628332', mobile: '4385551212');
+      // The old blob was '51456283324385551212', which contains '83324385'.
+      expect(ClientSearchPolicy.matchesClient(client, '83324385'), isFalse);
+    });
+
+    test('each number still matches on its own', () {
+      final client = clientWith(phone: '5145628332', mobile: '4385551212');
+      expect(ClientSearchPolicy.matchesClient(client, '5145628332'), isTrue);
+      expect(ClientSearchPolicy.matchesClient(client, '4385551212'), isTrue);
+      expect(ClientSearchPolicy.matchesClient(client, '5628332'), isTrue);
+    });
+
+    test('index exposes one entry per number, not one blob', () {
+      final entry = ClientSearchPolicy.index(
+        clientWith(phone: '5145628332', mobile: '4385551212'),
+      );
+      expect(entry.phoneDigits, ['5145628332', '4385551212']);
+    });
+
+    test('a contact phone is its own entry', () {
+      final entry = ClientSearchPolicy.index(
+        clientWith(
+          phone: '5145628332',
+          contacts: const [ClientContact(name: 'Ana', phone: '5145550110')],
+        ),
+      );
+      expect(entry.phoneDigits, contains('5145550110'));
+    });
+
+    test('blank numbers are dropped rather than becoming empty entries', () {
+      final entry = ClientSearchPolicy.index(clientWith(phone: '5145628332'));
+      expect(entry.phoneDigits, ['5145628332']);
+    });
+
+    test('rawMatches honours the same seam as index/entryMatches', () {
+      final data = <String, dynamic>{
+        'name': 'Marie Tremblay',
+        'phone': '5145628332',
+        'mobile': '4385551212',
+      };
+      expect(
+        ClientSearchPolicy.rawMatches(
+          data,
+          queryText: '',
+          queryDigits: '83324385',
+        ),
+        isFalse,
+      );
+      expect(
+        ClientSearchPolicy.rawMatches(
+          data,
+          queryText: '',
+          queryDigits: '4385551212',
+        ),
+        isTrue,
+      );
+    });
+  });
+
+  group('relevance exact tier with two numbers (F2)', () {
+    test('the main line reaches the exact tier even when a mobile exists', () {
+      final score = ClientSearchPolicy.relevanceScore(
+        displayName: 'marie tremblay',
+        personName: 'marie tremblay',
+        phoneDigits: const ['5145628332', '4385551212'],
+        contactsDigits: const [],
+        queryText: '5145628332',
+        queryDigits: '5145628332',
+      );
+      expect(score, 0);
+    });
+
+    test('the mobile reaches the exact tier too', () {
+      final score = ClientSearchPolicy.relevanceScore(
+        displayName: 'marie tremblay',
+        personName: 'marie tremblay',
+        phoneDigits: const ['5145628332', '4385551212'],
+        contactsDigits: const [],
+        queryText: '4385551212',
+        queryDigits: '4385551212',
+      );
+      expect(score, 0);
+    });
+
+    test('a prefix of the mobile reaches the prefix tier', () {
+      final score = ClientSearchPolicy.relevanceScore(
+        displayName: 'marie tremblay',
+        personName: 'marie tremblay',
+        phoneDigits: const ['5145628332', '4385551212'],
+        contactsDigits: const [],
+        queryText: '438555',
+        queryDigits: '438555',
+      );
+      expect(score, 2);
+    });
+  });
 }

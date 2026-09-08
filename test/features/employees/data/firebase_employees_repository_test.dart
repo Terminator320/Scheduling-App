@@ -12,6 +12,7 @@ import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
+import 'package:scheduling/features/employees/domain/policies/self_service_fields.dart';
 
 class _MockFirestore extends Mock implements FirebaseFirestore {}
 
@@ -32,6 +33,8 @@ class _MockQuerySnapshot extends Mock
 
 class _MockQueryDocSnapshot extends Mock
     implements QueryDocumentSnapshot<Map<String, dynamic>> {}
+
+class _MockSnapshotMetadata extends Mock implements SnapshotMetadata {}
 
 class _MockDocRef extends Mock
     implements DocumentReference<Map<String, dynamic>> {}
@@ -91,6 +94,7 @@ void main() {
       () => query.where(any(), isEqualTo: any(named: 'isEqualTo')),
     ).thenReturn(query);
     when(() => query.limit(any())).thenReturn(query);
+    when(() => collection.limit(any())).thenReturn(query);
     when(() => query.get()).thenAnswer((_) async => snapshot);
     when(() => snapshot.docs).thenReturn(const []);
 
@@ -160,7 +164,6 @@ void main() {
         phone: '',
         colorValue: '1',
         jobTitle: 'technician',
-        isAdmin: false,
       );
 
       expect(credentials.email, 'a@b.com');
@@ -174,7 +177,6 @@ void main() {
       expect(captured['email'], 'a@b.com');
       expect(captured['jobTitle'], 'technician');
       expect(captured['firstName'], 'A');
-      expect(captured['isAdmin'], isFalse);
     });
 
     test('rejects a half-blank credential payload', () async {
@@ -203,7 +205,6 @@ void main() {
           phone: '',
           colorValue: '1',
           jobTitle: '',
-          isAdmin: false,
         ),
         throwsA(isA<EmployeesFailureUnknown>()),
       );
@@ -238,7 +239,6 @@ void main() {
             phone: '',
             colorValue: '1',
             jobTitle: '',
-            isAdmin: false,
           ),
           throwsA(isA<EmployeesFailureEmailAlreadyExists>()),
         );
@@ -288,6 +288,29 @@ void main() {
     return (captured as Map).cast<String, dynamic>();
   }
 
+  test(
+    'createEmployeeAccount never sends isAdmin — the server decides the role',
+    () async {
+      final callable = stubCallable(
+        'createEmployeeAccount',
+        data: {'email': 'a@b.test', 'password': 'Pw23456789x'},
+      );
+
+      await repo().createEmployeeAccount(
+        name: 'A B',
+        firstName: 'A',
+        lastName: 'B',
+        email: 'a@b.test',
+        phone: '',
+        colorValue: '1',
+        jobTitle: '',
+      );
+
+      final payload = capturedPayload(callable);
+      expect(payload.containsKey('isAdmin'), isFalse);
+    },
+  );
+
   group('completeEmployeeSetup', () {
     test('always sends all five keys', () async {
       // The server reads the strings leniently (empty == absent) and the flags
@@ -321,6 +344,21 @@ void main() {
       expect(captured['phone'], '(514) 555-1234');
       expect(captured['termsAccepted'], isTrue);
       expect(captured['locationConsent'], isTrue);
+    });
+
+    test('trims setup profile strings before calling the server', () async {
+      final callable = stubCallable('completeEmployeeSetup');
+
+      await repo().completeEmployeeSetup(
+        firstName: '  Zoe ',
+        lastName: ' Roy ',
+        phone: ' (514) 555-1234 ',
+      );
+
+      final captured = capturedPayload(callable);
+      expect(captured['firstName'], 'Zoe');
+      expect(captured['lastName'], 'Roy');
+      expect(captured['phone'], '(514) 555-1234');
     });
   });
 
@@ -494,6 +532,62 @@ void main() {
       },
     );
 
+    test('runs the callable BEFORE the Firestore write', () async {
+      // The ORDER is the whole fix, and the payload assertion above holds
+      // whichever way round the two run. Auth is the store that owns sign-in
+      // and the only one that can genuinely refuse a duplicate, so it must
+      // never be the one left behind: a Firestore-first change leaves the
+      // person signing in at the old address while every admin surface shows
+      // the new one, and desyncs the two stores `createEmployeeAccount` joins
+      // on. Same shape as `auth_service_test.dart`'s password-then-activate.
+      stubStoredDoc(uid: 'auth-uid', emailAfterCallable: 'new@example.com');
+      final callable = stubCallable('changeEmployeeEmail', data: {'ok': true});
+
+      await repo().updateEmployee(
+        docId: 'my-id',
+        employee: const EmployeeRecord(
+          id: 'my-id',
+          name: 'Alice',
+          email: 'new@example.com',
+          uid: 'auth-uid',
+        ),
+      );
+
+      verifyInOrder([
+        () => callable.call<dynamic>(any<Object?>()),
+        () => transaction.update(docRef, any()),
+      ]);
+    });
+
+    test('a refused callable leaves the users doc untouched', () async {
+      // The half that matters: the Firestore write only ever "re-states what
+      // the server committed", so a callable that threw must leave nothing
+      // behind — otherwise the admin surface shows an address Auth refused.
+      stubStoredDoc(uid: 'auth-uid');
+      stubFailingCallable(
+        'changeEmployeeEmail',
+        FirebaseFunctionsException(
+          message: 'email-exists',
+          code: 'already-exists',
+        ),
+      );
+
+      await expectLater(
+        repo().updateEmployee(
+          docId: 'my-id',
+          employee: const EmployeeRecord(
+            id: 'my-id',
+            name: 'Alice',
+            email: 'taken@example.com',
+            uid: 'auth-uid',
+          ),
+        ),
+        throwsA(isA<EmployeesFailureEmailAlreadyExists>()),
+      );
+
+      verifyNever(() => transaction.update(docRef, any()));
+    });
+
     test('leaves the callable alone when the email is unchanged', () async {
       stubStoredDoc(uid: 'auth-uid');
 
@@ -511,6 +605,30 @@ void main() {
         () => functions.httpsCallable(any(), options: any(named: 'options')),
       );
     });
+
+    test(
+      'treats a normalized match as unchanged even if the stored email has legacy casing',
+      () async {
+        stubStoredDoc(uid: 'auth-uid');
+        when(
+          docSnapshot.data,
+        ).thenReturn({'email': ' Old@Example.com ', 'uid': 'auth-uid'});
+
+        await repo().updateEmployee(
+          docId: 'my-id',
+          employee: const EmployeeRecord(
+            id: 'my-id',
+            name: 'Alice',
+            email: 'old@example.com',
+            uid: 'auth-uid',
+          ),
+        );
+
+        verifyNever(
+          () => functions.httpsCallable(any(), options: any(named: 'options')),
+        );
+      },
+    );
 
     test('writes the email directly when the doc carries no uid', () async {
       stubStoredDoc(uid: '');
@@ -554,6 +672,35 @@ void main() {
         throwsA(isA<EmployeesFailureEmailAlreadyExists>()),
       );
     });
+
+    test(
+      'surfaces the callable email-changed refusal as a retryable failure and leaves the doc untouched',
+      () async {
+        stubStoredDoc(uid: 'auth-uid');
+        stubFailingCallable(
+          'changeEmployeeEmail',
+          FirebaseFunctionsException(
+            message: 'email-changed',
+            code: 'failed-precondition',
+          ),
+        );
+
+        await expectLater(
+          repo().updateEmployee(
+            docId: 'my-id',
+            employee: const EmployeeRecord(
+              id: 'my-id',
+              name: 'Alice',
+              email: 'new@example.com',
+              uid: 'auth-uid',
+            ),
+          ),
+          throwsA(isA<EmployeesFailureUnknown>()),
+        );
+
+        verifyNever(() => transaction.update(docRef, any()));
+      },
+    );
 
     test('saveEmergencyContact writes users/{id}/private/emergency', () async {
       final privateCollection = _MockCollection();
@@ -630,8 +777,8 @@ void main() {
         ),
       );
 
-      // Never empty: watchAllUsers orders by name and Firestore drops docs
-      // missing the orderBy field.
+      // Never empty: the repository preserves the stored fallback name when
+      // split-name fields are blank.
       expect(capturedUpdate()['name'], 'Legacy Single Name');
     });
 
@@ -669,7 +816,7 @@ void main() {
     );
 
     test(
-      'watchEmployees constrains role + active status and bounds the stream',
+      'watchEmployees constrains role + active status',
       () async {
         when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
         repo().watchEmployees().listen((_) {});
@@ -685,12 +832,13 @@ void main() {
           () => collection.where('role', whereIn: ['employee', 'admin']),
         ).called(1);
         verify(() => query.where('status', isEqualTo: 'active')).called(1);
-        verify(() => query.limit(500)).called(1);
+        // Bounded: this is a live listener held open for the whole session.
+        verify(() => query.limit(1000)).called(1);
       },
     );
 
     test(
-      'watchAssignableUsers constrains active status and bounds the stream',
+      'watchAssignableUsers constrains active status',
       () async {
         when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
         repo().watchAssignableUsers().listen((_) {});
@@ -698,20 +846,94 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         verify(() => collection.where('status', isEqualTo: 'active')).called(1);
-        verify(() => query.limit(500)).called(1);
+        verify(() => query.limit(1000)).called(1);
       },
     );
 
-    test('watchAllUsers orders by name and bounds the stream', () async {
-      when(() => collection.orderBy(any())).thenReturn(query);
-      when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
-      repo().watchAllUsers().listen((_) {});
-      // retryStream builds the query on subscribe, one microtask later.
-      await Future<void>.delayed(Duration.zero);
+    test(
+      'watchEmployees sorts active users client-side by display name',
+      () async {
+        final zed = _MockQueryDocSnapshot();
+        final amy = _MockQueryDocSnapshot();
+        when(() => zed.id).thenReturn('z');
+        when(() => amy.id).thenReturn('a');
+        when(zed.data).thenReturn(const {
+          'name': 'Zed Roy',
+          'status': 'active',
+          'role': 'employee',
+        });
+        when(amy.data).thenReturn(const {
+          'firstName': 'Amy',
+          'lastName': 'Adams',
+          'status': 'active',
+          'role': 'employee',
+        });
+        when(() => snapshot.docs).thenReturn([zed, amy]);
+        when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
 
-      verify(() => collection.orderBy('name')).called(1);
-      verify(() => query.limit(500)).called(1);
-    });
+        final records = await repo().watchEmployees().first;
+
+        expect(records.map((e) => e.id).toList(), ['a', 'z']);
+      },
+    );
+
+    test(
+      'watchAssignableUsers sorts active users client-side without requiring orderBy(name)',
+      () async {
+        final zed = _MockQueryDocSnapshot();
+        final amy = _MockQueryDocSnapshot();
+        when(() => zed.id).thenReturn('z');
+        when(() => amy.id).thenReturn('a');
+        when(zed.data).thenReturn(const {
+          'name': 'Zed Roy',
+          'status': 'active',
+        });
+        when(amy.data).thenReturn(const {
+          'firstName': 'Amy',
+          'lastName': 'Adams',
+          'status': 'active',
+        });
+        when(() => snapshot.docs).thenReturn([zed, amy]);
+        when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
+
+        final records = await repo().watchAssignableUsers().first;
+
+        expect(records.map((e) => e.id).toList(), ['a', 'z']);
+      },
+    );
+
+    test(
+      'watchAllUsers sorts users client-side without requiring orderBy(name)',
+      () async {
+        final zed = _MockQueryDocSnapshot();
+        final amy = _MockQueryDocSnapshot();
+        when(() => zed.id).thenReturn('z');
+        when(() => amy.id).thenReturn('a');
+        when(zed.data).thenReturn(const {
+          'name': 'Zed Roy',
+          'status': 'disabled',
+        });
+        when(amy.data).thenReturn(const {
+          'firstName': 'Amy',
+          'lastName': 'Adams',
+          'status': 'invited',
+        });
+        when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
+        when(
+          () => collection.snapshots(),
+        ).thenAnswer((_) => Stream.value(snapshot));
+        when(() => snapshot.docs).thenReturn([zed, amy]);
+
+        final records = await repo().watchAllUsers().first;
+
+        expect(records.map((e) => e.id).toList(), ['a', 'z']);
+        // No orderBy - it would exclude docs with no `name`, dropping an unnamed
+        // user off the admin roster. The sort happens in Dart instead, which is
+        // also where the cap warn lives.
+        verifyNever(() => collection.orderBy(any()));
+        verify(() => collection.limit(1000)).called(1);
+      },
+    );
 
     test('watchEmployees resubscribes past a permission-denied error', () {
       fakeAsync((async) {
@@ -795,6 +1017,40 @@ void main() {
       });
     });
 
+    test(
+      'cachedUserDocId is cleared when the authoritative stream goes empty',
+      () {
+        fakeAsync((async) {
+          final userDoc = _MockQueryDocSnapshot();
+          final liveSnapshot = _MockQuerySnapshot();
+          final deletedSnapshot = _MockQuerySnapshot();
+          final deletedMetadata = _MockSnapshotMetadata();
+          when(userDoc.data).thenReturn(const {'role': 'admin'});
+          when(() => userDoc.id).thenReturn('doc-1');
+          when(() => liveSnapshot.docs).thenReturn([userDoc]);
+          when(() => deletedSnapshot.docs).thenReturn(const []);
+          when(() => deletedSnapshot.metadata).thenReturn(deletedMetadata);
+          when(() => deletedMetadata.isFromCache).thenReturn(false);
+          when(
+            query.snapshots,
+          ).thenAnswer(
+            (_) => Stream.fromIterable([liveSnapshot, deletedSnapshot]),
+          );
+
+          final emissions = <Map<String, dynamic>>[];
+          final repository = repo();
+          repository.watchUserDoc('uid-1').listen(emissions.add);
+          async.flushMicrotasks();
+
+          expect(emissions, [
+            {'role': 'admin'},
+            <String, dynamic>{},
+          ]);
+          expect(repository.cachedUserDocId('uid-1'), isNull);
+        });
+      },
+    );
+
     test('watchUserDoc does not retry a non-permission error', () {
       fakeAsync((async) {
         var subscriptions = 0;
@@ -839,6 +1095,125 @@ void main() {
               .cast<String, dynamic>();
       expect(captured['status'], 'active');
       expect(captured.containsKey('updatedAt'), isTrue);
+    });
+  });
+
+  group('updateSelfDetails', () {
+    Future<Map<String, dynamic>> save({
+      String phone = '(514) 555-1234',
+      List<bool> workingDays = const [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+      ],
+      int workStartMinutes = 420,
+      int workEndMinutes = 960,
+      bool onCall = true,
+      bool travelAlertsEnabled = true,
+      bool locationSharingEnabled = false,
+    }) async {
+      await repo().updateSelfDetails(
+        EmployeeRecord(
+          id: 'u1',
+          name: 'Self',
+          email: 'self@example.com',
+          phone: phone,
+          workingDays: workingDays,
+          workStartMinutes: workStartMinutes,
+          workEndMinutes: workEndMinutes,
+          onCall: onCall,
+          travelAlertsEnabled: travelAlertsEnabled,
+          locationSharingEnabled: locationSharingEnabled,
+        ),
+      );
+      return (verify(() => docRef.update(captureAny())).captured.single as Map)
+          .cast<String, dynamic>();
+    }
+
+    test('writes the self-service values', () async {
+      final captured = await save();
+
+      expect(captured['phone'], '(514) 555-1234');
+      expect(captured['onCall'], isTrue);
+      expect(captured['workStartMinutes'], 420);
+      expect(captured['workEndMinutes'], 960);
+      expect(captured['travelAlertsEnabled'], isTrue);
+      expect(captured['locationSharingEnabled'], isFalse);
+    });
+
+    test('writes the travel-alert preference explicitly', () async {
+      final captured = await save(travelAlertsEnabled: false);
+
+      expect(captured['travelAlertsEnabled'], isFalse);
+    });
+
+    test('writes the location-sharing preference explicitly', () async {
+      final captured = await save(locationSharingEnabled: true);
+
+      expect(captured['locationSharingEnabled'], isTrue);
+    });
+
+    test('the patch carries no key outside the rules allowlist', () async {
+      // The rules use `hasOnly`, so one stray key rejects the WHOLE write and
+      // reaches the user as an opaque permission-denied. This is the assertion
+      // that matters most in this group.
+      final captured = await save();
+
+      expect(captured.keys, everyElement(isIn(kSelfServiceUserFields)));
+    });
+
+    test('never sends the emergency scrub updateEmployee sends', () async {
+      // updateEmployee deletes the legacy emergency pair on every save. Doing
+      // that here would add two keys the allowlist does not name.
+      final captured = await save();
+
+      expect(captured.containsKey('emergencyContact'), isFalse);
+      expect(captured.containsKey('emergencyPhone'), isFalse);
+    });
+
+    test('never sends an admin-owned field', () async {
+      final captured = await save();
+
+      for (final admin in const ['role', 'status', 'email', 'maxJobsPerDay']) {
+        expect(captured.containsKey(admin), isFalse, reason: admin);
+      }
+    });
+
+    test('normalizes working days to seven flags', () async {
+      final captured = await save(workingDays: const [true, true]);
+
+      expect((captured['workingDays']! as List).length, 7);
+    });
+
+    test('trims the phone', () async {
+      final captured = await save(phone: '  (514) 555-1234  ');
+
+      expect(captured['phone'], '(514) 555-1234');
+    });
+
+    test('stamps updatedAt', () async {
+      final captured = await save();
+
+      expect(captured.containsKey('updatedAt'), isTrue);
+    });
+
+    test('is a plain update, never a transaction', () async {
+      // No concurrent writer to guard against — a person edits their own doc
+      // from one device — and the iOS transaction plugin bug makes a needless
+      // client transaction a real risk, not just overhead.
+      await save();
+
+      verifyNever(
+        () => firestore.runTransaction<void>(
+          any(),
+          timeout: any(named: 'timeout'),
+          maxAttempts: any(named: 'maxAttempts'),
+        ),
+      );
     });
   });
 }

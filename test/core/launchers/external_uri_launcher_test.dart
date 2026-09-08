@@ -6,11 +6,13 @@
 // a notice. That is the case with no other cover: without a test, deleting the
 // catch leaves the whole suite green.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/launchers/external_uri_launcher.dart';
 import 'package:scheduling/core/notices/app_notice.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -78,6 +80,7 @@ void main() {
         ref,
         Uri.parse(_uri),
         tag: 'LAUNCH-TEL',
+        analyticsAction: AnalyticsContactActions.call,
         errorMessage: 'could not call',
       );
       await tester.pump();
@@ -103,6 +106,7 @@ void main() {
         ref,
         Uri.parse(_uri),
         tag: 'LAUNCH-TEL',
+        analyticsAction: AnalyticsContactActions.call,
         errorMessage: 'could not call',
       );
       await tester.pump();
@@ -125,11 +129,49 @@ void main() {
         ref,
         Uri.parse(_uri),
         tag: 'LAUNCH-TEL',
+        analyticsAction: AnalyticsContactActions.call,
         errorMessage: 'could not call',
       );
       await tester.pump();
 
       expect(opened, isTrue);
+      expect(seen, isEmpty);
+    });
+  });
+
+  testWidgets('a late false result after widget disposal does not throw', (
+    tester,
+  ) async {
+    final launchCompleter = Completer<bool>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_channel, (call) async {
+          if (call.method == 'canLaunch') return true;
+          if (call.method != 'launch') return null;
+          return await launchCompleter.future;
+        });
+
+    await _run(tester, (context, ref, notices) async {
+      final seen = <AppNotice>[];
+      final sub = notices.stream.listen(seen.add);
+      addTearDown(sub.cancel);
+
+      final pending = launchExternalUri(
+        context,
+        ref,
+        Uri.parse(_uri),
+        tag: 'LAUNCH-TEL',
+        analyticsAction: AnalyticsContactActions.call,
+        errorMessage: 'could not call',
+      );
+
+      await tester.pumpWidget(const SizedBox());
+      launchCompleter.complete(false);
+
+      final opened = await pending;
+      await tester.pump();
+
+      expect(opened, isFalse);
+      expect(tester.takeException(), isNull);
       expect(seen, isEmpty);
     });
   });

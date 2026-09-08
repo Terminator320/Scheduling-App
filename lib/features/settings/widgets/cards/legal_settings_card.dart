@@ -41,7 +41,6 @@ class LegalSettingsCard extends ConsumerWidget {
             icon: Icons.description_rounded,
             iconColor: scheme.secondary,
             label: context.l10n.settings_termsOfService,
-            isLast: true,
             trailing: openIcon,
             onTap: () => launchWebUrl(context, ref, AppUrls.termsOfService),
           ),

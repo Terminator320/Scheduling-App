@@ -41,4 +41,42 @@ void main() {
       );
     });
   });
+
+  group('displayEmployeeName', () {
+    test('prefers the split-name fields', () {
+      expect(
+        displayEmployeeName(
+          firstName: 'Theo',
+          lastName: 'Roy',
+          name: '',
+          email: 'theo@x.com',
+        ),
+        'Theo Roy',
+      );
+    });
+
+    test('falls back to the stored name before email', () {
+      expect(
+        displayEmployeeName(
+          firstName: '',
+          lastName: '',
+          name: 'Legacy Name',
+          email: 'legacy@x.com',
+        ),
+        'Legacy Name',
+      );
+    });
+
+    test('falls back to email when the record has no name fields', () {
+      expect(
+        displayEmployeeName(
+          firstName: '',
+          lastName: '',
+          name: '   ',
+          email: 'theo@x.com',
+        ),
+        'theo@x.com',
+      );
+    });
+  });
 }

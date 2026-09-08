@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/clients_filter.dart';
-import 'package:scheduling/features/clients/widgets/sections/client_type_filter_bar.dart';
-import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
+import 'package:scheduling/features/clients/domain/models/clients_sort.dart';
+import 'package:scheduling/features/clients/widgets/sections/clients_filter_bar.dart';
+import 'package:scheduling/features/clients/widgets/sections/clients_list_header.dart';
+import 'package:scheduling/features/clients/widgets/sheets/add_client_flow.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
+import 'package:scheduling/features/clients/widgets/sheets/clients_filter_sheet.dart';
 import 'package:scheduling/features/clients/widgets/views/client_detail_view.dart';
 import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
@@ -23,7 +28,7 @@ import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
 
-class ListInformation extends StatefulWidget {
+class ListInformation extends ConsumerStatefulWidget {
   const ListInformation({
     required this.isAdmin,
     required this.employeeId,
@@ -34,13 +39,19 @@ class ListInformation extends StatefulWidget {
   final String employeeId;
 
   @override
-  State<ListInformation> createState() => _ListInformationState();
+  ConsumerState<ListInformation> createState() => _ListInformationState();
 }
 
-class _ListInformationState extends State<ListInformation> {
+class _ListInformationState extends ConsumerState<ListInformation> {
   final TextEditingController _searchController = TextEditingController();
   ClientRecord? _selectedClient;
   ClientsFilter _filter = const ClientsFilterAll();
+  ClientsSort _sort = ClientsSort.name;
+  int? _visibleCount;
+
+  /// Street of the active building filter, remembered when it is picked so the
+  /// chip can name it without this screen watching the scan.
+  String? _activeBuildingLabel;
 
   /// Whether the list's first page has settled — gates the feature tour.
   bool _listSettled = false;
@@ -56,17 +67,35 @@ class _ListInformationState extends State<ListInformation> {
     super.dispose();
   }
 
+  Future<void> _openFilterSheet() async {
+    final picked = await showClientsFilterSheet(context, selected: _filter);
+    if (picked == null || !mounted) return;
+    // The building KEY is a street address — reported as the filter KIND only,
+    // never its value.
+    ref
+        .read(analyticsServiceProvider)
+        .logFilterUsed(
+          surface: AnalyticsSurfaces.clients,
+          filterName: switch (picked.filter) {
+            ClientsFilterAll() => 'none',
+            ClientsFilterType() => 'type',
+            ClientsFilterBuilding() => 'building',
+            ClientsFilterArchived() => 'archived',
+          },
+          filterValue: switch (picked.filter) {
+            ClientsFilterType(:final type) => type.name,
+            _ => null,
+          },
+        );
+    setState(() {
+      _filter = picked.filter;
+      _activeBuildingLabel = picked.buildingLabel;
+    });
+  }
+
   void _onListSettled() {
     if (_listSettled) return;
     setState(() => _listSettled = true);
-  }
-
-  Future<void> _onAddClient() async {
-    final result = await showAddClientSheet(context);
-    if (result == null || result.next != AddClientNext.bookJob) return;
-    if (!mounted) return;
-    // Sequential, never stacked — the add-client sheet has already popped.
-    await showAddEventPopup(context, initialClient: result.client);
   }
 
   Future<void> _onClientTap(ClientRecord client) async {
@@ -95,15 +124,14 @@ class _ListInformationState extends State<ListInformation> {
     final searchBar = AppSearchBar(
       textScaler: MediaQuery.textScalerOf(context),
       controller: _searchController,
-      hintText: context.l10n.clients_searchByNameOrPhone,
+      hintText: context.l10n.clients_searchAllFields,
     );
     return FeatureTourHost(
       scope: _tour.scope,
       isAdmin: widget.isAdmin,
       stepKeys: _tour.keys,
       // The client-row step has no target while the list is still its
-      // skeleton, and a tour started then drops it and marks the WHOLE scope
-      // seen — the row step would never be shown again.
+      // skeleton, so an ungated tour would open on nothing.
       ready: _listSettled,
       child: Scaffold(
         appBar: AppTopBar(
@@ -124,7 +152,7 @@ class _ListInformationState extends State<ListInformation> {
                 child: FloatingActionButton(
                   // Needs to be unique across tabs, since IndexedStack keeps every tab's FAB mounted at the same time.
                   heroTag: 'clientsAddFab',
-                  onPressed: _onAddClient,
+                  onPressed: () => runAddClientFlow(context),
                   tooltip: context.l10n.clients_addClient,
                   child: const Icon(Icons.add),
                 ),
@@ -136,9 +164,31 @@ class _ListInformationState extends State<ListInformation> {
             children: [
               _tour.stepIf(
                 TourStepId.clientsFilter,
-                ClientTypeFilterBar(
+                ClientsFilterBar(
                   selected: _filter,
-                  onChanged: (next) => setState(() => _filter = next),
+                  onOpen: _openFilterSheet,
+                  onClear: () => setState(() {
+                    _filter = const ClientsFilterAll();
+                    _activeBuildingLabel = null;
+                  }),
+                  activeBuildingLabel: _activeBuildingLabel,
+                ),
+              ),
+              _tour.stepIf(
+                TourStepId.clientsSort,
+                ClientsListHeader(
+                  count: _visibleCount,
+                  sort: _sort,
+                  onSortChanged: (next) {
+                    ref
+                        .read(analyticsServiceProvider)
+                        .logFilterUsed(
+                          surface: AnalyticsSurfaces.clients,
+                          filterName: 'sort',
+                          filterValue: next.name,
+                        );
+                    setState(() => _sort = next);
+                  },
                 ),
               ),
               Expanded(
@@ -156,6 +206,11 @@ class _ListInformationState extends State<ListInformation> {
                     firstRowTourWrap: (child) =>
                         _tour.stepIf(TourStepId.clientsRow, child),
                     onFirstPageSettled: _onListSettled,
+                    sort: _sort,
+                    onCountChanged: (count) {
+                      if (_visibleCount == count) return;
+                      setState(() => _visibleCount = count);
+                    },
                   ),
                 ),
               ),

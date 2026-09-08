@@ -26,6 +26,17 @@ enum JobTitle {
     return JobTitle.unset;
   }
 
+  /// Whether someone with this title is crew — the people a job can be
+  /// assigned to.
+  ///
+  /// A dispatcher schedules the work rather than doing it, so they are hidden
+  /// from the assignee picker and from the dashboard's per-person job numbers
+  /// (workload rows, daily capacity, availability conflicts), where they would
+  /// otherwise sit at a permanent zero and inflate capacity. It is NOT an
+  /// access flag — that stays `role` — and it never touches assignees that are
+  /// already stored on a job.
+  bool get isAssignable => this != JobTitle.dispatcher;
+
   /// The four pickable titles, in the order the chips render.
   static const List<JobTitle> pickable = [
     JobTitle.leadTech,

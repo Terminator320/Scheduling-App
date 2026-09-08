@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/image_viewer.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
 /// Swipeable read-only gallery of appointment photos with page-dot indicator.
@@ -39,23 +40,29 @@ class _AppointmentImageCarouselState extends State<AppointmentImageCarousel> {
             child: PageView.builder(
               controller: _controller,
               itemCount: widget.images.length,
-              itemBuilder: (context, index) => GestureDetector(
-                onTap: () => ImageViewer.open(
-                  context,
-                  images: widget.images,
-                  initialIndex: index,
-                ),
-                child: Image(
-                  image: ResizeImage(
-                    widget.images[index],
-                    width: cacheWidth,
-                    height: cacheHeight,
-                    policy: ResizeImagePolicy.fit,
+              itemBuilder: (context, index) {
+                final image = widget.images[index];
+                // A refused photo is a transparent 1x1, which renders as a
+                // BLANK page — indistinguishable from an empty one.
+                if (isRefusedImage(image)) return const _RefusedSlide();
+                return GestureDetector(
+                  onTap: () => ImageViewer.open(
+                    context,
+                    images: widget.images,
+                    initialIndex: index,
                   ),
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                ),
-              ),
+                  child: Image(
+                    image: ResizeImage(
+                      image,
+                      width: cacheWidth,
+                      height: cacheHeight,
+                      policy: ResizeImagePolicy.fit,
+                    ),
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -73,6 +80,38 @@ class _AppointmentImageCarouselState extends State<AppointmentImageCarousel> {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// What the carousel shows in place of a photo Storage refused.
+class _RefusedSlide extends StatelessWidget {
+  const _RefusedSlide();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      color: scheme.errorContainer.withValues(alpha: 0.3),
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.broken_image_outlined,
+            size: 32,
+            color: scheme.onErrorContainer,
+          ),
+          const SizedBox(height: AppSpacing.sp8),
+          Text(
+            context.l10n.calendar_photoUnavailable,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: scheme.onErrorContainer,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

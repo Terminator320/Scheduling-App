@@ -16,10 +16,13 @@ and brought `android/local.properties` with it, which carries a live
 `MAPS_API_KEY` — a committed secret. `flutter` regenerates that directory on any
 Android-touching command, so ignoring it is the only thing that stops a second
 resurrection; deleting the files alone does not. Don't remove the entry to
-"restore" an Android build. Two Android remnants survive **deliberately** and are
-not dead code to clean up: `DefaultFirebaseOptions.android` (the Android
-Firebase app still exists in the console, and the shared `dev/.env` keys feed
-it) and the `platform: 'ios' | 'android'` field on `fcmTokens` docs, which the
+"restore" an Android build. **`DefaultFirebaseOptions.android` is GONE**
+(2026-09-04, with the `dev/.env` retirement below): the shared `FIREBASE_API_KEY`
+/`APP_ID` pair that fed it was the only reason it survived, and
+`currentPlatform` now throws `UnsupportedError` on Android rather than handing
+back options nothing builds. Don't restore it. ONE Android remnant survives
+**deliberately** and is not dead code to clean up:
+the `platform: 'ios' | 'android'` field on `fcmTokens` docs, which the
 CURRENT build still writes — `push_registration_controller.dart` stamps
 `Platform.isIOS ? 'ios' : 'android'`, so on an iOS-only fleet the value is
 always `'ios'` but the write is live code, not a legacy row. (An earlier note
@@ -39,8 +42,8 @@ Since P4b a real `app_links` dispatcher exists (`lib/core/deep_links/`), but the
 `homeWidget` param and the `home_widget` tap channel are **both still live** and
 retire together — the dispatcher skips those URIs rather than replacing them.
 **Do NOT re-run `flutterfire configure`** — `lib/firebase_options.dart` already
-builds the iOS options from `dev/.env`; re-running it rewrites the file into the
-literal-values style and breaks the env-based setup.
+builds the iOS options from `--dart-define` values; re-running it rewrites the
+file into the literal-values style and breaks the define-based setup.
 
 ## Commands
 
@@ -50,17 +53,41 @@ flutter analyze   # baseline is `No issues found!` — any lint you see is yours
 
 ## Required environment
 
-`dev/.env` (gitignored, bundled as asset). 8 keys: `FIREBASE_API_KEY`,
-`APP_ID`, `MESSAGING_SENDER_ID`, `PROJECT_ID`, `STORAGE_BUCKET`, plus the iOS
-pair `IOS_API_KEY`, `IOS_APP_ID` (read in `lib/firebase_options.dart` to build
-the iOS `FirebaseOptions`), plus `IOS_MAPS_API_KEY` (iOS client Google Maps
-key, parsed natively by `AppDelegate.swift`). The first five are still required
-even though only iOS ships: three of them are platform-neutral, and
-`FIREBASE_API_KEY`/`APP_ID` still back `DefaultFirebaseOptions.android`.
+**Build-time `--dart-define` values, NOT a bundled file** (changed 2026-09-04).
+Copy `dev/firebase.local.example.json` to `dev/firebase.local.json` (gitignored)
+and pass it with `--dart-define-from-file=dev/firebase.local.json`, or spell the
+keys out with repeated `--dart-define=KEY=value`. 6 required keys:
+`IOS_API_KEY`, `IOS_APP_ID`, `MESSAGING_SENDER_ID`, `PROJECT_ID`,
+`STORAGE_BUCKET` (read in `lib/firebase_options.dart`, which fails fast naming
+any missing one) plus `IOS_MAPS_API_KEY`. `USE_FIREBASE_EMULATOR` and
+`EMULATOR_HOST` are the optional pair `main()` reads, plus `ANALYTICS_DEBUG`
+(turns analytics collection ON in a debug build for DebugView work — it is OFF
+there by default so `flutter run` never reaches the production property).
 `IOS_MAPS_API_KEY` is a RESTRICTED CLIENT key — distinct from the server-side
 Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
 
-- **`dev/.env` holds Firebase client config plus RESTRICTED client keys (e.g. `IOS_MAPS_API_KEY`) only.** It's an asset bundled into the IPA, so anything in it ships in the binary — restrict those keys app-side (bundle ID / package + API restrictions) in the Google Cloud Console. Server-side or unrestricted keys (Stripe, OpenAI, admin tokens, `GOOGLE_MAP_API_KEY`) must live in Google Secret Manager and be read from a Cloud Function — never in `dev/.env`.
+- **`String.fromEnvironment` is a CONST expression, so a define cannot be read
+  by a runtime string.** `_requireDefine` therefore holds a `const` map of the
+  five Firebase keys and looks up in that; adding a key means adding the literal
+  there too, not just to the JSON. A key read only through the map's argument
+  resolves to `''` and fails fast at startup, which is the intended shape —
+  don't "fix" it by building the name dynamically, which silently yields empty.
+- **The iOS Maps key crosses a MethodChannel, it is no longer parsed natively.**
+  `main()` sends `IOS_MAPS_API_KEY` over `net.vogas.scheduling/native_config`
+  and `AppDelegate.registerNativeConfigChannel` answers by calling
+  `GMSServices.provideAPIKey`. It is awaited before `runApp` on purpose, so the
+  key is installed before any map widget can be constructed; a missing or blank
+  key leaves the live map blank rather than crashing. `AppDelegate` no longer
+  reads any asset — don't reintroduce one.
+- **`dev/.env` and `flutter_dotenv` are RETIRED, and the asset entry with them.**
+  The file shipped inside the IPA as a readable asset, so every key in it was
+  extractable from the binary with no tooling; a define is compiled in instead.
+  A restricted client key is still recoverable from a binary by someone who
+  tries, so the app-side restriction (bundle ID + API restrictions in the Google
+  Cloud Console) is still what makes it safe — the change removes the trivially
+  greppable copy, not the need to restrict. Server-side or unrestricted keys
+  (Stripe, OpenAI, admin tokens, `GOOGLE_MAP_API_KEY`) must live in Google
+  Secret Manager and be read from a Cloud Function — never in a define.
 
 ## Critical invariants
 
@@ -71,7 +98,8 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   **The exception is `invited` (P4c, 2026-08-02): it routes to
   `AccountSetupScreen` and KEEPS the session**, at both gates
   (`splash_controller.dart`, `sign_in_controller.dart`). The admin created that
-  account with the shared starting password and this is the person's first
+  account with a generated starting password and handed it over, and this is the
+  person's first
   sign-in — signing them out makes setup unreachable, since the credential they
   just used is the one it needs. The test is `employee.isInvited`, an **exact**
   match checked BEFORE the active gate, so an empty or unknown status still
@@ -80,106 +108,19 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `isAccountDeletionSignal` (`account_status_provider.dart`) fires the runtime
   sign-out only when the current doc is a *settled* empty following a
   previously-populated one — so pass `previous` (the prior emission) from the
-  `ref.listen` in `main.dart`. A first-seen empty doc is a bootstrap window
+  `ref.listen` in `AccountExitListeners._listenForDeletedAccount`
+  (`core/app/account_exit_listeners.dart`), which `main.dart` only registers. A first-seen empty doc is a bootstrap window
   (fresh-sign-in `uid == null` branch, or an invited account signed in before
   `completeEmployeeSetup` activates its doc), NOT a deletion. Never simplify back to
   `doc.isEmpty` alone, or invited employees get wrongly kicked out mid-activation
   (cold-start already-deleted accounts are caught earlier by `SplashScreen`).
 - **Employee visibility:** Employees see only appointments where their doc id is
   in `employeeIds`. Apply this filter on any new appointment view.
-- **Editing an appointment must preserve assignees not in the active picker.**
-  The employee picker only shows active staff, so a disabled/removed assignee
-  can't be deselected — saving must re-append original `employeeIds` not in the
-  active set, or that staff is silently unassigned (which also changes who can
-  see the visit). The merge itself is the pure, tested `mergeRetainedAssignees`
-  (`calendar/domain/assignee_resolver.dart`) — route the retain logic through it.
-  Resolve the active set through the ONE owner, `_resolveActiveEmployees`
-  (`event_details_controller.dart`), which awaits `watchEmployees().first` —
-  never a cached provider value, and never a `.value ?? []` read. The await is
-  the point: a cold or empty stream value at save time makes every original
-  assignee look inactive, so all of them are retained and a real deselection is
-  silently undone. (This bullet previously described a two-tier "cached value
-  falling back to a fresh read" that the code does not have and should not
-  grow — the single awaited read is both simpler and strictly safer.)
-  **`employeeIds` and `employeeNames` are paired POSITIONALLY, and the bounds
-  check has one owner: `assigneeNameAt(names, i)`** (same file, returns null for
-  "no name here"). It was re-spelled at five sites; the differing missing-name
-  fallbacks around it are legitimately per-surface (the day route shows the id,
-  the history filter shows nothing), so the helper owns only the LOOKUP and each
-  caller keeps its own substitute. The edit-sheet copy is the dangerous one — a
-  blank name there flows into `mergeRetainedAssignees` and is written back.
-- **Image validation:** Reject uploads where first 4 bytes aren't JPEG
-  (`FF D8 FF`) or PNG (`89 50 4E`). Extension alone is not sufficient.
-- **Image upload pipeline:** Single stage — `ImagePickerService` resizes +
-  JPEG-compresses at pick time (`image_picker` `maxWidth/maxHeight: 1600`,
-  `imageQuality: 70`); `ImageStorageService` then validates magic bytes and
-  uploads. `ImageCompressService` was removed — don't reintroduce a second
-  compression pass. Background dispatch via `AppointmentImageUploadService`
-  after appointment save; the picker's temp files are deleted in a `finally`.
-- **Photos are RENDERED from `storagePath`, never from the persisted `url`**
-  (2026-08-08). `getDownloadURL()` mints a permanent `?alt=media&token=…` URL
-  that anyone holding it can read with **no auth and no rules evaluation**, so a
-  URL captured while an employee was active kept working after
-  `deactivateEmployee` disabled their Auth account and revoked their tokens —
-  which is exactly what `storage.rules`' `status == 'active'` gate on
-  appointment images exists to stop. `AppointmentImageUrlResolver`
-  (`core/images/`) resolves at render time so every read re-evaluates the
-  rules, and falls back to the stored `url` only when `storagePath` is empty on
-  a legacy doc — that fallback is why this needed no migration.
-  `ImageStorageService` **still writes `url`**, deliberately: builds that
-  predate the resolver render from it, so dropping the write now would blank
-  photos on any phone that hasn't updated. Retire it once the fleet has moved,
-  the way the 1.37.1 shim was retired.
-  **Resolved URLs are POSITIONAL, so they must be carried with the list they
-  were resolved for** — `PhotoPickerSection` keys them on `_resolvedFor` and
-  serves `const []` until that matches `existingImages`. A Storage round-trip
-  per photo is a real window, not "a frame or two": a partial or stale list
-  shifts every index beside it, so removing photo 0 rendered the *deleted*
-  photo, an untapped placeholder opened a NEW photo, and the viewer's
-  `initialIndex` (composed as `existingUrls.length + i`) ran past the end of
-  the provider list and threw a `RangeError` out of Save/Share. Offset a
-  viewer index by the URLs actually handed to the viewer, never by
-  `existingImages.length`; `ImageViewer.open` also clamps, as depth.
-- **Offline photo-upload queue:** a failed/incomplete photo batch is persisted
-  by `PendingUploadStore` (one JSON list under the SharedPreferences key
-  `pending_photo_uploads`, entries pruned after 7 days) so uploads survive
-  going offline. `AppointmentImageUploadService.drainPending()` retries the
-  queue — it's reentrancy-guarded, re-queues the *unsent*
-  paths on a transient failure (preserving `enqueuedAtMs` so a batch can't
-  retry past the prune window), and `arrayUnion`-appends uploaded pictures so a
-  concurrent edit or the batch's other half never clobbers them.
-  **When the uploads land but the `arrayUnion` doc-link append itself throws
-  transiently, the already-uploaded images are carried forward on the queue
-  entry's `uploaded` field for an append-only retry — NOT re-uploaded (their
-  local temp files are already gone), and NEVER dropped, or the Storage bytes
-  orphan invisibly on the job.** That re-link stays idempotent because each
-  carried image serializes its exact `uploadedAt` (ISO-8601 in the JSON,
-  round-tripped by `AppointmentImage.fromMap`), so an append that actually
-  committed server-side dedupes on the next pass. An entry with no paths AND no
-  carried `uploaded` images is the only genuinely-empty one that drains away.
-  **Staging and draining share ONE serialized path** (`drainPending`, guarded
-  by `_draining` + `_pendingDrain`): a save that stages a batch does NOT upload
-  it directly, because a listener-driven `drainPending()` firing in that window
-  would load the just-added entry and upload it concurrently — and since
-  `ImageStorageService` mints each file name from `DateTime.now()`, the two
-  passes produce different storage paths that `arrayUnion` can't dedupe, so the
-  photo lands twice. A request arriving mid-drain sets `_pendingDrain` so the
-  in-flight pass repeats (coalesce, never drop).
-  **`PendingUploadStore`'s mutations are serialized inside the store**
-  (`_serialized`, one `_mutations` chain) — `add`/`remove`/`prune` are each
-  `load()` → mutate → `_save()` over ONE SharedPreferences key, so two
-  overlapping mutations both read the same list and the second save erases the
-  first's change: a save staging a batch while a drain removed a finished one
-  wrote `[E1, E2]` then `[]`, stranding E2's files with no queue entry and no
-  failure notice. Keep new mutating methods inside `_serialized`, and never
-  "simplify" it away by serializing at the call site — the requeue inside a
-  drain is a caller too. `AppSyncListeners`
-  (`core/app/app_sync_listeners.dart`, registered from `main.dart`)
-  drives the drain on the offline→online flip AND when the account doc first
-  arrives (Storage rules need an authed user — a signed-out drain just
-  re-queues); both transitions are covered by
-  `test/core/app/app_sync_listeners_test.dart`. Method-channel plugin —
-  device-only verification of the upload itself.
+- **Photo and image-upload rules live in `.claude/rules/images.md`** (moved
+  2026-08-19) — magic-byte validation, the single-stage pick/compress pipeline,
+  render-from-bytes, the two caches, the `appointments/{id}/images` migration
+  and the offline upload queue. Loads when working under `lib/core/images/`,
+  `lib/features/calendar/` or the image functions.
 - **Offline write guard:** the appointment/client submit controllers
   (`add_event`, `event_details`, `client_form`) fail fast when
   `ref.read(isOfflineProvider)` is true by returning a fabricated
@@ -191,285 +132,30 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   while photos retry via the queue above. `persistenceEnabled: true` is pinned in
   `main()` (serves cached reads) — don't remove it.
 - **App Check:** `FirebaseAppCheck.instance.activate()` in `main()`. Do not remove.
-- **Appointment status allowlist:** The lifecycle is `pending` →
-  `in_progress` → `done`, plus `cancelled` (set by the separate Cancel action).
-  These four are the ONLY valid *stored* values — enforced by
-  `isValidAppointmentStatus` in `firestore.rules` and `_allowedStatuses` in
-  `firebase_appointments_repository.dart`. New appointments must be created
-  with `status: 'pending'`. **`AppointmentStatus.overdue` is a display-only,
-  time-derived state — NEVER stored, NEVER in the picker.** `displayStatus`
-  (`appointment_record.dart`) maps a non-terminal visit to `in_progress` while
-  now is within [start, end] and to `overdue` once `endTime` has passed.
-  **That ladder has exactly ONE owner: `AppointmentRecord.displayStatusAt(now)`;
-  `displayStatus` is `displayStatusAt(DateTime.now())` and
-  `DashboardAggregator.displayStatusAt` delegates to it.** The dashboard used to
-  carry a hand-copied "mirror" of it and had already drifted — it was missing
-  the `isPersonal` carve-out, so a personal block past its end read "Scheduled"
-  on its card and sat under the dashboard's Attention list as *overdue*, where
-  an admin had no affordance to clear it (personal jobs have no mark-done
-  flow). Never re-copy the ladder; add clock-derived rules to
-  `displayStatusAt` only. The
-  card/tile and the read-only detail header render `displayStatus`, but the edit
-  picker and all writes seed from the real stored `status` (so `overdue` can't
-  leak into a write). Don't add `overdue` to `appointmentValues` or the
-  allowlist; reading `AppointmentStatus.overdue.raw` **throws** on purpose so a
-  stray write path fails loudly at the source instead of emitting an
-  off-allowlist value that the rules reject with an opaque `permission-denied`.
-  **"Terminal" as a set of RAW STRINGS has one owner:
-  `terminalStatusRawValues` in `calendar/domain/appointment_status_values.dart`**
-  (2026-08-08) — `{done, completed, cancelled}`, deliberately Material-free so
-  `AppointmentRecord.isClosed` and the History query's `whereIn` can share it.
-  It had four definitions and the History one had dropped the legacy
-  `completed` alias, so such a doc rendered as Done on its card and was
-  **invisible in History and history search**, with no error anywhere.
-  `AppointmentStatus.isTerminal` is the enum-level mirror and
-  `appointment_status_values_test.dart` pins the two together. (`confirmed` was retired 2026-07-09 when the picker
-  collapsed to three states; `done` is labeled "Complete" in the UI. Account
-  statuses `active`/`invited`/`disabled` live in the separate `UserStatus` enum
-  — `shared/widgets/feedback/user_status_chip.dart` — not `AppointmentStatus`.)
-  **Any edit that re-serializes a stored record must normalize its status
-  through `AppointmentStatus.storedRaw(status)` before writing** — legacy
-  `confirmed`/unknown docs exist, an unchanged status is re-written verbatim,
-  and the rules reject anything off the allowlist (a raw write would fail the
-  whole save/series-update with `permission-denied`). Use `storedRaw`, never
-  `fromRaw(x).raw`: it maps legacy/unknown AND the display-only `overdue` onto
-  `pending`, so it can't throw the way a bare `.raw` does. Done at the seed in
-  `event_details_controller`, per-sibling in `appointment_series_editor`'s
-  `propagate`, and in the Siri snapshot builder. `UserStatus.fromRaw` is the
-  matching mapper for account statuses (unknown/empty → `invited`).
-- **Employee "Mark as complete" gates on `hasStarted`, not on "is today".**
-  `!appointment.startTime.isAfter(now)` in `details_view_body.dart` — the edit
-  form's status picker is admin-only, so an employee who misses the button
-  before midnight (or is on day 2+ of a multi-day visit) has no other way to
-  close the job while the server keeps sending "job finished?" nudges. The
-  rules allow an assignee to write `status:'done'` with no date restriction.
-- **Admin-only appointment actions are gated by an explicit `showActions`.**
-  `showEventDetails(..., showActions:)` is a REQUIRED param, and
-  `AppointmentTile` / `EventDetailsSheet` / `EventDetailsView` all default it
-  **CLOSED** (`false`). A default of `true` silently showed employees the
-  Edit/Cancel/Delete affordances, which the rules then reject with an opaque
-  `permission-denied`. Pass the caller's resolved role; never re-add a `true`
-  default. (Rules remain the real gate — this is defense-in-depth plus UX.)
-  **A DONE job's edit affordance is the action bar's bottom button, not the
-  top chip** (owner call, 2026-08-08): `DetailsViewBody` suppresses
-  `DetailsEditChip` when the stored status is done and hands
-  `DetailsActionBar.onEdit` instead, which takes over the slot the inert
-  "Complete" indicator held — that job has no mark-done or cancel action left,
-  so the slot was dead. `onEdit` is null-gated on the same `showActions`, so a
-  read-only surface (client job history) still renders the indicator and offers
-  nothing. Cancelled and open jobs keep the top chip. The two move together:
-  don't restore the chip on a completed job without removing the button, and
-  don't drop the button without bringing the chip back, or a finished job
-  becomes uneditable again.
-  **`AppointmentHistoryView` takes an `isAdmin` and passes it straight through
-  as `showActions`** (restored 2026-08-08 after a revert dropped it). It used to
-  hardcode `false` on the grounds that History is a read-only surface, but
-  History is where `done` and `cancelled` jobs actually LIVE, so that made the
-  completed-job edit button above unreachable from the one screen an admin would
-  look for it on. It still DEFAULTS closed like every other appointment surface;
-  `HistoryScreen` passes `widget.isAdmin`.
-- **Personal jobs (`isPersonal`, added 2026-07-31) carry no client and no
-  address.** The switch at the top of the form's WHO section is on BOTH the add
-  and edit flows (unlike the template chips), because the flag is stored and
-  has to be reversible. Turning it on hides the client picker and the address
-  field, clears their controllers, and drops `clientRequired` from
-  `AppointmentFormValidator` — **the assignees stay required**, they are who the
-  block is for and who can see it. Both save paths write `clientId`/
-  `clientName`/`clientPhone`/`address` as **empty strings**, including when an
-  existing client visit is converted, so a hidden field can never keep a stale
-  value the UI no longer shows. Everything that speaks a client name falls back
-  to the **title**: the card and the detail row say "Personal"
-  (`calendar_personal`), the widget and Siri decoders already fell back to
-  `title`, and `_who` in `functions/notification_messages.js` now does too
-  (`_contextFor` therefore has to keep passing `title` through).
-  **`live_activity_utils.js` carries its OWN `_who` with the same fallback, and
-  it is not optional:** a *timed* personal job is still a travel candidate, so
-  the `leaveNow` push and the Lock Screen card describe the same trip at the
-  same moment — the card read "Client"/"un client" while the push read
-  "Dentist" until `title` was threaded through. Every `ctx` passed to
-  `startLiveActivity`/`updateLiveActivity`/`endLiveActivity` (the sweep, the
-  on-site flip, the terminal end, the reschedule hook) must carry `title`, and
-  `_stateFor` must forward it into `buildContentState` — the state builder
-  field-picks its `ctx`, so a dropped field fails silently back to "Client".
-  **Build that `ctx` with `liveActivityCtx(record, opts)`
-  (`live_activity_utils.js`) — never a hand-written object literal.** There were
-  four copies and they had already drifted again (two normalized `address`, two
-  passed it raw), which is exactly the silent-failure shape above.
-  `propagateClientEdits` can't touch these — it
-  queries by `clientId`, which is empty. Also dropped from a personal job: the
-  template chips, the repeat picker, materials and photos. The **title is
-  optional** there and an unnamed one saves as "Personal" — substituted in the
-  widget layer (both sheets), which is where `l10n` lives. The edit form shows
-  the switch **only when the job is already personal** (`onPersonalChanged: null`
-  otherwise), so an ordinary client visit can't be converted mid-life. Turning
-  it on clears the hidden text controllers and, in the ADD flow only, resets
-  `repeat` — the edit flow keeps its repeat, where clearing it would rewrite a
-  live series.
-- **An all-day block (`isAllDay`) stores real instants**, midnight → 23:59, so
-  every range query, `orderBy('startTime')` and sweep keeps working unchanged —
-  the flag only changes how it is SHOWN (`allDaySpan` builds the pair).
-  **Neither save path may re-derive that pair itself** — both the add and edit
-  controllers resolve their instants through the one `appointmentSpan(...)`
-  helper beside `allDaySpan` (`calendar/domain/policies/appointment_form_validator.dart`),
-  which picks the all-day span or the picked times. Hand-writing the ternary in
-  a controller gives the convention three owners, and a change to it (23:59 →
-  23:59:59, a DST-safe end) then lands on one save path and not the other.
-  **`setPersonal(value: false)` MUST NOT clear `isAllDay`** (2026-08-03).
-  It used to — the switch was personal-only, so a surviving flag saved a
-  midnight–23:59 *client* visit with neither the switch nor the time rows on
-  screen to repair it. **All-day is now offered on EVERY job**, so that state is
-  reachable, repairable and legitimate: a client visit can genuinely run whole
-  days. Clearing the flag now discards a deliberate choice, and both controllers
-  pin the new behaviour with a test. The asymmetry is deliberate and also
-  pinned: turning Personal **on** still defaults an untimed block to all-day;
-  only the **off** direction changed. The travel sweep still skips all-day
-  records (no departure time to compute), and the overdue sweep still gates on
-  `isPersonal`, so an all-day *client* job does go overdue after its 23:59 end —
-  which is correct. **There is no longer an end-after-start check to gate**: an
-  end time at or before the start time now means the window crosses midnight
-  (see the multi-day bullet below). Now offered
-  on every job, ON by default for a personal block when no time has been picked,
-  and it hides the start/end rows. The switch is the schedule `SheetPanel`'s first
-  row — **that panel holds the whole of "when": all-day, date, start/end and
-  the repeat rule**, which is a `SheetFieldRow` + `showAdaptiveActionSheet`
-  rather than the standalone dropdown it used to be (owner call, 2026-07-31). `AppointmentCard` and the detail when-line render
-  "All day" instead of "12:00 AM – 11:59 PM". A personal job also **never
-  derives `in_progress`/`overdue`**: `displayStatus` returns its stored status
-  (which reads "Scheduled"), and `selectOverdueCandidates` in
-  `functions/notification_utils.js` skips `isPersonal` records for the same
-  reason — "job finished?" is the wrong question for a dentist appointment.
-  Keep those two in sync. **`isAllDay` is threaded through all four off-screen
-  mirrors** (2026-07-31), and each one needs it for a different reason:
-  - **Reminder sweep** — `selectTravelCandidates` (`functions/travel_utils.js`)
-    skips all-day records. Without it the midnight start put the block inside
-    the 90-min window at ~23:30 the night before and fired a "time to leave"
-    push for something that has no departure time. A *timed* personal job keeps
-    its reminder; only the all-day skip is new.
-  - **Push/digest text** — `_contextFor` carries `isAllDay`, and
-    `notification_messages.js` renders the date alone ("Wed, Jul 8") instead of
-    "Wed, Jul 8, 12:00 a.m."; `_whoAt` joins with "·" rather than "at"/"à",
-    since there is no clock time to sit after the preposition.
-  - **Home-screen widget** — `isAllDay` is in the job JSON in BOTH hand-mirrored
-    builders (`widget_sync_service.dart`, `widget_payload_utils.js`) and the
-    Swift `Job` decodes it as `Bool?` so a pre-existing payload still parses.
-    `timeLabel` says "All day". **The "today" filter is `endTime`-based for an
-    all-day block** — the old `startTime.isAfter(now)` test dropped it from
-    today from 00:00 onward, so it appeared only under *tomorrow* and then
-    vanished. `DaySchedule.nextJob` prefers a timed job, falling back to the
-    all-day one, or a midnight block owns "up next" all day.
-  - **Siri snapshot** — schema **v2** (`scheduleSnapshotVersion`, matched by
-    `supportedVersion` in `ScheduleSnapshot.swift`): adds `isAllDay` AND
-    `title`, since a personal job has no client and the snapshot previously had
-    no title to fall back to, so Siri said "unnamed client". `SiriStrings.who`
-    is now the single client→title→placeholder resolver and `timePhrase` speaks
-    "all day"; `nextAppointment` applies the same prefer-timed rule as the
-    widget, and treats an all-day block as upcoming until its 23:59 end.
-    **That prefer-timed test must be scoped to the block's OWN span**
-    (`$0.start < earliest.end`), not to every timed visit in the 7-day window:
-    the widget's `nextJob` runs against a single day's bucket, but the Siri
-    snapshot is flattened across 8 days, so a window-wide comparison skipped
-    today's all-day block whenever *any* later day held a timed job — Siri
-    answered with Thursday's visit and never mentioned today's.
-- **An appointment may span up to `maxAppointmentSpanDays` (14) days, and its
-  two times are a DAILY WINDOW** (2026-08-03) — 9:00 AM–5:00 PM means 9–5 on
-  *each* of those days, not one unbroken stretch through the nights. **No schema
-  change**: `startTime`/`endTime` already carry the span, `isMultiDay` is
-  derived and never stored (same discipline as display-only `overdue`), and
-  `firestore.rules` doesn't constrain either instant, so the 14-day cap is
-  client-side only. Consequences that must stay in sync:
-  **`AppointmentDaySlice` (`calendar/domain/appointment_day_slice.dart`) is the
-  ONE owner of day-scoping** — `sliceFor` / `expandToDays` / `lastWorkDayOf`
-  (plus `lastWorkDayOfWindow`, its raw start/end form, for the one caller that
-  holds a resolved pair and no record yet: the booking-conflict dialog).
-  Never re-derive a day index or a run length at a call site, the way the
-  `displayStatusAt` ladder and `_who` were re-derived and drifted.
-  **The end date names the last day the crew STARTS work**, never the morning an
-  overnight run finishes, so the length is `end − start + 1` for day jobs and
-  night shifts alike. A window whose end time is at or before its start time
-  crosses midnight and counts **nights** — which is why **there is deliberately
-  no end-time-after-start-time validation**: that ordering IS a night shift.
-  (Consequence, accepted: picking 9:00–9:00 on a one-day job books 24 hours
-  rather than erroring, because it is structurally identical to a legitimate
-  one-night shift.)
-  **Slices are generated per WORK day** — each day the window *begins* — not per
-  calendar day the stored instant span touches; that is what keeps a night shift
-  off the morning it ends.
-  **`AppointmentDateRange.fetchStart` widens the query 14 days back and MUST
-  stay a derived getter**, never a constructor field: `==` is keyed on
-  `start`/`end`, so two surfaces asking for the same day still produce equal
-  ranges and share one listener. Widening at a call site instead forks a second
-  Firestore query for the same day.
-  **"All day" is reserved for `isAllDay`** and is never borrowed to describe a
-  timed job's middle day — the card reads `9:00 AM – 5:00 PM · Day 3 of 5`.
-  A continuing *timed* job has a real start time that day and sorts in clock
-  order; only all-day blocks pin above the day.
-  **A RANGE STREAM IS A SUPERSET OF ITS RANGE — every consumer must re-scope**
-  (2026-08-04 audit). Because the query starts at `fetchStart`, the emitted list
-  holds every job that STARTED in the previous 14 days. Only the calendar
-  clipped it; the day route, the roster's "jobs today", the employee detail's
-  TODAY panel and the drawer's calendar badge all read it raw and silently
-  reported a fortnight of past jobs as today's. Re-scope through
-  **`runsOn(appointment, day)`** (beside `sliceFor` in the same owner file) —
-  never by comparing `startTime` at the call site. A reducer over
-  `appointmentsInRangeProvider` without a day predicate is a bug.
-  **A conflict check is a DAILY-window overlap, not an instant overlap.**
-  `findBusyEmployees`' Firestore query is only a coarse prefilter; its results
-  are filtered through **`dailyWindowsOverlap`** (same owner file). Testing the
-  raw instants reported a 9-5 run across a week as clashing with a 7 pm job
-  inside it — a phantom clash the admin had to force through on every evening
-  job. That helper compares ALL window pairs rather than matching day indices,
-  because an overnight window runs into the following calendar day.
-  **`MAX_APPOINTMENT_SPAN_DAYS`/`_MS` in `functions/time_utils.js` hand-mirrors
-  `maxAppointmentSpanDays`** (each carries a pointer to the other). Every
-  backend sweep that filters on `startTime` must reach at least that far back,
-  or a job already under way is invisible to it — that single missing constant
-  caused three separate bugs (no overdue prompt for multi-day runs, a digest
-  that told an on-site crew "no jobs tomorrow", and a long job dropping out of
-  its own travel context).
-  **"Is this job still live?" gates on the run's END, not its start, and has
-  ONE owner: `hasWorkLeft(record, nowMs)` in `functions/time_utils.js`.**
-  Gating on `startTime` meant cancelling or deleting a job mid-run pushed
-  NOTHING to the crew, who then turned up the next morning (the Live Activity
-  card still ended, so the only signal was a card silently vanishing), and it
-  meant `propagateClientEdits` never reached a crew already on site. It was a
-  per-module closure in `notification_policy.js` and `client_propagation.js` —
-  the same drift shape as `displayStatusAt` and `_who` — so route any new test
-  through the shared helper rather than re-deriving `endTime ?? startTime`.
-  **Widening a floor to admit started jobs makes a status filter MANDATORY
-  where it used to be free.** A `startTime >= now` query cannot match a job
-  already marked done, so terminal jobs were excluded incidentally; reaching a
-  span back admits them. `countFutureAssignments`
-  (`firebase_appointments_repository.dart`) therefore tests
-  `AppointmentStatus.fromRaw(status).isTerminal` explicitly, or a visit
-  completed this morning still tells the admin to reassign it before disabling
-  the person. Check every floor widened this way for the same gap.
-  **NOT YET MIRRORED (owed by Plan 2):** the home widget, the Siri snapshot and
-  `widget_payload_utils.js` still treat every job as single-day, so days 2+ of a
-  run are invisible there. (`notification_messages.js` and `travel_utils.js`
-  were closed by the 2026-08-04 audit — see the two bullets above.)
-  See `docs/plans/2026-08-02-multi-day-appointments.md` §8.
-  **The 14-day cap is applied by ONE clamp, `_clampedDayCount`, and every
-  day-scoping answer routes through it** (2026-08-08): `sliceFor`/`runsOn`,
-  `runsInRange`, `expandToDays` and `dailyWindowsOverlap`. The cap is
-  client-side only — `firestore.rules` constrains neither instant — so a doc
-  written by the console, the Admin SDK or another build CAN exceed it, and
-  when the owners disagreed the calendar rendered 14 slices while every
-  `runsOn` consumer counted the full corrupt length: a drawer badge reading
-  "1 job today" every day for a year, a card counter reading "Day 400 of 900".
-  `AppointmentFormValidator` is the one deliberate exception — it reads the
-  RAW count, because it is the caller that has to see an out-of-range value in
-  order to refuse it.
-  **A form's run length has one owner too, `runLengthDays`** (beside
-  `appointmentSpan`): the `end − start + 1` rule was hand-copied into both form
-  bodies, which even shared the same five-line comment.
-- **Job templates are display-only quick-fill, NEVER stored.** `JobTemplate`
-  (`calendar/domain/models/job_template.dart`) backs the one-tap chips on the
-  **add** flow only (`onApplyTemplate`, null on edit); picking one just seeds the
-  title text and — if a start time is set — the end time from
-  `defaultDurationMinutes` (clamped inside the same day). The appointment still
-  saves with `status: 'pending'` and whatever the admin edits afterwards; there
-  is no template field on the record. Add new types to the enum + a
-  `jobTemplateLabel` case + EN/FR ARB keys (mirrors `statusLabel`).
+- **Analytics: NOTHING outside `lib/core/analytics/analytics_service.dart` may
+  import `firebase_analytics`, and no parameter reaches Firebase unless its key
+  is declared in `AnalyticsParams.allParams`.** The sanitizer drops an
+  undeclared key and asserts in debug, which is what makes a PII leak
+  structurally impossible in an app full of client phones, addresses and job
+  notes — a leak arrives through one call site passing a convenient
+  `'client_name': record.name`, never through a decision. `setUserId` is never
+  called; the role travels as the `user_role` user property. An event fires on
+  the sealed SUCCESS branch only (`AddEventSubmitted`, `EventDetailsSaved`,
+  `ClientSaved`, …) — a `Busy` member is the reentrancy guard's no-op and wrote
+  nothing. Full rules in `.claude/rules/analytics.md` (loads under
+  `lib/core/analytics/`), including the observer-vs-hub-shell screen-view split
+  that keeps the four tabs from double-counting.
+- **Appointment rules live in `.claude/rules/appointments.md`** (moved
+  2026-08-19; the assignee and job-record set moved 2026-09-02) — the status
+  allowlist and `displayStatusAt` ladder, mark-complete, `showActions`, personal
+  jobs, all-day blocks, the 14-day multi-day span and `AppointmentDaySlice`, and
+  the `findBusyEmployees` conflict check; plus an assignee's own field record
+  (crew notes and photos), the server-owned job time record and crew status, the
+  assignee-retaining edit merge, the picker's dimming and availability rules,
+  job templates, the split dashboard window and the technician's History scope.
+  Loads when working under `lib/features/calendar/` or `functions/` — and, since
+  several of those own `allow update` disjuncts, on `firestore.rules` and
+  `storage.rules` too.
 - **No client `runTransaction` on routine/concurrent paths.** The
   cloud_firestore iOS plugin mutates an unsynchronized NSMutableDictionary from
   the transaction queue (`FLTTransactionStreamHandler` → `_transactions`), so
@@ -513,6 +199,14 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
 - **Role cache:** Never read `isAdmin`/role from SharedPreferences — always Firestore.
 - **Routing:** `AppRoutes.onGenerateRoute` is the single source of truth.
   Pass typed arg classes via `Navigator.pushNamed(..., arguments: ...)`.
+  **An arg-required route TYPE-CHECKS its arguments and degrades to
+  `InvalidRouteScreen`** — `_args<T>(settings)` returns null rather than
+  force-casting, and `_invalidRoute` renders a screen the user can leave. The
+  seven `settings.arguments! as T` casts red-screened the app on a malformed or
+  argless push, which a deep link can produce. The HOME route keeps its own,
+  DIFFERENT answer — least-privilege defaults rather than a recovery screen,
+  because it is reached from every cold start and back stack; that asymmetry is
+  deliberate and documented at the site.
 - **Firestore query rules vs. get rules:** For list/query operations, security rules are
   evaluated against query *constraints*, not document data. If a rule checks
   `resource.data.status == 'active'`, queries must also `.where('status', isEqualTo: 'active')`
@@ -524,922 +218,42 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   they'll be rejected. **Three, not four** — a fourth
   `email_verified && status == 'invited' && email == token.email` clause existed
   only because the retired code flow left `uid` empty until redemption, and it
-  was deleted 2026-08-08 with the rest of the `#compat-1.37.1` shim. P4c mints
+  was deleted 2026-08-08 with the rest of the `#compat-1.37.1` shim. (That was a
+  `firestore.rules` READ clause and is unrelated to `completeEmployeeSetup`'s
+  `email_verified` callable guard, which was removed separately on 2026-08-21 —
+  two different `email_verified` checks, both gone, for different reasons.) P4c mints
   the Auth account up front, so an invited person reads their own doc through
   clause 3; don't re-add an email-matched clause. An ordinary
   employee still cannot see a pending account: clause 2 requires `active`.
-- **Employee accounts: the admin invites, the employee sets up** (P4c,
-  2026-08-02 — this REPLACED the one-time signup-code flow entirely). The
-  admin's person sheet calls `createEmployeeAccount`, which mints a **Firebase
-  Auth account** with the shared starting password `Welcome123!` plus a `users`
-  doc that is `invited` but **already carries the real `uid`**, and returns the
-  email + password for the admin to hand over out-of-band (the `NewAccountDialog`
-  right after creation, or the expanded roster row later). The employee then
-  signs in normally; both gates see `invited` and route to
-  `AccountSetupScreen`, where they **choose their own password** and fill in
-  name/phone/consent → `completeEmployeeSetup` flips the doc to `active`.
-  **ORDER IS THE APP-LAYER GUARANTEE: the password is replaced FIRST,
-  client-side, then the account is activated.** The server cannot see a
-  password, so "you must replace the shared default" holds because
-  `AuthService.completeAccountSetup` calls `User.updatePassword` before the
-  callable — swap the two and an interrupted setup leaves an *active* account
-  still on `Welcome123!`. Pinned by a test (`verifyInOrder`, plus the half that
-  matters: a thrown `updatePassword` must `verifyNever` the activation).
-  **Be precise about how strong this is: it is client-side ordering, NOT a
-  server check.** `completeEmployeeSetup` verifies auth + `email_verified` + a
-  matching doc + `status == 'invited'`; it does not verify that the password
-  actually rotated, so anything reaching the callable directly activates an
-  un-rotated account. `enforceAppCheck: true` plus that mailbox check are what
-  stand in the way there, and App Check is attestation, not authorization.
-  Don't build on the ordering as if the server enforced it.
-  **The password itself is validated TRIMMED** — `completeAccountSetup` stores
-  `newPassword.trim()`, so checking the raw text let `"Aa1!bcd "` pass the
-  8-character rule and set a 7-character password. The strength meter and the
-  requirements checklist read the same trimmed value.
-  **The setup screen rejects `kDefaultStartingPassword` by name**
-  (`account_setup_screen.dart`, `validation_passwordMustDifferFromStarting`).
-  That check is load-bearing, not belt-and-braces: `Welcome123!` satisfies every
-  requirement `AuthValidators.newPassword` tests (length, upper, lower, digit,
-  symbol), so without it someone can "choose" the password the admin just read
-  to them and end up permanently `active` on a constant that is in the source,
-  on every pending roster row and known to every admin — with the roster
-  reporting `active` and nothing anywhere flagging it. A failure *after* the password change deliberately does **not** revert
-  it: the new password is the one the person just chose and typed twice, so
-  leaving them `invited` with a working password beats resetting them to the
-  shared default (the next sign-in routes back to setup, which never assumes the
-  current password is the default). Re-running create on a still-`invited`
-  person **resets their password** — that IS the "never signed in / lost it"
-  path — but it refuses with `email-exists` once someone has set up. **That
-  refusal resolves the target by `uid`, not by email, and the password rotation
-  happens AFTER the doc-level transaction claims the person as still-`invited`
-  (`resetProvisionedPassword`, split out of `provisionAuthAccount` for exactly
-  this).** Both halves are load-bearing and both were bugs: `users.email` is
-  admin-editable, and the two stores can still disagree on any doc edited
-  before `changeEmployeeEmail` existed (nothing back-fills those), so an
-  email-only check can clear a doc that is NOT the account Auth hands back —
-  which reset a live employee's password and minted a second `users` doc
-  carrying their uid, and `syncUsersByUid` then DELETED their `usersByUid`
-  bridge, locking them out of everything. The transaction therefore also
-  refuses when the uid already belongs to another doc (the rules' `allow create`
-  uid denylist restated for the one path that bypasses rules). And resetting
-  before the claim meant a setup committing in that window left the person
-  active on a password nobody told them had been reverted.
-  **Be precise about what the deferral bought: the window is NARROWED, not
-  closed.** Firestore serializes the two transactions, but the Auth call sits
-  outside both — a `completeEmployeeSetup` that commits between
-  `performCreateAccount` committing and `resetProvisionedPassword` returning
-  still ends with an `active` employee on the shared default. That residue is
-  milliseconds wide instead of a whole round trip, and it cannot be closed
-  from here (Auth is not transactional); don't write it up as fixed.
-  `deleteEmployeeAccount` likewise
-  only works while `invited` (transactional, so a setup that commits first makes
-  the delete refuse); after that the no-delete invariant applies and disable is
-  the only removal. Provisioning **rolls back**: if the Firestore write fails
-  after the Auth account is created, that Auth account is deleted — but only if
-  *we* just minted it — since an Auth account with no `users` doc is a sign-in
-  `SplashScreen` can't resolve and no admin surface can see.
-  **The security posture is weaker than the codes it replaced, deliberately and
-  with the owner's sign-off.** `Welcome123!` is known to everyone forever, so
-  between creation and first sign-in anyone who knows an employee's email can
-  sign in as them. **What stops them going further is
-  `completeEmployeeSetup`'s `email_verified` guard (added 2026-08-08): setup
-  requires control of the MAILBOX, not just knowledge of the address.**
-  Before that guard the window was priced here as "can reach the setup screen
-  as this person, not read the business", and that was wrong — the race winner
-  called the callable, landed `active`, and (if the row was provisioned with
-  `isAdmin: true`) landed *admin*, which reaches the whole `/clients` PII
-  collection. Nothing about the code had drifted; the written risk assessment
-  had. Reaching the setup screen is still all an unverified caller gets: an
-  `invited` user is granted **nothing** by `firestore.rules` — no clients, no
-  appointments, no peers. **The residual risk is now "whoever holds the mailbox
-  AND the shared password can activate the account"**, and the window remains
-  under the admin's control (create the account when you are handing the
-  credentials over, not weeks ahead). That last mitigation is operational, not
-  technical, and belongs in the onboarding instructions.
-  Client side, `AccountSetupScreen` sends Firebase's own verification email and
-  gates its CTA on `AuthService.refreshEmailVerified()`, which **forces an ID
-  token refresh** — the callable reads `email_verified` off the token, minted at
-  sign-in, so a bare `User.reload()` would leave the server refusing an address
-  the person had already verified. `create_account_screen.dart`, both `accept_invite_*` screens,
-  `CodeEntryBoxes`, `signup_code_dialog`, `InvitePreview` and the
-  `revokeInvite`/`previewInvite` callables are all **deleted** — there is
-  nothing left to "accept" in THIS build, which is why sign-in's bottom prompt
-  went with them. **The backend half is gone too, as of 2026-08-08**: once every
-  device was on 1.40+, the whole `#compat-1.37.1` shim was retired —
-  `invites.js`, `signup_code_utils.js`, the `createEmployeeInvite`/
-  `redeemSignupCode` callables, the `signupCodes` collection's rules block and
-  TTL entry, and the two `allow delete` grants. There is no code-based invite
-  anywhere in the stack and none should be reintroduced. Design:
-  `docs/plans/redesign-subdocs/2026-08-02-p4c-HANDOFF.md`.
-- **An employee's email is their SIGN-IN identity, so an edit to it moves BOTH
-  stores or neither** (2026-08-04, which re-enabled a field that had been
-  read-only since P4c). The joining callable is `changeEmployeeEmail`
-  (`functions/employee_accounts.js`), and `FirebaseEmployeesRepository
-  .updateEmployee` is its ONLY caller: it reads the stored doc first and, when
-  the email actually changed **and** the doc carries a `uid`, runs the callable
-  **before** its own Firestore write, which then merely re-states what the
-  server committed. The order is the whole fix — a Firestore-only change left
-  the person signing in at the old address while every admin surface showed the
-  new one, and desynced the two stores `createEmployeeAccount` joins on (see the
-  uid-not-email refusal above). Keep the call **inside** `updateEmployee` rather
-  than exposing it on `EmployeesRepository`: "an email edit always moves Auth
-  too" is then a property of the one save path, not a second method a call site
-  can forget to pair with it.
-  **Server-side the order is Auth FIRST, Firestore second, with a revert.**
-  Auth is the store that owns sign-in and the only one that can genuinely refuse
-  a duplicate, so it must never be the one left behind; if the doc write then
-  fails, the Auth email is put back and a failed revert `logger.error`s the
-  uid + docId (never the addresses — emails are PII). `performChangeEmail`'s
-  transaction re-checks BOTH the previous email and the uniqueness the
-  pre-flight checked, and raises `email-changed` on a concurrent edit, which the
-  client surfaces as the same "try again" its own transaction guard does.
-  A doc with **no** `uid` still takes the direct client write — there is no Auth
-  account to join, and that is the one path allowed to write `email` alone.
-  **The employee is pushed a `kind:"emailChanged"` notice naming the new
-  address**, after the commit and best-effort (`notifyEmailChanged`, through the
-  shared `sendToEmployee`). It is a courtesy, **not** a guarantee — no live FCM
-  token, no notice — so the admin still has to tell them; don't write it up as
-  if the person is reliably informed.
-- **`kDefaultStartingPassword` is hand-mirrored** in
-  `employees/domain/policies/starting_password_policy.dart` and
-  `DEFAULT_PASSWORD` in `functions/employee_accounts.js`; both carry a pointer to
-  the other. The Dart copy is only ever a **display fallback** for a row whose
-  account was created earlier — any surface that just called the callable shows
-  the password the **server echoed back**, so a drift can't reach the screen
-  where it matters.
-- **A displayed starting password is a CREDENTIAL — state-only, never logged,
-  never persisted.** It lives in widget/controller state and dies with the
-  surface, keyed to the account it belongs to (`_credentialsFor`, so a recycled
-  `State` can't show one person's password on another person's row). It is never
-  passed to `logger.*` (auth catch sites log through `logger.authFailure`, whose
-  breadcrumb carries only the label and `failure.runtimeType`), never
-  interpolated into a notice or an error message, and never written to
-  SharedPreferences or secure storage. The **"Copy both"** clipboard action on
-  the new-account dialog and on the roster row is the ONE sanctioned egress — it
-  is the feature. Both go through `copyCredentialsToClipboard`
-  (`employees/widgets/fields/credential_line.dart`), which is the single owner
-  of that payload format — never re-inline `'$email\n$password'` at a call
-  site, or the two surfaces can put different things on the clipboard. The
-  `CredentialLine`, `CopyCredentialsButton` and `credentialPanelDecoration`
-  beside it are shared for the same reason — the whole surface, not just the
-  payload. They were separate copies and had already drifted twice: the two
-  confirmed-state icons disagreed, and the dialog tinted its panel
-  `surfaceContainerHighest`/`r8` against the roster row's `sheetRow`/`r12`, so
-  the same credential pair rendered on two different fills in the two places an
-  admin reads it. Add a new credential surface by calling these, never by
-  re-deriving the control or the tint.
-- **`EmployeeFormActivity` tracks busy state as SETS OF DOC IDS, not booleans**
-  (`savingIds`, `deletingAccountIds`). The notifier is app-wide but its surfaces
-  are not: the roster can show several expanded `PendingInviteTile`s at once,
-  each with its own Reset and Remove. A single flag made every row claim to be
-  busy when any one was, and — worse — made `_save`'s reentrancy guard refuse a
-  *different* employee's action, which `EmployeeSaveBusy` then dropped with no
-  spinner and no notice. **So `_save` takes a `docId` and guards per key:** the
-  same person twice is a double-tap and must be refused; a different person is a
-  real action and must proceed. `isSaving` survives as an `isNotEmpty` getter
-  for the two person sheets (modal, one at a time). Its sibling
-  `isDeletingAccount` has **no** in-app caller — the sheets have no
-  delete-account affordance, only `PendingInviteTile` does, and it correctly
-  asks the id-keyed form — so it is an aggregate read for tests alone; don't
-  wire a surface to it without re-checking that the surface really is modal. A row
-  asks `isSavingId(id)`/`isDeletingAccountId(id)` through a Riverpod `select`,
-  so it rebuilds only when its OWN state flips. A brand-new person keys on `''`
-  — correct, not a gap, since the invite sheet is modal. Never collapse this
-  back to booleans, and never "fix" a busy-state bug by adding a flag at a call
-  site instead.
-- **The deep-link dispatcher is the single `app_links` consumer, and it MUST
-  skip any URI carrying the `homeWidget` query param.** `classifyDeepLink`
-  (`core/deep_links/deep_link_target.dart`) returns `IgnoredLink` for it, with
-  or without a value. That skip is load-bearing, not tidy: once `app_links` is
-  listening, BOTH plugins observe the same `openURL`, so without it every
-  widget, Live-Activity and Siri tap opens the appointment sheet **twice**. The
-  param and the `home_widget` tap channel retire **together, later** (see
-  `ios/CLAUDE.md`) — dropping either one alone re-breaks widget taps. On iOS,
-  `FlutterDeepLinkingEnabled` stays **false**: that is the correct setting *for*
-  `app_links`, since Flutter's own handler would otherwise consume the URL
-  first. P4c reduced the dispatcher to the **appointment branch alone**: an old
-  `esproschedule://invite?code=…` link now falls through to `IgnoredLink`, which
-  is deliberate — those links can still be sitting in someone's messages and
-  must not reach a screen that no longer exists. `awaitLoginRoute` and the whole
-  invite-branch route race went with it. **`TopRouteObserver` is still
-  registered on `MaterialApp.navigatorObservers` and still deliberately has no
-  `didRemove` override** — `pushNamedAndRemoveUntil` (the account-disabled path)
-  pushes *before* it removes, so overriding it would overwrite the just-pushed
-  name with a route no longer on the stack. It now has no in-app caller; leave
-  it and this note in place.
-- **`termsAcceptedAt` / `locationConsentAt` are function-owned `users`
-  fields.** They are on the `/users` update **denylist** in `firestore.rules`
-  beside `uid` — **three fields**, since P4c deleted `codeExpiresAt` everywhere
-  (same posture as `jobCount`/`wave` on clients), so a compromised admin session
-  can't forge a consent record; `EmployeeRecord.toMap()` must never emit them, or a future
-  whole-record `set()` becomes an opaque `permission-denied`. **`toMap()` omits
-  `uid` and `status` for the same reason** — `uid` is on that denylist and
-  `status` belongs to deactivate/reactivate; the repository's field-scoped
-  allowlist in `updateEmployee` is the real write path, and `toMap()` exists
-  only to round-trip the editable fields. **The denylist is on `allow create`
-  as well as `allow update`**: without it the same admin session that cannot
-  edit `uid` could simply create a doc carrying a forged one, and a second doc
-  claiming an existing employee's uid repoints the `usersByUid` bridge every
-  rules gate resolves through.
-  `completeEmployeeSetup` writes the consent stamps **only when the payload
-  flags are actually `true`** — stamping unconditionally would mint a
-  legally-flavoured consent record for someone who never saw the checkbox.
-- **The consent sentence LINKS to the terms, and the link is what makes the
-  stamp mean anything** (2026-08-05, restored 2026-08-08 after a revert dropped
-  it). Ticking the box stamps `termsAcceptedAt`, so the person must be able to
-  read what they are accepting; the setup screen used to demand acceptance of
-  terms that were published nowhere and tappable nowhere. `_ConsentRow`
-  (`account_setup_screen.dart`) builds the sentence by locating
-  `auth_termsOfServiceLink` **verbatim inside**
-  `auth_termsAndLocationConsent` and turning that run into the link, so the two
-  keys must stay consistent **in every locale** — a translation that rewords the
-  phrase silently renders a plain sentence with no link (`indexOf < 0` falls
-  back to one plain span on purpose: a missing link beats half a sentence or a
-  `-1` substring crash). It is a `StatefulWidget` solely to own and dispose the
-  `TapGestureRecognizer`; one built in `build` leaks on every rebuild. A tap on
-  that run is claimed by the recognizer, so it opens the terms instead of
-  toggling the checkbox; the rest of the tile still toggles.
-  **The per-locale half is pinned by `test/l10n/new_success_strings_test.dart`**,
-  which asserts the substring holds in every `supportedLocales` entry — the
-  widget test in `account_setup_screen_test.dart` only ever exercises the
-  default locale, so a French re-translation would otherwise drop the link with
-  nothing failing.
-  **Settings › Legal is the DURABLE route** — setup is shown once, only to a new
-  employee, and never again, so `LegalSettingsCard` carries a Terms of Service
-  row beside Privacy Policy. Both point at `AppUrls`
-  (`privacyPolicy`, `termsOfService`); the sources are
-  `docs/legal/privacy-policy.html` / `terms-of-service.html`, published to the
-  `es-pro-legal` GitHub Pages repo, where **the privacy policy is the index** —
-  which is why the terms page links to it by absolute URL rather than a relative
-  `privacy-policy.html` that would 404. Neither page is bundled: if the Pages
-  repo drifts from `docs/legal/`, the consent record points at the wrong text.
-- **Account re-provisioning REFRESHES the pending doc's editable fields, so
-  `createAccount` takes the whole `EmployeeRecord` — never loose scalars.**
-  `performCreateAccount`'s existing-doc branch *updates*
-  `name`/`firstName`/`lastName`/`phone`/`colorValue`/`jobTitle`/`role` with
-  whatever it is handed, so a call site that omits one silently wipes the
-  pending person's phone or job title. `EmployeeFormController.createAccount`
-  therefore takes a record and destructures it in ONE place (the repository
-  method below it is the only place that speaks named strings), and
-  `PendingInviteTile` passes `widget.employee` whole — the omission is
-  unexpressible rather than merely documented. Don't "flatten" the controller
-  signature back to named strings: that shape was a trap that bit the old Show
-  code and Resend equally, and a new pending-user field had to be threaded
-  through four layers with no compile error if you missed one.
-  Unlike the retired code flow, **expanding the row is NOT a re-issue** — the
-  starting password is a fixed shared value, so the row renders it with no
-  server round-trip. Only **Reset password** re-provisions, and only that
-  rotates what the person was given.
-- **`watchEmployees()`** now filters `status == 'active'` — it no longer returns invited or
-  disabled users. Use `watchAllUsers()` (admin-only) if all statuses are needed.
-  All three `users` streams are bounded by the shared `_userStreamLimit` (500)
-  so a runaway collection can't stream an unbounded snapshot to every client —
-  add the bound to any new one. **The appointment range streams are bounded
-  too** (`_rangeStreamLimit`, 1000) and WARN when a snapshot comes back at the
-  cap — past it the calendar is showing a prefix of the range, which the grid
-  dots and agenda would otherwise misreport in silence. `watchEmployees` deliberately has **no
-  `orderBy`**: `watchAllUsers`' `orderBy('name')` makes Firestore exclude docs
-  missing `name`, which would drop an unnamed active employee out of the
-  picker (and silently change who can see a visit). That asymmetry is also why
-  it isn't derived from `allUsersStreamProvider`. **`employeesStreamProvider`
-  is `autoDispose`** (2026-08-08): its consumers are the two transient
-  appointment sheets plus the Dashboard, so without it opening the
-  add-appointment sheet ONCE pinned a second live `users` listener for the rest
-  of the session, alongside the always-on `watchAllUsers()`.
-- **The dashboard's window is SPLIT: one live listener, one `.get()`.**
-  `DashboardAggregator.liveRangeAround` (this ISO week through next Monday /
-  the 3-day pending horizon) is watched; `historyRangeAround` (the seven
-  settled weeks behind it) is read once through
-  `AppointmentsRepository.fetchInRange`. Held as one range it was a **70-day**
-  business-wide live listener capped at `_rangeStreamLimit`, so above ~14
-  jobs/day the 8-week trends, busiest-weekday and Attention list were computed
-  over a silent PREFIX. The two results **must be merged by doc id**
-  (`DashboardAggregator.mergeById`, live wins) and never concatenated — each
-  query reaches back to its own `fetchStart`, so they overlap by a fortnight.
-  Adding a reducer that needs older data means widening the HISTORY half, not
-  the live one.
-- **ClientRecord legacy back-compat:** pre-Wave-reshape "business-only" client
-  docs stored their name under `businessName` with an empty `name`.
-  `ClientRecord.fromMap` handles it in **two** halves, and both are load-bearing:
-  `name` falls back to `businessName` when blank (the documented legacy shape),
-  AND the raw value is carried through onto `ClientRecord.businessName`, which
-  `ClientSearchPolicy.index` indexes. The fallback alone is not enough — it only
-  fires when `name` is empty, so a legacy doc holding a name AND a *different*
-  business name was unfindable by the business. The one-time
-  `backfillLegacyClientNames` function was removed, so these reads are the only
-  thing keeping legacy business docs visible/searchable — keep them
-  indefinitely; never strip either. **`businessName` is READ-ONLY**: no UI edits
-  it and `toMap` must never emit it (pinned by a test), or every save would
-  persist a field the app no longer owns. Don't instead add a second matcher
-  over the raw map beside the policy — that is what had drifted before, matching
-  in the instant local filter and then vanishing when the debounced read landed. (A doc missing
-  `name` entirely is excluded by the list/search `orderBy('name')`; the fallback
-  only rescues docs whose `name` is present-but-empty.) `toMap` must NEVER emit
-  `waveCustomerId`/`wave`/`jobCount`; those are function-owned and
-  `firestore.rules` rejects any client write that touches them. Every field
-  `toMap` DOES emit is type/length-capped by `isValidClientData` in
-  `firestore.rules` (name/business/first/last/phone/mobile/email plus the
-  address family, a bounded `contacts` array, and the P3 additions
-  `type`/`accessNotes`/`onSiteManager`/`billingTerms`/`autoInvoice`) —
-  add the matching rule cap when you add a new client field, or the write passes
-  the app but a rules tightening later rejects it.
-- **A client is ARCHIVED, not deleted** (owner decision 2026-08-03, which
-  REVERSED the 2026-08-01 "never removed — no delete, no archive" rule and
-  retired the `kShowTestingDeleteClient` `#pre-ship` hole with it —
-  `lib/core/testing_flags.dart` is deleted).
-  Archiving hides a client from the paginated list and the type filter but
-  keeps it **searchable and bookable**: its `clientId` links on existing
-  appointments are untouched, which is the whole point — deleting one orphaned
-  its past visits, which keep the denormalized `clientName` but lose the link,
-  so history silently detached.
-  **`archived` must be on EVERY client doc, forever.** The list filters
-  `where('archived', isEqualTo: false)` **server-side**, and Firestore excludes
-  docs missing a filtered field — so a doc without it is invisible in the list
-  while still turning up in search: a partial disappearance with no error
-  anywhere. There are exactly two create paths and both stamp it: `_normalizedMap`
-  (`firebase_clients_repository.dart`, via `ClientRecord.toMap`) and Wave
-  `importCustomers` (`functions/wave/customers.js`). **The Wave UPDATE branch
-  must never write it**, or every scheduled import un-archives everything; a
-  test pins that half. Existing docs were backfilled by
-  `functions/scripts/backfill-clients-archived.js` (idempotent, `--dry-run`),
-  which must run against prod BEFORE the filtered query deploys.
-  The filter is server-side **specifically so `fetchClientsPage` keeps returning
-  a plain `List`**: the server still fills a whole page, so `items.last` stays
-  the true cursor and the list's `pages.last.length < pageSize` end-of-list test
-  stays valid. A Dart post-query filter would shorten a page the server actually
-  filled and truncate the list permanently at the first archived client — never
-  reintroduce one. Needs the `(archived, name, __name__)` composite index.
-  **Delete survives only for junk data, and only through the `deleteClient`
-  callable** (`functions/clients.js`), which refuses with
-  `failed-precondition / client-has-history` when a **live `count()` aggregate**
-  finds any appointment — deliberately NOT the denormalized `jobCount`, which is
-  lazily backfilled and can be stale, missing or wrong. Rules cannot express
-  "only when this client has no appointments" (no cheap foreign-collection
-  count), so the callable is the only place that guarantee can live and
-  **nothing deletes a client directly**.
-  **`allow delete` on `/clients` is now WITHDRAWN** (2026-08-08). It had
-  survived as a `#compat-1.37.1` shim entry for that build's ungated Delete
-  button, and while it did the hole was real — an admin on the old build could
-  orphan a client's job history, the very thing the callable's `count()` gate
-  prevents. That is closed: the callable is the only delete path, in rules as
-  well as in code. Never re-add the grant.
-  `canDeleteClient`
-  (`domain/policies/client_delete_policy.dart`) is **advisory UI only** — it
-  keeps the swipe and the detail footer from offering what the server would
-  refuse, and treats a null `jobCount` as unknown, which withholds. The Admin
-  SDK bypasses rules, so console/support cleanup is unaffected.
-  UI: `flutter_slidable` in `ClientsListView`'s item builder — **never inside
-  `ClientTile`**, which the booking-flow client picker reuses and must not gain
-  destructive actions. A full swipe commits **Archive only**; delete is never
-  gesture-committed. Both surfaces route through the one `ClientActionsHost`
-  mixin (`clients/widgets/views/client_actions_host.dart`) so the notices, the
-  CLI-ARCH/CLI-DEL tags and the confirm copy can't drift; its two hooks are
-  separate because the detail view must STAY OPEN after archiving (to offer
-  Unarchive) and dismiss after deleting.
-- **The clients type filter is a SEPARATE bounded read, never a filter over the
-  paginated list.** `fetchClientsByType` scans the same cached 1000-doc window
-  `searchClients` uses, so the chip row and its results cost no extra Firestore
-  read inside the 2-minute TTL and need no composite index. `fetchArchivedClients`
-  (the Archived chip) is the same shape over the same window, and the chips are
-  ONE sealed `ClientsFilter` — "archived AND commercial" is unexpressible, not
-  merely unhandled. The type filter **excludes archived clients** (the Archived
-  chip is where they live); `searchClients` deliberately does **not** — archived
-  clients stay findable and bookable, which is why the row badges them.
-  Routing it through `fetchClientsPage` instead would filter a server page in
-  Dart, shortening a page the server actually filled — which is exactly what
-  stops `ClientsListView` paging early and hides every client below the first
-  non-matching one. The window bound is the same one search already lives with:
-  past ~1000 clients the filter sees a prefix, not the whole roster. The chips
-  offer the fixed `ClientType.pickable` set, so there is no vocabulary to
-  discover and no spelling to reconcile — searching *within* an active filter
-  runs in Dart over that same bounded list via `ClientSearchPolicy`, indexed
-  once per result set rather than per keystroke.
-  **A write patches that cached window by MERGING over the stored doc, never
-  replacing it** (`_patchWindow`): `ClientRecord.toMap()` emits user-owned
-  fields only, so a plain substitution drops the function-owned `jobCount` and
-  `createdAt` and blanks the count on every search and type-filter result until
-  the TTL expires. Any new field `toMap()` doesn't emit inherits this.
-- **The Wave sync badge needs a LIVE doc read, and `ClientDetailView` is the one
-  surface that has one** (2026-08-07). Every other client surface is a one-shot
-  read — a paginated page, or the repository's cached scan window — and
-  `wave.syncState` is function-owned: the `waveUpsertCustomer` trigger stamps
-  `pending` *after* the save has already returned, and the outbox worker flips
-  it to `synced` up to five minutes later. So the record a screen holds always
-  predates the state the badge is trying to show, and the edit sheet pops back
-  a `copyWith` of that same record, which carries the PRE-EDIT sync state
-  through by design (it must — `waveSyncState` is not the form's to write).
-  The badge therefore could never move in response to an edit: it sat on
-  "Synced with Wave" while the push was still queued, and Settings ›
-  "Sync with Wave" — correctly — reported nothing left to send, because the
-  5-minute worker had already sent it. `clientStreamProvider`
-  (`clients_providers.dart`, an `autoDispose.family` over
-  `ClientsRepository.watchClient`) is the fix; the view keeps the handed-in
-  record as a **fallback**, so an offline or refused read leaves the detail on
-  screen instead of blanking it. Don't "simplify" the badge back onto a
-  passed-in record, and don't try to fix it by writing an optimistic `pending`
-  client-side — that would fork `mappedFieldsHash`'s projection into Dart, and
-  only the server knows whether an edit touched a Wave-mapped field.
-  This listener deliberately does **not** patch the search/scan cache:
-  `_patchWindow` merges `toMap()`, which omits `wave`, so the cached copy keeps
-  a stale sync state on purpose.
-- **A no-op push must HEAL the client's sync state, or the badge sticks
-  forever.** `upsertCustomer`'s already-synced short-circuit
-  (`functions/wave/customers.js`) returns `noop` without touching Wave — and it
-  now clears a stale `pending`/`error` via `healSyncState` before it does. That
-  state is reachable from an ordinary pair of edits: the first marks the doc
-  `pending` and enqueues, the second puts the mapped fields BACK, and
-  `shouldEnqueueClientWrite`'s rule 2 skips that write entirely — so the job the
-  first edit left behind arrives with nothing to push, and nothing else ever
-  clears the flag. `healSyncState` re-reads and re-hashes **inside the
-  transaction** rather than trusting the caller's hash: an edit landing in that
-  window must not be marked synced, or the badge claims Wave has data still
-  sitting in the outbox — the exact lie it exists to remove. It writes
-  `syncState`/`syncError` only, never `lastSyncedAt` (nothing reached Wave just
-  now), and the write re-fires the trigger harmlessly — unchanged mapped fields
-  return at rule 1. `tallyUpsert` still counts `noop` as nothing: no Wave
-  mutation was made, and the admin must not be told a client was pushed.
-- **`jobCount` is recomputed absolutely, never incremented.** `recountClientJobs`
-  (`functions/client_job_count.js`) runs `retry: true`, so a retried event would
-  double-count a `FieldValue.increment`; it runs a `count()` aggregate and SETS
-  the value. It fires only when `clientId` actually changes (create, delete,
-  reassignment) — an ordinary title or time edit costs zero reads — and writes
-  with `update()`, not `set({merge: true})`, so a client removed out-of-band is
-  never resurrected as a count-only stub. Backfill is lazy: a client's count
-  self-heals on its next appointment write, and a row renders nothing (never
-  `0`) until the field exists.
-- **`mobile` is no longer editable and self-heals into `phone`.** The edit sheet
-  dropped the second phone field (owner change 5), so `EditClientSheet._save`
-  promotes a stored `mobile` into `phone` when `phone` is empty and clears
-  `mobile` either way, on every save. Without that, a stored number would sit on
-  the doc forever — invisible, uneditable, still matched by `matchClientDocs`
-  (which reads `mobile`) and still in the Wave payload. There is no migration
-  script and none is needed; the fleet heals as clients are edited.
-- **The street + apt precedence rule has ONE owner: `AddressParser.canonicalFrom`.**
-  Both client save paths resolve their stored address through it — the explicit
-  apt field wins over an apt embedded in the street text, and a blank one keeps
-  the embedded value. It was a verbatim copy in each sheet, which is two owners
-  for a rule whose two answers must agree on the same typed input.
-- **Inline add-client while booking:** `ClientsRepository.addClient` returns the
-  created `ClientRecord` with its generated Firestore doc id (NOT `void`) — the
-  appointment form's "Add new client" flow links the appointment to that id.
-  Don't revert it to `void`. All add-client sheet opens go through
-  `showAddClientSheet` (`clients/widgets/sheets/add_client_sheet.dart`), which
-  pops the created client and gates its result on `context.mounted`; pass
-  `settleFocus: true` when opening from a search field (the appointment client
-  picker). The affordance lives in the shared `ClientSearchField` (`onAddNew`
-  callback, injected null when unused) and is admin-only only because the
-  appointment forms are admin-only surfaces — gate it explicitly if it's ever
-  reused somewhere non-admin. Both appointment hosts guard the open via the
-  shared `InlineAddClientHost` mixin (`requestAddClient`, in
-  `calendar/widgets/sheets/inline_add_client_host.dart`) — an in-flight flag,
-  because the settle delays the modal barrier so an unguarded double-tap stacks
-  two sheets → duplicate client. Mix it into any new inline-add host rather than
-  re-copying the flag.
-
-- **`users.name` is composed, never abandoned.** P4 added `firstName`/`lastName`,
-  but `watchAllUsers()` orders by `name` and Firestore **excludes docs missing
-  the orderBy field**, so a user whose `name` went empty vanishes from the admin
-  roster. Every write path builds it through `composeEmployeeName`
-  (`employees/domain/policies/employee_name_policy.dart`), which falls back to
-  the stored name and then to `'—'` — it can never return `''`. The edit sheet
-  seeds First from the whole stored `name` when both halves are empty, so a
-  legacy single-name doc round-trips unchanged. **`EmployeeFormValidator` takes
-  the two halves separately, never the composed name** — `composeEmployeeName`
-  falls back and so can never return empty, meaning a composed value cannot
-  express "the last name is missing". Its `requireLastName` flag is the one real
-  difference between the two person sheets: the invite demands both halves, the
-  edit leaves the last name optional so a legacy single-name doc still saves.
-- **`jobTitle` is not `role`.** `role` stays the ACCESS flag
-  (`admin`/`employee`) and is what `firestore.rules` gates on; `jobTitle`
-  (Lead tech · Technician · Apprentice · Dispatcher) is what someone does on
-  site and gates nothing. `JobTitleChips` therefore has no side effect on the
-  ACCESS toggle — conflating them would make picking "Dispatcher" silently
-  grant or revoke admin.
-- **`workingDays` is Sunday-indexed** (`[0]` = Sunday), matching
-  `weekStartForLocale` and `weekdayLabelsForLocale`, which both read intl's
-  Sunday-indexed `NARROWWEEKDAYS`. Storing Monday-first would put a `% 7`
-  conversion at every read and write, and one missed conversion shifts a whole
-  roster by a day. Display order comes from `orderedWorkingDays`, whose cells
-  carry their own `storedIndex` — a widget must write back through that, never
-  through the visual position. `formatWorkingDays` (the detail page's DAYS row)
-  takes its `labels` **Sunday-indexed and unrotated** (`weekdayAbbreviationsForLocale`),
-  because it indexes them by `storedIndex`; passing a display-ordered list
-  silently mislabels every day.
-- **A user-doc rules cap must not be tighter than the widest value a shipped
-  write path can produce.** `createEmployeeAccount` accepts `phone` up to 40
-  chars while `TextLimits.phone` is 24, so `isValidUserData` caps phone at
-  **40** — a tighter cap would make every server-created doc with a longer phone
-  permanently un-updatable, including by `deactivateEmployee`. Rules caps mirror
-  the *server* limit; the client caps with `TextLimits`. **Retiring a callable
-  does NOT license tightening a cap it set**: the docs it created outlive it, so
-  the 40 survives `createEmployeeInvite` (deleted 2026-08-08) on the strength of
-  the rows still in the collection. Same reasoning for the
-  P4b `emergencyPhone`: rules cap **40**, client caps `TextLimits.phone`.
-  **The converse also holds: a client cap must not be LOOSER than the callable's,
-  or the field silently accepts a value the callable rejects as
-  `invalid-argument`** — which reaches the user as an unexplained "Something went
-  wrong" they cannot fix by editing. That is why the `users` name halves use
-  `TextLimits.employeeNameHalf` (**100**), matching `createEmployeeAccount` and
-  `completeEmployeeSetup` exactly, rather than the 200-char `TextLimits.firstName`
-  used for clients. `name` is the JOIN of those halves, so it legitimately
-  reaches 201 — its server and rules caps are **250**, sized to the composed
-  value and never to a half. Same reason for **`TextLimits.authEmail` (254)**:
-  an employee's email is a sign-in identity and passes through
-  `createEmployeeAccount`/`changeEmployeeEmail`, which both
-  `requireString(..., 254)`, so the two employee sheets bind to it rather than
-  to the 320-char `TextLimits.email` the client records use.
-  **`test/core/validators/text_limits_test.dart` now reads `firestore.rules`
-  (and `employee_accounts.js`) back and fails the build if a client cap ever
-  exceeds its rules or callable cap.** Dart, CEL and JS cannot share a constant,
-  so that test is the only mechanism turning this rule into something enforced
-  rather than merely written down — four appointment pairs are currently
-  EXACTLY equal, so a one-character bump on either side breaks every long save
-  with an opaque `permission-denied`.
-- **Phone numbers are stored FORMATTED, not as raw digits** (owner call,
-  2026-08-02). `PhoneInputFormatter` (`core/validators/phone_format.dart`) masks
-  every phone field as it is typed, so `phone`, `emergencyPhone` and each
-  contact phone persist as `(514) 555-1234`. Two deliberate pass-throughs, both
-  load-bearing: anything containing `+` is returned untouched (an international
-  number has no fixed 10-digit shape, and bracketing its first three digits as
-  an area code would be wrong), and digits past the tenth are appended verbatim
-  rather than truncated, so an extension survives. Consequences to keep in
-  sync — **`launchPhoneCall` strips back to digits** (keeping a leading `+`)
-  before building the `tel:` URI, because `Uri` percent-encodes the brackets and
-  space into a path some dialers reject; and `ClientSearchPolicy.digitsOnly`
-  already normalized on both sides, so phone search is unaffected.
-  **`TextLimits.phone` is 24, and it must stay above the widest string
-  `formatPhoneNumber` can emit** — `LabeledTextField` appends the
-  `LengthLimitingTextInputFormatter` **after** `PhoneInputFormatter`, so the
-  mask runs first and the cap truncates its output. At the old 15 the two
-  pass-throughs above were unreachable: a NANP number typed with its leading 1
-  formats to 16 chars, so the 11th digit could never be entered, and every
-  further keystroke re-truncated to the same 15 with no error shown. Never size
-  this cap to the 14-char happy path.
-- **The emergency contact lives in `users/{docId}/private/emergency`, NOT on the
-  users doc, and it is the one piece of person data gated to the admin AND the
-  person themselves** (owner call, 2026-08-02). Firestore rules are
-  document-level — there is no way to hide a field from someone allowed to read
-  the document — and `/users` read clause 2 deliberately lets every active
-  employee read every active peer (the crew pickers, names and colours need it).
-  On the parent doc this pair therefore shipped a **third party's** name and
-  phone to every employee's device; that person is not an app user and never
-  consented. A subcollection is the only place rules can express the grant:
-  `allow read, write: if isAdmin() || (isActiveUser() && myDocId() == userId)`.
-  **Never move these back onto the users doc, and never widen a `/users` read
-  clause to reach them.** Consequences to keep in sync:
-  `EmployeeRecord` does **not** carry them (`EmergencyContact` does, read via
-  `emergencyContactProvider`); `isAvailabilityOnlyChange()` no longer lists
-  them, because P5's self-service clause governs the users doc and these are
-  not on it; and a read
-  failure on this path means "not entitled", so a surface must render it as
-  *not shown*, never as *none on file*.
-  **The rules now make a value on the parent doc unreachable, with NO migration
-  (owner call 2026-08-04: nobody had entered one, so there was no data to move,
-  and the feature is treated as clean-slate).** `allow create` bans both keys
-  outright; `allow update` routes them through **`emergencyFieldNotSet(f)`**,
-  which permits a write that leaves the field ABSENT and refuses one that
-  leaves a value. That asymmetry is the whole design and must not be
-  "simplified" into a plain denylist entry beside `uid`: the denylist form
-  rejects any write that touches the key at all, which would reject the
-  `FieldValue.delete()` scrub `updateEmployee` still sends on every save AND
-  leave any doc that somehow carried the pair permanently un-updatable —
-  including by `deactivateEmployee`, since a partial update presents every
-  untouched field in `request.resource.data`. As written, an untouched legacy
-  value simply passes through (so the doc stays updatable) and the client scrub
-  heals it on the next save. The length caps in `isValidUserData` stay for that
-  pass-through case — they are not dead. `functions/scripts/backfill-emergency.js`
-  is **deleted**; it has nothing to do. Pinned by
-  `test/core/security/emergency_contact_rules_test.dart`, which reads
-  `firestore.rules` back (rules can't be unit-tested without the emulator).
-- **`MyDetailsScreen` (Settings › My details) is the ONLY surface where a person
-  edits their own record**, and it exists solely to exercise the owner half of
-  the grant above — the employee detail and edit sheets are admin-only. Keep it
-  scoped to the emergency contact: everything else about a person is
-  admin-owned, and `allow update` on `/users` is still admin-only, so a general
-  profile editor here would fail with `permission-denied`.
-- **The emergency pair is its own section, not a tail on availability.** Both
-  the edit sheet (`MonoSectionLabel` `employees_sectionEmergency`) and the
-  read-only detail view (its own `KeyValuePanel`, rendered only when non-empty)
-  group them apart from hours and access — who to call when something goes
-  wrong on site is a different question from when someone works.
-- **An employee is never deleted — disable is the only removal** (owner decision
-  2026-08-02, which withdrew a shipped delete). Deleting the `users` doc
-  orphaned every past appointment's `employeeIds` link: the visit keeps the
-  denormalized `employeeNames` and loses the crew colour and the person.
-  `syncUsersByUid` already does strictly more on disable — it disables the Auth
-  account, calls `revokeRefreshTokens`, and purges `presence/location`,
-  `fcmTokens`, every `liveActivityTokens` row and the `liveActivityCards`
-  marker. `allow delete` is withdrawn from `/users`; the Admin SDK bypasses
-  rules, so console cleanup is unaffected.
-- **Revoking a PERMISSION deletes nothing server-side, and the published privacy
-  policy now says so** (2026-08-08 audit). `presence/location` is deleted only by
-  `PresenceSyncController.unregister()` and `fcmTokens` only by
-  `unregisterCurrentDevice()`, and both are reached from exactly three places:
-  sign-out, self-service account deletion, and the server-side disable/delete
-  bridge (`functions/bridge.js`). Losing the OS permission mid-stream only runs
-  `_stop()`, which cancels the subscription and timers — no network call. That
-  matters because **the stored fix keeps rendering on the admin live map**:
-  `LiveMapAggregator.join` filters on missing/inactive user, never on freshness,
-  and `staff_marker_icon.dart` has no staleness branch, so a months-old pin is
-  visually identical to a live one (only the roster row and info card show the
-  age). The policy used to promise deletion on revocation and promise the pin
-  disappeared; owner call was to correct the TEXT rather than the code, so
-  `docs/legal/privacy-policy.html` §6 and §8 now describe this behaviour
-  exactly. **The two must stay in step**: if you ever wire permission-revocation
-  into a delete, or add a freshness filter to the map, update those two sections
-  in the same change — and republish (see below), or the site keeps describing
-  the old behaviour.
-- **`docs/legal/*.html` are SOURCES, not the published pages.** The live site is
-  the separate `gvogas/es-pro-legal` GitHub Pages repo, where
-  `privacy-policy.html` is published as **`index.html`** (which is why the other
-  pages link to the privacy policy by absolute root URL — a relative
-  `privacy-policy.html` 404s). The four files must stay **byte-identical** across
-  the two repos; a 2026-08-08 audit found the support page still describing the
-  signup-code flow deleted in P4c, months after the app stopped having it.
-  Editing `docs/legal/` alone changes nothing a user can read.
-- **A disabled or invited employee's colour is TAKEN.** `usedColors` reads
-  `allUsersStreamProvider`, never `employeesStreamProvider` — the latter filters
-  to `status == 'active'`, so a disabled employee's colour was offered again and
-  two people ended up the same hue, which is what the appointment bar and the
-  calendar dots key on.
-- **`isAvailabilityOnlyChange()` in `firestore.rules` has no caller yet.** It
-  exists for P5's own-doc self-service clause; `allow update` on `/users` is
-  still admin-only. Don't delete it as dead rules code, and don't wire it before
-  the My-details UI ships. A deploy prints `Unused function` plus two
-  `Invalid variable name` warnings for it — all three are artifacts of it being
-  uncalled and disappear once P5 wires it up.
-
-- **Calendar (rebuilt in P2, 2026-07-30):** `table_calendar` is **deleted**;
-  the month view is our own `CalendarMonthGrid` + `CalendarMonthPager`. It
-  renders **only the weeks the month actually occupies** — 4, 5 or 6 rows from
-  `monthGridRowCount` (owner call, 2026-07-31: a fixed 6 trailed a week of
-  nothing but off-month cells). A fixed **5** is still wrong the other way and
-  drops the end of months like August 2026, so the row count must stay derived,
-  never a constant. Week start comes from the locale (`weekStartForLocale`,
-  memoized per locale string — it builds a `DateFormat` just to read its
-  symbols, and the grid, pager and week strip all ask on every calendar
-  rebuild). Resolve it from a widget through `CalendarMonthGrid.weekStartOf(context)`
-  rather than re-inlining `weekStartForLocale(Localizations.localeOf(...))`.
-  Because rows vary, `CalendarMonthGrid.heightFor` takes a **required `rows`**
-  (use `rowsFor(context, month)`), the pager animates its viewport to the month
-  in view, and each page is wrapped in `ClipRect` + top-aligned `OverflowBox`
-  so a taller month being dragged in doesn't overflow before the height
-  settles. Off-month cells render a **faint day number AND their
-  crew dots** but stay untappable and out of the semantics tree: the design says
-  "blank, Ink 15, not tappable" while the program spec widened the fetch range
-  precisely so trailing days aren't dotless, and dots-plus-faint-number is what
-  reconciles the two (owner-confirmed). **The crew dots also survive selection**
-  (owner call, 2026-07-31): the selection circle fills the day number only and
-  the dot row sits below it on the plain cell background, so suppressing them
-  there made the day being looked at the one day whose crew was invisible.
-  Every cell that has crew shows it — off-month, selected, today, all of them.
-  **A day's dots count JOBS, not distinct people** (owner call, 2026-08-04, which
-  reversed the P2 rule): `dayJobDotColors` (`calendar/domain/appointment_crew.dart`)
-  emits one entry per job in list order, capped at 3, each carrying that job's
-  first colour-resolvable assignee. The dots answer "how busy is this day", so
-  two jobs for the same person are two dots. It returns `List<Color?>` and a
-  **null entry is load-bearing, not a gap**: a job whose crew resolves to no
-  colour still gets a dot, painted `palette.textFaint` — the same neutral the
-  card's crew bar uses for an unassigned job. The old per-assignee version
-  simply skipped those, so a day holding only unassigned work read as empty.
-  The week strip renders the same list capped at 1, for the same reason.
-  `today` always comes from
-  `currentDayProvider`, never `DateTime.now()`, or the circle sticks on
-  yesterday in an app left open across midnight.
-  **`AppointmentDateRange.visibleMonth` overscans ±14 days, not ±7.** With the
-  variable-row grid the true worst case is ±6, so ±14 is now a deliberate
-  superset — keep it rather than tuning it to the current row rule, or a future
-  grid change silently empties the edge cells' dots.
-  **A single-day window has ONE owner: `AppointmentDateRange.forDay(day)`.**
-  It is **calendar** arithmetic (`DateTime(y, m, d + 1)`), never
-  `add(Duration(days: 1))`, which lands an hour off real midnight on the two
-  DST-shift days. Two costs, not one: it mis-buckets a late-evening job, AND
-  because `appointmentsInRangeProvider` is keyed by range **value**, an hour of
-  drift stops matching the day-range another surface already holds open and
-  forks a second live Firestore query for the same day. That is why
-  `todayRangeProvider`, the drawer's job count, the day route and
-  `forCalendar`'s selected-day leg all resolve through the one factory rather
-  than re-deriving the pair — it was hand-copied at four sites, two of which
-  cited each other as the authority.
-  **Portrait is TWO scroll areas** (owner call, 2026-07-31): the grid is FIXED
-  above the agenda, and the jobs have their own `CustomScrollView`, so reading
-  down the day never moves the calendar. Collapse is a **drag on the divider
-  between them** — `_CollapseHandle`, which is also a tap-toggle and carries the
-  Hide/Show calendar tooltip that the widget tests find it by.
-  `CalendarCollapse` (`domain/collapse_state.dart`) accumulates drag deltas past
-  **24px**, resetting on a direction reversal and on `endDrag` so two half-drags
-  don't add up. Only `onDragDelta` returns a bool (it means "the flag flipped",
-  so the caller rebuilds on a transition and not per gesture frame); `toggle()`
-  is `void` — it always flips, so a bool there would be a constant nobody reads.
-  The agenda's own `ScrollController` is load-bearing for a second reason: an
-  explicitly-controlled scrollable is not the *primary* one, which is what keeps
-  it and the grid off the app-wide `Scrollbar`'s single controller. The old
-  shared-viewport version needed a derived
-  `gridHeight − stripHeight` spacer to hold the extent the grid vacated; with two
-  viewports there is no vacated extent, and the spacer is gone. **The grid does
-  not scroll at all** (owner call, 2026-07-31): it sits in a `Flexible` +
-  `SingleChildScrollView` whose physics are `NeverScrollableScrollPhysics`, so
-  the viewport is pure overflow protection — a short viewport (small phone,
-  large text scale) shrinks the grid instead of running the column past the
-  bottom, and at normal heights it shrink-wraps and is inert. The handle is the
-  ONLY thing that moves the grid; don't restore scrollable physics to "fix" a
-  clipped month.
-  **Collapse is portrait-only** — `_splitCalendar` short-circuits the strip.
-  **Paging selects.** A month swipe (or the month picker) lands on the 1st and
-  SELECTS it, and a swipe on the collapsed week strip pages one week and selects
-  that week's first day — the agenda must always describe the grid above it.
-  That is also why the fetch window is `AppointmentDateRange.forCalendar`
-  (month grid ∪ selected day) rather than the month alone: any path that leaves
-  a selection outside the visible month drops its jobs from the fetch, and the
-  agenda then reports "0 jobs" for a day that has some.
-  The calendar is the **one screen with no `AppTopBar`** (see the frontend rule):
-  `CalendarHeaderBlock` replaces it, and therefore must set the system overlay
-  style itself via `AnnotatedRegion`, choosing icon brightness from the surface
-  colour rather than the theme brightness. Its title and controls **stack under
-  `context.isCompact`**. The month name itself is **measured, not gated**: the
-  screen passes both `monthLabel` and `monthLabelShort` (`DateFormat.MMMM` /
-  `.MMM`) and `_MonthRow` lays out the row, subtracts the year + chevron, and
-  takes the abbreviation when the full name won't fit. Don't "simplify" that
-  back to a text-scale threshold — the in-app XL setting is **exactly 1.4**, so
-  the `isCompact` gate (`> 1.4`) missed it entirely, and the OS scaler, the
-  device width and the locale's month lengths all move independently. The
-  semantics label always speaks the full month. Note the widget test asserts
-  against **viewport width**, not a scale: the test font is far wider per glyph
-  than the shipped one.
-- **The calendar agenda sinks CLOSED jobs to the bottom of the day, and only
-  the calendar does** (2026-08-08). `_agendaOrder` in `appointment_day_slice.dart`
-  gained a first tier — open before closed — above the existing all-day and
-  window-start tiers, which still apply *within* the closed block. It reads the
-  STORED status through **`AppointmentRecord.isClosed`**, never `displayStatus`,
-  so the comparator stays clock-free like the rest of that module; `isClosed` is
-  the model-layer mirror of `AppointmentStatus.isTerminal` and exists precisely
-  so a pure module can ask without pulling Material in through `status_chip.dart`
-  (it is also the one owner of the `done`/`completed`/`cancelled` triple —
-  `displayStatusAt` calls it rather than re-spelling it). Both terminal states
-  sink: a cancelled visit is as done with as a completed one.
-  A closed job then renders in the **collapsed** treatment —
-  `AppointmentCard(collapseWhenClosed: true)`, opt-in and passed ONLY by
-  `AgendaSliverList`: the success tint for `done`, a one-line body putting the
-  time beside the client, and no avatar stack (the crew bar still carries
-  colour, so *who* survives the collapse). **`_kClosedMinHeight` (48) is
-  load-bearing, not belt-and-braces** — the collapsed row lands near 56px, close
-  enough that a small text scale drops it under Material's minimum, and the row
-  is still a full `InkWell` opening the same sheet. The **multi-day counter
-  stays** on a collapsed row (deviating from the approved mockup, deliberately):
-  a closed job renders on every day of its run, so without "Day 3 of 5" those
-  rows are indistinguishable. `AgendaSliverList` emits one `_ClosedRule`
-  (`calendar_closedCount`, which reads **"Done"** — owner call 2026-08-08,
-  reversing the earlier "Closed"; a cancelled visit sinks into the same block
-  and is counted by it, so the label is deliberately looser than the set) at
-  `_firstClosedIndex`, and its `length - index` count is only valid because the
-  sort guarantees the closed jobs are one contiguous tail — don't reorder them
-  at the call site. Everywhere else (day route, dashboard, employee TODAY panel,
-  client job history) keeps its own sort and the plain full-height card.
-- **`AppointmentCard` is the ONE appointment card** — calendar agenda, day
-  route, client job history, both dashboard sections and the paginated history
-  list (`AppointmentTile` is deleted, along with `colorFromMap` and
-  `resolveAssigneeNames`). It takes `crew: List<AppointmentCrew>` from
-  `crewFor(appointment, colorMap:, nameMap:)`; without a `nameMap` that falls
-  back to the record's denormalized `employeeNames`, which is what the history
-  and client surfaces already showed. **The crew bar bands EVERY assignee**
-  (`_crewBarDecoration`, up to `_kMaxCrewShown` = 4 — the SAME cap the avatar
-  stack uses, deliberately, so the bands and the faces never disagree on how
-  much of the crew the card shows): a flat colour for one,
-  a hard-stopped `LinearGradient` of each crew colour for more (owner call,
-  2026-07-31 — it followed the first assignee alone before that, and the
-  pre-redesign grey-for-multi-crew is doubly wrong: grey reads as
-  *unassigned*). Only a job with no crew at all is `textFaint`. The meta line
-  is an **overlapped avatar stack — one avatar per assignee — followed by the
-  client name** (owner call, 2026-07-31; it was a single avatar plus the text
-  `Theo +1 · Client`, and `calendar_crewAndClient` is deleted). `_CrewAvatars`
-  computes its own width rather than laying out, because of the
-  `IntrinsicHeight` rule below; `_crewLabel`/`calendar_crewPlusOthers` survive
-  only as the fallback text for a record with no client name to show. `alwaysShowChip` is **gone**, not ported
-  (every call site passed `true`); cancelled dims to **0.6**, not 0.75. The card
-  uses `IntrinsicHeight` to stretch the crew bar, so **nothing in its subtree may
-  use `LayoutBuilder`, `AutoSizeText` or `FittedBox`** — they cannot report
-  intrinsics.
-- **`findBusyEmployees` must exclude the appointment under edit.** Pass
-  `excludeAppointmentId` from any edit-flow conflict check or the job collides
-  with itself and reports every one of its own assignees as busy. The exclusion
-  is by **doc id, not by series**, so a genuine clash with a sibling occurrence
-  still surfaces. A clash returns the sealed `EventDetailsBusyEmployees` (not an
-  error) and **must clear `isSaving`** before returning, or Save stays stuck
-  once the dialog is dismissed.
-- **Navigation (`lib/core/navigation/`, restructured 2026-07-30):**
-  `AppDestination` is a **sealed** family — `enum HubTab {calendar, clients,
-  employees, liveMap}` (the four `IndexedStack` panes) and
-  `enum PushedDestination {dayRoute, history, dashboard, settings}` (plain
-  routes above the shell). The split makes `select(settings)` a **compile
-  error** instead of an `IndexedStack` range crash; that is the whole point —
-  never collapse it back to one enum plus a list or an `isHubTab` flag.
-  `implements Enum` keeps `.name`/`.values` on the union type, and `.name` is
-  load-bearing: it is the persisted `tour_seen_tabs` key AND the showcase scope
-  name, so **renaming a member silently replays or orphans a tour** (that is
-  why the member stayed `employees` while its label became "Team" via
-  `nav_team`). `navigateToDestination` is the one nav action; a hub tab reached
-  from a pushed route goes through `selectAndReveal` (collapse, then switch) —
-  the old `pushReplacementNamed` path left the wrong screen on top from a
-  2-deep stack. `goHomeToCalendar` is the canonical go-home gesture behind the
-  header's Calendar pill. **`_popToShell` targets the shell's captured
-  `ModalRoute`, never `isFirst`** — on `_hubRoute`'s fallback branch the shell
-  is not route #1, so `popUntil(isFirst)` pops the shell itself and strands the
-  user. The **nav rail, `AdaptiveShell`, `AdaptiveDestination`,
-  `Breakpoints.expanded` and `isExpanded` are all deleted**; `AppNavDrawer`
-  (right-anchored, from `drawerGroups(isAdmin:)`) is the nav surface at every
-  screen size, and `AppHeaderPair` sits in every `AppTopBar.actions` — on the
-  **calendar only** it is built with `showCalendarPill: false` (a go-home pill
-  on the screen it goes home to is dead weight; owner call 2026-07-31), so that
-  header carries the day-route button and the hamburger alone.
-  `_hubRoute` + `HubTabRedirectRoute` survive at three tab routes — they look
-  dead but remain the cold-start fallback and are pinned by `hub_shell_test`.
-
-- **Feature tours (`lib/features/feature_tour/`, showcaseview 5.x):** each
-  scope registers its OWN showcaseview scope (`TourScope.storageKey`) — the hub
-  IndexedStack keeps every tab mounted, so a shared scope would mix hidden
-  tabs' targets into the visible tour. `FeatureTourHost` is the only start
-  path.
-  **A tour is keyed on the sealed `TourScope`, not on `AppDestination`**
-  (`domain/tour_scope.dart`, 2026-08-04): `DestinationTour` wraps a screen,
-  `FormTour` wraps one of the three create-flow sheets (`addAppointment`,
-  `addClient`, `invitePerson`) — which is the only reason a walkthrough of
-  "how do I create an appointment" is expressible at all. **`storageKey` is
-  BOTH the showcase scope name and the SharedPreferences entry, and a
-  destination's key is its bare `.name`** — do not prefix it, or every
-  installed device replays every tour it has already seen. Form keys are
-  namespaced `sheet_*` so they cannot collide. `.name` stays load-bearing:
-  renaming a `HubTab`, `PushedDestination` or `TourForm` member replays or
-  orphans that tour.
-  **Its visibility gate is chosen by the scope's sealed type, not
-  by a null `HubShellScope`**: a `HubTab` gates on `HubShellScope.currentOf`;
-  a `PushedDestination` **and a `FormTour`** both gate on
-  `ModalRoute.of(context)?.isCurrent` — one branch, because a
-  `ModalBottomSheetRoute` IS a `ModalRoute`. A null scope is
-  ambiguous — it also describes a hub screen hosted standalone in a test, where
-  "never start" must be preserved. Before this split, Settings and History
-  (now pushed routes) would have had `currentOf == null` and their tours would
-  have silently never started.
-  **A widget test that pumps `AddEventSheet`, `AddClientSheet` or
-  `InvitePersonSheet` MUST call `markFormToursSeen()`**
-  (`test/support/tour_test_support.dart`). A sheet's route is current the
-  instant the test pumps it, so on a fresh-install preferences store the tour
-  starts and showcaseview's repeating tooltip animation makes `pumpAndSettle`
-  time out. Hub tabs are immune (no `HubShellScope` when hosted standalone).
-  **A scrolling tour host passes `autoScroll: true` AND
-  `kTourScrollCacheExtent`** — `isTargetRendered` cannot find a target a lazy
-  list never built, and it drops that step silently rather than failing.
-  **Wrap targets with `TourSteps.stepIf`, not `has(id) ? step(id, ...) : child`**
-  — `step` force-unwraps `keys[id]!`, so an unguarded wrap crashes on a screen
-  whose employee catalog is empty. A list-row step wraps the FIRST row only
-  (the `GlobalKey` must stay unique), injected as a wrap callback so the widget
-  stays reusable untoured — `ClientsListView` is also the booking flow's client
-  picker.
-  Route mode also awaits `_routeTransitionSettled()` so showcase measures a
-  page that has finished sliding in. It
-  awaits `tourSeenProvider.ready` before acting (the optimistic empty default
-  would replay seen tours on cold start), and drops steps whose target isn't
-  rendered via `isTargetRendered` — **never `GlobalKey.currentContext`: the
-  5.x `Showcase` widget does NOT forward its key to the element tree, so
-  currentContext is always null** (zero survivors → mark seen, never
-  crash/retry). The auto-start sets a `_started` guard before its post-frame
-  callback runs; **reset `_started` on the visibility-changed early-return** (the
-  tab was switched away before the callback fired) — a stale `true` there
-  permanently suppresses that tab's tour for the session, so a fast tab-switch
-  during auto-start otherwise wedges it shut. **Data-dependent tabs MUST pass `FeatureTourHost(ready:)` false
-  while their body shows a loading/error placeholder** — the tour's targets
-  don't exist yet, so an ungated start finds zero survivors and permanently
-  marks the tab seen against an empty body (bit LiveMap: its FAB targets live in
-  the map stack, absent during the presence-data load). **A PARTIAL start is
-  the same bug and is easier to miss** — the surviving steps run, the tour
-  finishes, and `markSeen` fires for the WHOLE scope, so the dropped steps are
-  gone for good (Settings › Replay is the only way back). Any scope holding
-  even ONE data-dependent target needs the gate, not just one whose body is
-  entirely a placeholder. Calendar gates on
-  `!isLoading`; LiveMap gates on `_mapTargetsRendered` (the map stack, not the
-  placeholder, is showing); Dashboard and Day route gate on `AsyncData`; Team
-  gates on `allUsersStreamProvider.hasValue`. **Clients and History are
-  paginated, so they have no `AsyncValue` to read** — `ClientsListView` and
-  `AppointmentHistoryView` each expose `onFirstPageSettled`, fired post-frame
-  after the first page resolves (success OR failure — either way the skeleton
-  is gone and no further row arrives on its own), and the screen gates `ready`
-  on it. Wire any new paginated tour host the same way rather than starting
-  against the skeleton.
-  Settings and the three form sheets instead FORCE their below-fold targets to
-  mount via `autoScroll: true` + an inflated `scrollCacheExtent` — a lazy list
-  won't build off-screen rows for `isTargetRendered` to find. Scopes are
-  registered in initState and deliberately NEVER
-  unregistered (register() replaces; unregister in dispose would race the
-  replacement State's initState on a hub identity change), and every
-  dismiss/mark-seen is gated by `_tourRunning` because the package fires
-  onDismiss even when idle. Step catalogs are pure (`tourStepsFor`);
-  Clients/Employees/History/LiveMap/Dashboard and all three form sheets are
-  admin-only, so their employee catalogs are empty and their screens guard
-  wraps on catalog membership. **Calendar, Day route and Settings are the
-  three destinations an employee can reach, and each has an employee tour** —
-  keep that set matching `drawerGroups(isAdmin: false)`.
-  Seen flags are device-local SharedPreferences ONLY (`tour_seen_tabs`);
-  sign-out does not reset them — the Settings "Replay app tour" row is the
-  only reset.
+- **Employee, account and `users`-doc rules live in `.claude/rules/employees.md`**
+  (moved 2026-08-19) — the P4c invite/setup flow, `changeEmployeeEmail`,
+  the generated starting password and credential handling, `EmployeeFormActivity`,
+  `watchEmployees`, `users.name` composition, `workingDays`, the rules caps, the
+  `private/emergency` subcollection, `MyDetailsScreen`, the two-branch
+  `allow update` on `/users`, the roster's one-listener jobs-today count, and
+  `travelAlertsEnabled`. Loads when working under
+  `lib/features/employees/`, `lib/features/settings/` or the account functions.
+- **Client rules live in `.claude/rules/clients.md`** (moved 2026-08-19) —
+  `ClientRecord` legacy back-compat, archive-not-delete, the type filter, the
+  Wave sync badge, `jobCount`, the `clients/{id}.name` IS-the-phone rule and
+  `ClientNamePolicy`, inline add-client, the client detail's Job history
+  section, and the History screen's rail/sections.
+  Loads when working under `lib/features/clients/`, `functions/clients.js`,
+  `functions/client_*.js` or `functions/wave/`.
+- **Calendar UI rendering rules live in `lib/features/calendar/CLAUDE.md`**
+  (moved 2026-08-14) — the P2 month grid/pager/collapse rules, the
+  `AppointmentCard` contract, and the agenda's closed-job sink. They are pure
+  Flutter with no `functions/` twin, so they load only when working under that
+  directory. Everything with a server-side mirror stayed here.
+- **Navigation rules live in `lib/core/navigation/CLAUDE.md`** (moved
+  2026-08-19) — the sealed `AppDestination` family, why `.name` is load-bearing
+  for tour storage keys, `navigateToDestination`/`selectAndReveal`, and the
+  `_popToShell` caveat.
+- **Feature-tour rules live in `lib/features/feature_tour/CLAUDE.md`**
+  (moved 2026-08-14) — `TourScope`, the visibility gates, `isTargetRendered`,
+  the `ready:` gate for data-dependent tabs, and the widget-test caveat.
+  Remember here: an `AppDestination`/`TourForm` member name IS the tour's
+  storage key, so renaming one replays or orphans that tour.
 
 ## Conventions
 
@@ -1447,7 +261,10 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   Promote to `shared/` or `core/` only when reused across features.
 - Services are plain classes; no DI container. `AuthService` accepts optional
   injected deps for testability — mirror this pattern.
-- Normalize emails: `.trim().toLowerCase()` before any Firestore read/write.
+- Normalize emails through `normalizeEmail()`
+  (`core/validators/email_format.dart`) before any Firestore read/write — never
+  a hand-spelled `.trim().toLowerCase()`, which had nine copies and a private
+  `_norm` twin.
 - `initState` must be thin — extract heavy init to `_initStreams()`.
 - **Submit/save reentrancy:** in a controller's submit/save, set the in-flight
   flag (`isSubmitting`/`isSaving`) synchronously BEFORE the first `await` —
@@ -1461,70 +278,249 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   sheet variant unmounts there, so the guard covers both.
 - All Firestore writes via service classes (never direct `FirebaseFirestore.instance` in UI).
   Always set `createdAt`/`updatedAt` server timestamps.
-- Entity search matches in Dart (Firestore has no full-text search) — don't
-  "fix" it into a server query. Clients/history search read a bounded window
-  (`_historySearchScanLimit` / clients ~1000 docs) via `clientSearchProvider` /
+- **Entity search runs SERVER-SIDE now** (2026-09-04). Client search, appointment
+  history search and the booking conflict check go through the callables
+  `searchClients` / `searchHistory` / `findAppointmentConflicts`
+  (`functions/indexed_search.js`), because the old capped client-side scan
+  windows went silently incomplete as the business grew: the clients window is
+  `orderBy('name')`, so at its cap it was the alphabetically FIRST N clients and
+  everything past that point vanished from search, the type-filter chips and the
+  Archived chip at once, with no error anywhere. **This replaces the old rule
+  that said to keep matching in Dart and never "fix" it into a server query** —
+  that rule was written when there was no index to query.
+  - **The index is a TOKEN ARRAY the CLIENT writes on every entity write**:
+    `clients.searchTokens` and `appointments.historySearchScopes`, both built by
+    `searchIndexTokens` (`core/search/search_tokens.dart`), both capped at 240
+    entries by `firestore.rules`. A doc written before 2026-09-04 carries
+    neither until `functions/scripts/backfill-search-tokens.js` has run against
+    it — **that backfill is a prerequisite for the release, not a follow-up**,
+    or search returns nothing for every existing client and closed job.
+  - **`searchIndexTokens` is hand-mirrored by `functions/search_tokens.js`** —
+    the app writes the tokens and the server queries them, so a divergence is a
+    search that silently returns nothing. `test/core/search/search_tokens_test.dart`
+    and `functions/__tests__/search_tokens.test.js` share their worked examples
+    value-for-value; change both sides in one commit and keep the examples equal.
+  - **Two ordering rules inside it are load-bearing.** Each word emits its WHOLE
+    token before any of its prefixes, so an exact-word query survives
+    truncation; and the text and phone runs are INTERLEAVED, so a long client
+    name can never push the phone tokens past the cap. Appending phones after
+    texts is what made appointment search-by-phone index nothing at all —
+    the per-scope budget is ~10 tokens and a two-word client name fills it.
+  - **The per-scope budget is the FIELD cap divided by the scope count, not the
+    QUERY limit.** `historySearchScopes` carries every token once per scope
+    (`all:` plus `emp:<id>:` per assignee), so the divide is what keeps it under
+    240; clamping to `kSearchTokenQueryLimit` (10) instead — the number a
+    QUERY may send — starves everything after the client's first name.
+  - **A token hit is a PREFILTER, never the answer.** Both callables re-verify
+    with `recordMatchesQuery` over the full stored document before returning,
+    because a prefix token matches more than the query does.
+  - **`normalize` is hand-mirrored as an explicit fold TABLE on both sides, not
+    NFD.** The app writes the index with `ClientSearchPolicy._foldAccent` and
+    the server tokenizes the typed query with `functions/search_tokens.js`; NFD
+    folds strictly more (all of Latin Extended-A), so a JS side using it made
+    "Muñoz" storable as `t:mu`/`t:oz` and queryable as `t:munoz` — a client
+    nobody can find. Add a letter to both tables or to neither, and keep the
+    shared accent examples in the two suites equal.
+  - **The read cap is a KNOWN bound and it warns.** A phone query tokenizes to
+    every 3-12 digit substring, so `514` matches most of the roster; the
+    callable reads 200 `orderBy('name')` and returns 25, which means the answer
+    to a very broad query is the alphabetically first slice. It logs at the cap
+    so the truncation is visible rather than silent — never remove that warn,
+    and don't raise the cap without also giving the result a real relevance
+    order (the client-side path it replaced had `relevanceScore`; the server
+    does not).
+  - **A SERVER write path must maintain the index too.** The tokens are written
+    by the app on save, so a document created or edited server-side keeps stale
+    tokens or none at all — and the admin then searches for a client they can
+    SEE in the list and gets nothing, with nothing logged. Two sites already do
+    it and any new one must: the Wave import (`wave/customers_import.js` sets
+    `searchTokens`) and client propagation (`buildAppointmentPatch` rebuilds
+    `historySearchScopes` whenever it moves `clientName`/`clientPhone`).
+  - **The conflict rule has a server twin now.** `findAppointmentConflicts`
+    filters through `dailyWindowsOverlap` in `functions/day_slice_utils.js`,
+    hand-mirrored from `appointment_day_slice.dart` — a DAILY-window overlap,
+    not a raw instant test. It shipped as a raw instant test and reported a
+    9-5 run across a week as clashing with a 7 pm job inside it; pinned now by
+    `functions/__tests__/indexed_search_conflicts.test.js`. It also keeps the
+    fail-closed half: a doc whose stored times don't parse clashes
+    unconditionally.
+  - **The old local scan windows are STILL THERE as the injected-`FirebaseFunctions`-
+    absent fallback**, which in practice means tests only — `firebaseFunctionsProvider`
+    is non-nullable, so production always takes the callable path. Everything
+    below about those windows still describes the fallback; don't delete it, and
+    don't add a THIRD matcher rather than routing through the two named pairs.
+  Clients/history search read a bounded window
+  (`_historySearchScanLimit` 5000 / `_clientScanLimit` 5000) via `clientSearchProvider` /
   `historySearchProvider` (`autoDispose.family` keyed by query) and match across
   all fields in Dart; the loaded-page filter fills the gap until the debounced
   read settles. `ClientSearchPolicy.normalize` (accent-fold) + `digitsOnly`
-  (phone) are the matching primitives, and `ClientSearchPolicy.matchesClient` is
-  the single client-side fallback matcher — route new client matching through it.
+  (phone) are the matching primitives. **The client-side matchers are
+  `index()` + `entryMatches()` (the loaded-page filter) and `rawMatches()` (the
+  debounced server scan) — route new client matching through those.**
+  `matchesClient` is a convenience wrapper over the first pair with NO
+  production caller: the split exists FOR performance, since `index` is hoisted
+  to run once per data change while `matchesClient` rebuilds the projection per
+  candidate per keystroke.
+  **`ClientSearchPolicy.rawTexts` / `rawPhones` are the ONE owner of the raw-map
+  field list**, read by `rawMatches` AND by the `searchTokens` builder in
+  `firebase_clients_repository`: what is INDEXED and what MATCHES cannot be
+  allowed to drift, and they were two hand-written copies of the same ten
+  fields. `index()` keeps its own `ClientRecord`-shaped copy on purpose.
+  **A client's OWN numbers and its CONTACTS' are separate owners**
+  (`ownPhoneDigits`/`contactPhoneDigits` and their `raw*` twins, 2026-09-05),
+  because `relevanceScore` treats them differently — only the client's own may
+  score an exact or prefix hit — and `rawPhones` is now just their
+  concatenation, already reduced to digits. Spelled at the call site instead,
+  it drifted immediately: `scoreRecord` passed the contacts in BOTH lists (so a
+  contact's number could score exact, and every contact was compared twice at
+  the weakest tier) while the repository's local-fallback matcher kept them out
+  of the own list, which is two answers to one question. Note `searchIndexTokens`
+  runs `digitsOnly` itself, so handing it digits changes no token.
+  **The appointment side has the same pair**:
+  `historyEntryOf` + `historyEntryMatches` (`calendar/domain/policies/history_search_policy.dart`),
+  which `matchHistoryDocs` and `appointment_history_view.dart`'s loaded-page
+  filter BOTH route through — they are the same search at two layers, and a
+  field added to one used to change results visibly when the debounce settled,
+  with nothing logged. The repository's fallback calls `matchHistoryDocs`; it
+  briefly carried a third hand-written matcher that also read `title`, which
+  neither twin does.
+  **A matcher that reads the RAW map to skip building a record must parse list
+  fields through `firestoreStringList`** (`core/utils/firestore_parsing.dart`,
+  beside `firestoreDateTime`/`firestoreInt`), never a private copy: the history
+  filter reads `employeeNames` before there is a record, so a second spelling
+  that accepted less would silently reject documents the record itself would
+  have matched — a search that quietly stops finding a crew member, with
+  nothing logged.
   `FirebaseAppointmentsRepository` keeps a bounded LRU of recent `searchHistory`
-  results on the long-lived singleton; every write path clears it via
-  `_invalidateSearchCache()`, so a new appointment-write method MUST call it too
-  or history search serves stale results (including a just-deleted appointment
-  that opens a detail view for a doc that no longer exists).
-- **Client "Job history" section** (`ClientJobHistorySection`, admin-only client
-  detail) reads via `fetchClientHistory` (`clientJobHistoryProvider`, an
-  `autoDispose.family` that re-fetches on `onLocalWrite`). The query filters on
-  `clientId` alone so the automatic single-field index serves it — there is NO
-  `orderBy`, so newest-first is sorted in Dart over the bounded window. Don't add
-  a server `orderBy('startTime')`, or it needs a `(clientId, startTime)`
-  composite index.
-- **The team roster's "jobs today" count is ONE listener, not one per row.**
-  `employeeJobsTodayProvider` reduces a single `appointmentsInRangeProvider` over
-  today's range into a `Map<String,int>`; every row reads the map. The range
-  comes from `todayRangeProvider`, which watches `currentDayProvider` — never
-  `DateTime.now()`, or the counts stick on yesterday in an app left open across
-  midnight. Cancelled visits don't count. **The employee detail's TODAY panel
-  filters that SAME stream** (`employeeTodayJobsProvider`) rather than opening a
-  per-employee query — the Team tab already holds the day range open, so a
-  detail costs no extra read and the panel can't disagree with the count on the
-  row that opened it.
+  results on the long-lived singleton. **Every write path must call
+  `_patchWindow(...)` or `_notifyLocalWrite()`** — a method that calls neither
+  serves stale results, including a just-deleted appointment that opens a
+  detail view for a doc that no longer exists, and
+  `firebase_appointments_repository_invalidation_test.dart` reads the source
+  back to make that a test failure rather than a silent one. **It replaced
+  `_invalidateSearchCache()`, which THREW THE WINDOW AWAY** (2026-09-01): the
+  window is the full paged terminal-status archive capped at 5000, and nine
+  write paths dropped it outright, so an admin who searched History, opened a
+  result and marked it complete re-paged the entire archive behind the sheet —
+  thousands of billed reads and four sequential round trips for a one-field
+  write, growing with the archive. `_patchWindow` merges the changed docs by id
+  instead, the same treatment `firebase_clients_repository`'s own `_patchWindow`
+  already had. Two rules inside it are load-bearing: a doc whose status is no
+  longer terminal is REMOVED rather than merged (the window is
+  `status whereIn terminalStatusQueryValues`, so a create or a reopen does not
+  belong in it), and a new doc is inserted at its `startTime` position, because
+  the window is `startTime` DESC and `searchHistory` returns it unsorted.
+  `_notifyLocalWrite()` is the narrow alternative, for a write that provably
+  changes no field `matchHistoryDocs` reads — the two photo paths.
+  **The LRU itself is `SearchResultCache<T>` (`core/data/search_result_cache.dart`),
+  shared with the clients repository**: the two carried byte-identical
+  `_isFresh`/`_cacheSearch` pairs over identical dials (50 entries, 2 min), and
+  neither copy had a test for expiry or eviction. Invalidation policy stays
+  per-repo — they legitimately differ on the `_localWrites` poke.
+  **Both scan windows PAGE to their cap and then WARN**, the same posture
+  `_mapRangeSnapshot` takes for the range streams. Paging is what stops a
+  window truncating at one page; the cap is what stops it walking the whole
+  collection, and the two are not alternatives — the 2026-08-19 cleanup
+  commits deleted every ceiling and every warn when they added the paging, and
+  both were restored the same day at 5000. It matters most on clients: that
+  window is `orderBy('name')`, so at the cap it is the alphabetically FIRST N
+  clients, and everything past that point goes invisible to search, to the
+  type-filter chips and to the Archived chip at once, with no error anywhere.
+  It arrives gradually as the roster grows, which is the kind of failure
+  nobody reports. Never add a bounded read here without the warn, and never
+  replace a ceiling with an unbounded `while (true)` paging loop —
+  `fetchClientHistory` (`_clientHistoryScanLimit`, 1000) and
+  `fetchClientsCreatedSince` carry the same pair.
+  **The loop itself has ONE owner: `pageToCap` (`core/data/paged_scan.dart`),
+  2026-08-19** — the four call sites had a hand-written copy each, which is
+  four chances to omit the cap or the warn on the next one. The caller still
+  supplies its own cap, page size and warn text (each names a different
+  user-visible consequence); only the loop is shared. **Page size is NOT the
+  display bound** — `fetchClientHistory` used its `limit` (50) as both against
+  a 1000 cap, so one client-detail open cost up to 20 sequential round-trips;
+  it pages at 500 like the other two windows. **Nor may page size EQUAL the
+  cap**: `pageToCap` asks for `cap + 1 - fetched`, so a full first page always
+  costs a second round trip whose only job is to decide whether to warn. A
+  caller wanting the newest N passes `limit: N + 1, cap: N`
+  (`clientBookingHistoryProvider`), which answers "is there more than N" in the
+  one query. **Such a caller BREADCRUMBS at the cap rather than warning.** The
+  warn exists for a SILENT truncation of a list meant to be complete; a
+  deliberate window reaches its bound as the normal case — for the booking
+  form, on exactly the repeat clients it is for — so warning there files a
+  Crashlytics non-fatal per form open and buries the real one.
+  `fetchClientHistory` keys that on whether an explicit `cap` was passed.
 - **Every widget-layer offline write guard goes through `guardedOffline`**
   (`core/errors/error_cause.dart`, beside `composeErrorNotice`) — it reads
   `isOfflineProvider`, pushes the standard offline notice and returns true so
   the caller returns. The block was copy-pasted at six sites. It takes no
   `tag`: notices carry no support code (2026-08-04), so a tag now lives only in
-  the `logger.warn` label at the same site. The two `accept_invite_*`
-  screens deliberately stay out — they surface offline through their own
-  `AuthBanner`, not a notice. Controller-layer guards (`add_event`,
+  the `logger.warn` label at the same site. **There are exactly TWO carve-outs,
+  and this list is meant to be exact** — a stale entry here is what made the
+  previous version read as drift. `AccountSetupScreen` surfaces offline through
+  its own banner (`_bannerError`) rather than a notice; and
+  `WaveSettingsSection._blockedOffline` surfaces
+  `WaveNetwork().toLocalizedMessage` instead of `composeErrorNotice`, because
+  the typed-`Failure`-branch-first rule gives it a better sentence than the
+  generic cause vocabulary can. (This named "the two `accept_invite_*` screens"
+  until 2026-08-11, both of which P4c deleted, so the rule pointed at nothing;
+  the Wave carve-out was added 2026-08-15 for the same reason — it existed and
+  went unnamed.) Controller-layer guards (`add_event`,
   `event_details`, `client_form`) keep returning a typed failure instead.
-- **`DateFormat` is memoized per locale** (`calendar/domain/month_grid.dart`:
-  `longDateFormatFor`, `weekdayAbbrevFormatFor`, `_symbolsFormat`). Constructing
-  one verifies the locale and parses a skeleton into pattern fields, and the
-  calendar built a fresh one PER DAY CELL for a semantics label — 30–90 per
-  rebuild on every day tap and month swipe. Never call a `DateFormat.*`
-  constructor inside a cell/item builder.
-- **`TourSteps`** (`feature_tour/domain/tour_steps.dart`) owns a screen's step
-  ids, keys and `step()` wrapper. Six screens had a copy of the trio that had to
-  stay in sync (`keys[id]!` force-unwraps; `indexOf`/`length` feed "step N of
-  M") and Settings had already drifted. One `late final _tour = TourSteps(dest,
-  isAdmin:)` per screen — don't re-inline it. **The app bar's `bottom:` slot
-  uses `stepBarIf`**, the `PreferredSizeWidget` sibling of `stepIf`: without it
-  that one slot escaped the class's ownership and Clients, History and Team each
-  re-spelled the same six-line `has(id) ? TourShowcaseBar(...) : bar` block by
-  hand.
-- **The account-exit teardown lives in `AccountExitListeners`**
-  (`core/app/account_exit_listeners.dart`), the sibling of `AppSyncListeners`.
-  The ORDER is load-bearing: push, presence and Live Activity de-register
-  BEFORE `signOut()`, because each needs the credential sign-out revokes. Its
+- **Account exit is SPLIT: `AccountExitListeners` detects, `AccountExitController`
+  tears down** (`core/app/`, siblings of `AppSyncListeners`; the controller was
+  split out 2026-08-19). The listeners are three `ref.listen` wire-ups
+  (disabled / role revoked / doc deleted) and nothing else; every one of them
+  calls `AccountExitController.exitAccount`, which owns the teardown, the
+  navigation and the guard. Don't put teardown back in a listener — that is
+  what made the order and the guard untestable. The ORDER is load-bearing:
+  push, presence and Live Activity de-register BEFORE `signOut()`, because each
+  needs the credential sign-out revokes. The controller's
   `_isHandlingAccountExit` guard is released by the post-frame callback on
   success and by the `finally` only on failure — three listeners can fire for
   one underlying event.
 - Per-keystroke search debounces through `Debouncer` (`lib/core/utils/debouncer.dart`,
-  own one per State, `dispose()` it). `SettingsSaveDebouncer` is the async-action
-  variant — don't add a third raw `Timer`.
+  own one per State, `dispose()` it) at the shared `kSearchDebounce` beside it.
+  **The debounced-search-over-a-`PagingController` block has ONE owner,
+  `DebouncedPagedSearch`** (`clients/widgets/views/debounced_paged_search.dart`,
+  2026-09-01), mixed into `ClientsListView` and `AppointmentHistoryView`: it
+  builds the `Debouncer.tagged` in `initState`, owns `committedQuery`,
+  `scheduleSearch`, the `didUpdateWidget` trimmed-query diff and
+  `notifyFirstPageSettled`, and disposes the debouncer. Don't re-spell those
+  in a new paged list — they were byte-identical in two files.
+  `kSearchDebounce` itself is one cost dial, not a per-surface taste, and it lives in
+  `core/` rather than on `ClientSearchPolicy` because its callers span features
+  — the appointment sheets debounce a CLIENT search, History an APPOINTMENT
+  one. **`Debouncer` is the ONLY one** — `SettingsSaveDebouncer` was deleted
+  2026-08-19: making `onError` required (below) turned `Debouncer` into a
+  strict superset, and a second wrapper whose `onError` stayed OPTIONAL voids
+  exactly the guarantee that change buys. Its interval survives as
+  `kSettingsSaveDebounce` beside `settings_providers.dart`, which is a
+  different cost dial from `kSearchDebounce`. Don't add a second wrapper or a
+  raw `Timer`, and don't re-spell an interval at a call site (it had already
+  split 300 ms / 250 ms across four).
+  **`Debouncer`'s `onError` is REQUIRED** (2026-08-19). It was optional, and
+  five of the six call sites omitted it — the action runs from a `Timer`
+  callback, so a throw inside a debounced search had no caller left to catch it
+  and the search just returned nothing, with nothing logged and nothing in
+  Crashlytics. Requiring it is what makes that omission impossible at a NEW
+  call site.
+  **Build one through `Debouncer.tagged(duration, logger:, tag:)`, not the raw
+  constructor** (2026-08-22). All five sites use it (six until
+  `DebouncedPagedSearch` merged two). Requiring `onError` closed
+  the omission case; what it could not close is *where the logger is resolved*
+  — the handler can fire after dispose, and Riverpod 3 `ref.read` on an
+  unmounted consumer throws (see `.claude/rules/error-handling.md`), so the
+  logger has to be read where the `Debouncer` is CONSTRUCTED (`initState`),
+  never inside the callback and never via a lazy `late final` touching `ref`.
+  Prose cannot enforce that; a required `AppLogger` PARAMETER can, because an
+  argument is evaluated at the construction site. Five of the six sites carried
+  a restatement of this paragraph as a comment, and the sixth — the one that
+  deviated — is the one that shipped a FATAL. `tag` is the Crashlytics warn tag.
+  **`kAddressLookupDebounce` (700 ms) lives beside `kSearchDebounce`** for the
+  one caller that needs a different interval: every address lookup is a BILLED
+  Places call behind a per-uid rate limit, where a client search spends a
+  Firestore read the app already pays for. Two dials, compared in one place,
+  rather than a number re-spelled at a call site.
 - Localization (`gen_l10n`):
   - Source of truth: `lib/l10n/app_en.arb` (template) + `lib/l10n/app_fr.arb`.
   - Generated `app_localizations*.dart` live in `lib/l10n/.gen/` and are
@@ -1538,9 +534,13 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   - Every key MUST carry a `@key` metadata block (description + typed
     placeholders). Enforced by `required-resource-attributes: true` in
     `l10n.yaml` — `flutter gen-l10n` fails on a bare key.
-  - Key naming: `feature_keyName`. Prefix buckets: `auth_`, `calendar_`,
-    `clients_`, `employees_`, `settings_`, `maps_`, `status_`,
-    `validation_`, `error_`, `common_`, `nav_`, `app_`.
+  - Key naming: `feature_keyName`. Prefix buckets: `calendar_`, `clients_`,
+    `tour_`, `employees_`, `error_`, `settings_`, `common_`, `dashboard_`,
+    `auth_`, `wave_`, `validation_`, `liveMap_`, `onboarding_`, `nav_`,
+    `status_`, `maps_`, `applock_`. `liveMap_` is the one lowerCamel prefix —
+    every other bucket is all-lowercase, so don't add a key by pattern-matching
+    a random existing one. `app_` is not a real bucket (zero keys) — drop it
+    if it resurfaces from an old copy of this list.
   - Adding a key: update both ARBs in lockstep, add the `@key` block in EN,
     run `flutter gen-l10n`. EN/FR drift surfaces in
     `lib/l10n/.gen/untranslated.json`.
@@ -1558,14 +558,26 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
 
 Functions live in `functions/` (project `schedulingapp-88727`, region
 `us-central1`), split into domain modules re-exported by a thin `index.js`.
-Full guidance — module map, every function, push / Live Activities / Wave, the
-Firestore TTL rules — is in `functions/CLAUDE.md`, which loads when working
-under `functions/`. Per-function reference: `docs/CLOUD_FUNCTIONS.md`.
+The module map and the per-function notes are in `functions/CLAUDE.md`, which
+loads when working under `functions/`. Three subject areas were split out of
+it on 2026-08-19 because each spans more than that one directory:
+`.claude/rules/notifications.md` (push, presence, widget, Live Activities,
+Siri — JS + Dart + Swift), `.claude/rules/wave.md` (`functions/wave/**` plus
+the Settings UI) and `.claude/rules/firestore-indexes.md` (TTL policies and
+index exemptions — scoped to `firestore.indexes.json`, which
+`functions/CLAUDE.md` never covered). Per-function reference:
+`docs/CLOUD_FUNCTIONS.md`.
 
-**A module that resolves a firebase-admin handle at load can't be tested, so
-its decisions live in a pure `*_policy.js` sibling.** `maintenance.js` resolves
-a Storage bucket at load and therefore throws on `require()` outside the
-emulator — which is why the only unattended, irreversible deletion in the repo
+**A module that resolves a Storage bucket at load can't be tested, so
+its decisions live in a pure `*_policy.js` sibling.** `maintenance.js` throws on
+`require()` outside the emulator, but NOT from an admin `getStorage()` handle —
+both of its calls resolve lazily inside the function bodies. The throw is
+`onObjectFinalized`'s own bucket-name resolution at **trigger registration**
+("Missing bucket name", `firebase-functions/lib/v2/providers/storage.js`), which
+happens the moment the module is evaluated. Same conclusion, so don't go looking
+for a load-time `getStorage()` that isn't there — and don't "fix" it by making
+the handles lazier, because they already are. That untestability is why the only
+unattended, irreversible deletion in the repo
 (`purgeExpiredHistory`) had ZERO tests until 2026-08-04. Its orchestration now
 lives in `maintenance_policy.js`, taking `db`/`deleteImages`/`now` injected,
 the same split `notification_policy.js` ↔ `notification_utils.js` already uses.
@@ -1583,23 +595,29 @@ old-build-compatibility check, rollback, and the deploy log recording what
 production actually runs. Read it before any deploy that touches a callable
 payload or a rules cap.
 
+**Four callables were ADDED 2026-09-04** — `searchClients`, `searchHistory`,
+`findAppointmentConflicts` (`indexed_search.js`) and `restoreAppointmentStatus`
+(`appointment_actions.js`), taking the export list 25 → 29. The first three need
+their composite indexes deployed FIRST and READY, and the `searchTokens` /
+`historySearchScopes` backfill run, before the app build that calls them ships.
+
+**A self-service callable opens with `assertActiveCall(req, allowedKeys)`**
+(`functions/security.js`), the twin of `assertAdminCall`: auth → payload shape →
+the `usersByUid/{uid}` bridge row, refusing anyone not `active`, returning the
+profile because every site needs `role`/`docId` next to scope what it may reach.
+It exists for the same reason the admin one does — a guard nobody has looked at
+is the one that silently loses a clause, and this one was already written twice,
+having drifted on its logging in the first week.
+
 Deploy: `firebase deploy --only functions,firestore:rules,firestore:indexes,storage`
+(clear `AI_AGENT`/`CLAUDECODE`/`CLAUDE_CODE` in the shell first, or the CLI
+stamps `agent-name/claude_code` into the audit log — see `docs/DEPLOYMENT.md` §5.)
 (`storage:rules` is **not** a valid deploy target — use `storage`.)
 **Never pass `--force`** — it deletes any prod Firestore TTL policy missing from
 `firestore.indexes.json` (this removed all 5 live policies once, 2026-07-21).
 Always run `cd functions && npm run lint` before deploying.
 
 `GOOGLE_MAP_API_KEY` lives in Secret Manager only — it is **not** in `dev/.env`.
-
-App Check simulator setup: debug builds use `AppleDebugProvider` (App Attest is
-Release-only and fails on the Simulator), so run the app once → take the debug
-token from the Xcode console, or read `GACAppCheckDebugToken` out of the
-simulator app's preferences plist → register it in Firebase Console → App Check
-→ the iOS app → Manage debug tokens. The token is per-install: re-register after
-a full reinstall or a fresh simulator. An unregistered token causes all Firestore
-writes and non-cached reads to fail with `permission-denied` while cached reads
-still succeed, making the failure appear collection-specific. Full walkthrough:
-`docs/IOS_MAC_BUILD.md` Phase E.
 
 ## Testing
 
@@ -1609,6 +627,18 @@ still succeed, making the failure appear collection-specific. Full walkthrough:
   owns a local `_harness` helper for this — **there is no shared
   `_scaledHarness`**, despite what older plan docs call the pattern.
 - Harness requirements, mocking rules and device-only caveats: the **Test
-  Strategy** section of `docs/ARCHITECTURE.md`. (This used to point at
-  `.claude/rules/testing.md`, which does not exist — `.claude/` is gitignored
-  and was never committed, so that file was never available to anyone.)
+  Strategy** section of `docs/ARCHITECTURE.md`, mirrored by
+  `.claude/rules/testing.md` — keep the two in step. **`.claude/` is COMMITTED
+  as of 2026-08-14** (private repo, worked from both a Windows box and the Mac),
+  so the rules, skills, agents, commands and hooks now reach every clone;
+  before that date `.claude/` was gitignored and `docs/ARCHITECTURE.md` was the
+  only copy anyone else could read. Only `.claude/settings.local.json` stays
+  ignored, because it is machine-local. `code-quality.md`, `error-handling.md` and
+  `security.md` are `alwaysApply: true`; the other ten
+  (`testing.md`, `frontend.md`, the 2026-08-19 additions
+  `appointments.md`, `clients.md`, `employees.md`, `images.md`,
+  `notifications.md`, `wave.md`, `firestore-indexes.md`, and `analytics.md`,
+  added 2026-09-07) are `paths:`-scoped,
+  so they load only when Claude touches a matching file. That scoping is verified working — a
+  `paths:` rule is absent from context until its paths are touched — and it
+  is what took this file from ~155k chars to ~31k.

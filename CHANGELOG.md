@@ -10,6 +10,976 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.59.0+88] - 2026-09-07
+
+What happened on a job is now something the office can read. The crew's notes
+are a signed, dated thread instead of a single box only the technician could
+see, the photos an employee takes stay on screen while they upload, and the
+screens meant for an admin check the account rather than the tap that opened
+them.
+
+### Added
+- **Crew notes are a signed thread the office can read.** Each note carries the
+  name of the person who wrote it and the time they wrote it, oldest first, and
+  an admin sees the whole thread on the job. Notes are added, never edited or
+  overwritten — where a second technician on the same job used to replace the
+  first one's notes, both now stand. Anything written under the old single-box
+  notes still shows at the top of the thread.
+- **The client search drops down under the field as you type.** Results attach
+  to the field the way the address picker's do, and the spinner moved into the
+  field itself, so the list no longer blanks and jumps on every keystroke — the
+  previous matches stay put while the next ones load. Closest-number results
+  are still labelled as such, never as matches.
+
+### Changed
+- **History is an admin screen now.** A technician's copy of it never had a
+  single filter control, and a finished job is still one tap away on the
+  calendar, where closed jobs sink to the bottom of the day. The screen was
+  removed rather than half-built.
+- **Recent clients is gone from the add-job form.** Search is the one way to a
+  client, and it now starts on the first digit.
+- **The job address is hidden while the client's own address is in use.** Turn
+  the switch off and the field comes back; a client with no address on file
+  keeps it on screen, so a job can always be given one.
+- **The client filter sheet has a back button.** Leaving it keeps the filter you
+  had, the address you were on and your place in the list.
+- **The photo limit applies to the crew's photos too**, and says so when a pick
+  is trimmed. Photos added on site used to bypass it entirely, which then made
+  the admin's own Add photos button a silent no-op on that job.
+- **The client detail no longer counts who else is at the same address.** That
+  question belongs to the filter sheet, which still answers it; on the page
+  about one client it was a line nobody had asked for.
+
+### Fixed
+- **An employee's first photo on a job no longer disappears while it uploads.**
+  The whole photos section stayed invisible for the length of the upload, then
+  blinked out again at the moment it succeeded.
+- **A crew photo that fails keeps its error message on screen.** A batch that
+  failed outright used to erase its own error tile, and the Retry beside it
+  could not do anything except destroy the only record of the loss.
+- **A long thread of crew notes keeps the newest ones.** Past two hundred notes
+  it kept the oldest and silently dropped everything written since; it now
+  keeps the recent ones and says on screen that older ones aren't shown.
+- **A note can no longer be posted under a colleague's name** — it is signed
+  from the account that wrote it, not from what was submitted with it.
+- **A crew member with a long name can post a note at all.** Anyone whose name
+  ran past two hundred characters had every attempt refused with a generic
+  error and no field to correct.
+- **Admin-only screens re-check the account, not the tap that opened them.**
+  Settings, the navigation drawer, the Day Route crew selector and History all
+  read the current role from the account, so a stale back stack or a link can
+  no longer show an admin-shaped screen that then fails on every action.
+- **The crew notes and photos on a job say when they could not be loaded**
+  instead of rendering as an empty record.
+
+## [1.58.0+87] - 2026-09-05
+
+Booking a job while the client reads their number down the phone is what this
+release is built around. The client step is now a phone pad with the matching
+list live above it, narrowing as each digit lands, and the job address offers
+the places this client has actually been before it offers to search for a new
+one.
+
+### Added
+- **The add-job client step is phone-first.** Tapping Phone opens the number
+  pad with a running "8 of 10" tally, and the match list stays on screen and
+  narrows as you type — so a client is confirmed at digit eight, mid-sentence,
+  rather than after the tenth. A Name-or-address switch sits above the field
+  for the times a number is not what you have; it searches name, address, city
+  and postal code.
+- **Clients you booked recently are offered before you type anything.** They
+  come from jobs the app has already loaded, so they cost nothing and appear
+  the moment the field is focused.
+- **A typo in a number now finds the client anyway.** When a full number
+  matches nobody, the search retries on the first seven digits and then the
+  last seven, and presents what it finds as "closest numbers on file" — never
+  as a match. Creating a new client is offered last, and names the number it
+  would use.
+- **The attached client is confirmed on a card.** The number leads it, with the
+  name, job count and last visit beneath, and the client's address carried on a
+  switch you can turn off — so a job at a different address no longer means
+  silently overwriting the one that was filled in for you.
+- **The job address offers this client's previous jobs first.** Their past job
+  addresses are listed newest-first, one tap each and no billed lookup; for a
+  building client the rows collapse to unit numbers under the one street.
+  Searching for a new address is still there, as the fallback rather than the
+  first thing offered.
+- **The tour covers the new client picker and job address**, and the clients
+  sort it had not caught up with.
+
+### Changed
+- **Search results are ordered by how well they match**, not alphabetically, so
+  the closest number is the first row rather than wherever the alphabet put it.
+- **A number typed into a client's Name field moves to the phone field.** It
+  already did for a clean ten digits; it now also handles a seven-digit local
+  number and the eleven-digit shape with a country code — the ways a client
+  arrives from Wave named by their own number, with nothing to dial.
+- **Attaching a client no longer reads that client's whole job history.**
+  Booking read up to a thousand past jobs to render two lines, and re-read them
+  on every background photo upload while the form was open.
+
+### Fixed
+- **Picking a previous job address now visibly does something.** The tap set
+  the address but left the same list on screen, so it read as having done
+  nothing — and tapping a second one to check silently saved that one instead.
+- **"Exact match" is no longer shown above a list of partial matches.** Typing
+  three letters of a name returned twelve results under a header claiming an
+  exact match, which on the booking path invites attaching the wrong client.
+- **A failed client search says so, and offers to retry**, instead of rendering
+  as "no clients found" — which reads as "new customer" and is how a duplicate
+  gets created for a client already on file.
+- **Picking a client from the recents list now fills in their address**, the
+  same as picking them from search did.
+- **"Last visit" no longer names a booking that hasn't happened yet.**
+- **A client imported from Wave whose name is their phone number is dialable
+  again.** Seven-digit and eleven-digit numbers were lifted in the app but not
+  on import, so those clients arrived with an empty phone field.
+- **Searching a client's numbers no longer matches a number nobody has.** Two
+  numbers on one client were being checked as if joined end to end, so a query
+  straddling the join appeared to match.
+- **Saving an appointment can no longer leave the Save button stuck.**
+
+## [1.57.0+86] - 2026-09-04
+
+Search stops being a guess. Finding a client or a past job no longer depends on
+how much of the business fits in the app's memory — the search runs against the
+whole database, so the answer is the same on the thousandth client as it was on
+the fiftieth. Alongside that, marking a job complete by mistake is undoable,
+and sharing your location with the staff map is now something you turn on
+rather than something that happens.
+
+### Added
+- **Location sharing is a choice, with its own screen.** A new "Staff map
+  location" control says plainly what is uploaded and what it is for, shows
+  when your position was last sent, and offers a single action that stops
+  sharing and erases the position already stored. Until now the phone started
+  reporting its location as soon as you signed in, with nothing in Settings
+  that said so and no way to stop it short of revoking the OS permission.
+- **Undo on "mark complete".** Closing a job by accident used to mean an admin
+  reopening it. The confirmation now carries an Undo for as long as it is on
+  screen, and it puts the job back exactly where it was.
+- **Sorting on the clients list.** Alongside the alphabetical order it has
+  always had, the list can now show the busiest clients first or the most
+  recently added.
+- **The app tour covers the new features.** The walkthrough now points out the
+  week view and the crew filter on the calendar, the location-sharing control
+  in Settings, and — on the job itself — Start, the notes and photos the crew
+  writes, the Undo on a job closed by mistake, Push back and Book again.
+  Anyone who has already been through the tour sees only what is new to them,
+  in place, rather than sitting through the whole thing again.
+
+### Changed
+- **The clients screen leads with search, and its filters moved into one
+  sheet.** The row of five controls that used to sit above the list scrolled
+  sideways, so on a small phone or at large text something was always
+  off-screen when you arrived. There is now a single Filter button that cannot
+  scroll away, and whatever it is set to shows as one chip beside it. The
+  search box also says what it actually searches — name, phone, address and
+  email, not just name or phone. Rows are calmer too: a client's type and the
+  "Building" marker have moved to the filter sheet and the client's own page,
+  leaving the name, where the job is, and how many jobs they have had.
+- **Opening the Clients tab is much cheaper.** It used to read the whole client
+  roster on arrival, purely to work out which addresses were shared. That read
+  now happens only if you open the filter sheet.
+- **Client and job-history search now runs against the whole database.** Both
+  searches previously scanned a capped window of records held on the phone —
+  the first 5,000 clients by name, the most recent 5,000 settled jobs — and
+  anything past that point was invisible to search, to the type filters and to
+  the Archived chip at once, with nothing to say so. Growing past the cap is
+  the kind of failure nobody reports, because the app looks like it is working.
+- **Checking who is free is done server-side too**, so a booking conflict is
+  found against every job on the calendar rather than the first thousand in the
+  window.
+- **Notifications are now turned on deliberately, from Settings.** The app no
+  longer springs the phone's permission prompt during sign-in or a background
+  sync, where it arrives with no explanation and is usually refused. The
+  trade-off is worth stating plainly: until someone taps the notification row
+  in Settings and allows it, that phone receives nothing — no job assignment,
+  no "time to leave", no daily digest.
+- **A photo waiting to upload belongs to the person who took it.** Queued
+  photos now carry their owner, are only sent while that person is signed in,
+  and are cleared with everything else when an account signs out — a shared or
+  handed-over phone can no longer finish somebody else's upload.
+- **Phone numbers are checked as you type and stored in one form.** A number
+  too short to dial is caught on the form instead of being saved, and saved
+  numbers keep a consistent shape rather than whatever punctuation was typed.
+  An extension is kept as an extension — `514-555-1234 poste 2` stays dialable
+  and reads the same way back, in either language.
+- **The additional-contacts list says where its limit is** instead of letting
+  you fill in a contact the server would refuse on save.
+
+### Fixed
+- **A bad link opens a screen you can leave.** Opening the app at a screen
+  whose details are missing or malformed used to red-screen; it now says the
+  link can't be opened and offers a way back.
+- **Employees no longer see swipe actions they are not allowed to use.**
+  Archive and Delete were offered on client rows to everyone, and the server
+  refused them.
+- **The address field's rate limit now holds across the whole backend**, not
+  just within one server instance, so a burst of typing is throttled the way
+  it was meant to be.
+- **Turning location sharing off says what actually happened.** The screen used
+  to report your stored position as erased whether or not the erase succeeded.
+- **A queued photo belongs to whoever took it.** Photos still waiting to upload
+  are no longer sent by the next person to sign in on that phone.
+
+## [1.56.0+85] - 2026-09-02
+
+The release the field crew gets something out of. Until now a technician could
+read a job and press one button; they can now say they are on the way, start
+the clock, write down what they found and photograph it, and search their own
+finished work. On the office side the calendar answers "what is Marc doing this
+week" for the first time, and a finished job can be re-booked in one tap. The
+app also opens in French on a French phone, which it never did.
+
+### Added
+- **The crew can record what they found.** An assignee on a job now gets their
+  own notes field and photo picker on the job itself — what they found, what
+  they did, anything worth quoting — separate from the brief the office wrote
+  when booking, so neither can overwrite the other. Previously the only thing a
+  technician could write to a job was "complete", and everything else travelled
+  by phone call.
+- **Start job, and a real time record.** Pressing Start stamps the arrival and
+  marking it complete stamps the finish, both recorded server-side rather than
+  taken on trust, so the job shows when it actually started, when it finished
+  and how long it took.
+- **A week view on the calendar.** The agenda toggles between one day and the
+  whole week, each day under its own pinned bar with its job count. Three other
+  screens could answer "what is this person doing this week"; the calendar
+  could not.
+- **Filter the calendar to one crew member.** A control in the calendar header
+  narrows the whole screen — agenda, counts and all — to one person, with a
+  banner naming them and a Clear button. It is deliberately not remembered
+  across restarts, so it can never quietly hide the schedule.
+- **"Book again" on a finished job.** Repeat callbacks are common, and they had
+  to be typed out again. The action opens the ordinary new-appointment sheet
+  already carrying the client, address, job title, brief, materials, crew and
+  expected length — and no date or time, because that is the part that is
+  actually new.
+- **Push a job back without opening the edit form.** A running-late job can be
+  moved by a fixed amount from the job itself.
+- **A technician can search their own job history.** The one search the field
+  crew had was none at all; their finished and cancelled jobs are now reachable
+  and searchable from the menu.
+- **Photos waiting to upload are visible.** Photographing a job underground no
+  longer looks identical to a completed upload — the job says how many photos
+  are still queued, and a form you open while offline says so before you fill
+  it in rather than after you press Save.
+
+### Changed
+- **The app opens in the language of the phone.** A French handset gets French
+  on first launch, including push notifications, the Lock Screen card and the
+  home-screen widget. Before this, everyone started in English until they found
+  the Settings toggle. An explicit choice still wins and is never re-derived.
+- **iOS permission prompts are translated.** The camera, photo library and
+  location prompts asked in English on a bilingual product.
+- **Bold Text and Increase Contrast are honoured.** Both iOS settings were
+  claimed on the public accessibility page and did nothing; text now takes the
+  extra weight and secondary text and hairlines lift with the contrast setting.
+- **Settings switch rows are tappable across the whole row**, not only on the
+  switch, and the button that removes a photo is a full-size target instead of
+  a two-thirds-size one.
+- **A failed load offers a Retry instead of a dead end.** My Details had four
+  places where a transient error left the screen inert with no way out but
+  backing out and coming in again.
+- **The assignee picker says whether it is loading or has failed** rather than
+  rendering as though the business has no staff — which, since an assignee is
+  required to save, could block the only way to book a job.
+
+### Fixed
+- **The crew filter offered nobody.** Its list was built at the moment it was
+  tapped, before the staff list had loaded, so it showed "All crew" and no one
+  else — every time.
+- **Marking a job complete no longer re-reads the entire job archive.** Any
+  write from a History search re-fetched every settled job behind the sheet:
+  thousands of reads and four round trips for a one-field change, and it grew
+  with the archive.
+- **A working-days value the app could not read no longer locks someone out.**
+- **Swiping a client row to archive no longer removes it when the write
+  failed.**
+- **A client whose contacts are stored in an unexpected shape no longer breaks
+  the client stream or the search.**
+- **A very long field can no longer slip past the size limit** on the server —
+  the cap counted characters where it should have counted bytes, so accented
+  and emoji text could be three to four times over it.
+- **The key column of a job's details no longer overflows in French**, where
+  "TÉLÉPHONE" wraps and "PHONE" never did.
+
+## [1.55.0+84] - 2026-09-01
+
+Two things that were quietly wrong are now right: on the four or five months a
+year that need six weeks, the calendar was clipping the last one off the
+bottom, and every travel-aware "time to leave" reminder had silently fallen
+back to a flat 30 minutes since August 29. Alongside those, the Wave sync stops
+finding out at push time that Wave will refuse a client — it now checks first,
+and says which field to fix.
+
+### Added
+- **Wave tells you which client it cannot sync, and why.** A client whose data
+  Wave would refuse — a blank name, an address or name past Wave's length
+  limit, a malformed email — is now identified against Wave's own rules before
+  anything is sent, and the problem is recorded against the exact field you
+  would edit to fix it. Previously the refusal only surfaced after the fact, as
+  a failed sync that "Retry failed" could never clear, because every retry
+  re-sent the identical rejected data.
+- **A phone number nobody can dial is reported without blocking the sync.**
+  Wave accepts some values that are still wrong — a contact's name typed into
+  the phone box, for instance. That client keeps syncing, and the problem is
+  recorded rather than silently accepted or wrongly blocked.
+- **The Address filter has an "All addresses" row.** Clearing a picked street
+  no longer means hunting for the chip — the menu that set the filter can now
+  clear it.
+
+### Fixed
+- **A six-week month no longer loses its last week.** The month grid was
+  capped at half the screen no matter how tall the month was, so the final row
+  was quietly cut off on the months that need six — with nothing to indicate
+  anything was missing. The grid now takes the height its month actually needs.
+- **"Time to leave" reminders account for travel again.** Since August 29 every
+  one of them had degraded to a flat 30 minutes before the job, ignoring drive
+  time entirely, because a database index they depend on had been removed. The
+  reminder still arrived, which is why nobody noticed it had stopped being
+  accurate.
+- **A crew change now notifies everyone assigned, not just the first person.**
+  If the notification to one assignee failed, everybody after them on the job
+  was silently skipped and never told at all.
+- **Editing "this and all following" on a multi-day job targets the right
+  days.** After moving the first day of a run, the action could update nothing
+  while still reporting success — or, from a later day, sweep the moved day
+  back in and overwrite its time. The confirmation count now matches what is
+  actually written.
+- **A business named only by its own phone number syncs again.** Such a client
+  was reduced to a blank name, which Wave rejects outright, so it failed on
+  every attempt permanently.
+- **The live staff map stops re-requesting addresses it just failed to get.**
+  Scrolling the roster re-asked for every address that had failed, immediately
+  and repeatedly, until the hourly lookup limit was exhausted and the whole map
+  stopped resolving addresses. A failed lookup now waits before retrying.
+- **Addresses on the live map resolve instead of hanging.** A slow lookup ran
+  with no time limit on the server while the app had already given up on it.
+- **The clients list, the sign-in prefill and the Wave "Sync" button no longer
+  fail invisibly.** Three separate errors were escaping as app-level crash
+  reports instead of being handled — including one where tapping Sync could
+  appear to do nothing at all.
+- **Opening a job's photos can no longer take the app down** if the images
+  fail to load.
+- **The Address filter menu reads as a menu.** It painted the same colour as
+  the page behind it with no border, so it looked like part of the list rather
+  than a panel over it. It also moved to the front of the filter row, its
+  label is capped so a long street stops pushing the other filters off screen,
+  and each row now shows the city and the number of clients sharing that
+  address in its own column.
+
+## [1.54.0+83] - 2026-08-29
+
+The calendar now marks the days the province takes off. Québec's statutory
+holidays, the Greek Orthodox Easter days and the two-week construction
+shutdown all show up on the month grid, the week strip and the date picker you
+book from — so a job lands on Saint-Jean because someone chose it, not because
+nobody noticed.
+
+### Added
+- **Holidays are marked on the calendar.** A coloured rule under the day number
+  flags Québec's thirteen statutory holidays, the Greek Orthodox Good Friday /
+  Easter / Easter Monday, and the fourteen days of the CCQ construction
+  shutdown. Teal is a statutory holiday, purple a Greek Orthodox one and ochre
+  the construction fortnight; tapping the day names it in the agenda below,
+  with a tag saying whether it is a holiday or an observance. **Nothing is
+  blocked** — an emergency call on Christmas Day books exactly as it does
+  today, the calendar just stops being silent about what day it is.
+- **The date picker on the booking form is marked too,** which is the one that
+  can actually stop a mistake: the holiday is visible while the date is being
+  chosen, not discovered afterwards — and it keeps its colour once the day is
+  picked, so it still tells you which kind of day you just chose.
+- **A holiday with nothing booked still says so.** The row appears above an
+  empty day, which is the day it has most to tell you about.
+- **The dates need no upkeep, ever.** Every holiday is worked out from its own
+  rule, including the ones that move — both Easters, the Monday before May 25,
+  Canada Day shifting when July 1 is a Sunday, and the shutdown's fortnight. It
+  is right in 2031 and 2044 with no update and nothing to maintain.
+
+## [1.53.0+82] - 2026-08-28
+
+A job that runs over several days is now booked as one visit per day, so the
+crew can finish Tuesday without closing Wednesday and Thursday with it.
+Alongside it, client addresses stop repeating themselves, and clients who share
+a building can finally be seen as a group.
+
+### Added
+- **A multi-day job is now one visit per day.** Booking Monday to Friday
+  creates five visits, one per day, still shown as a single job on the calendar
+  and still reading "Day 3 of 5". Each day carries its own status and its own
+  photos, so marking Monday complete no longer marks the whole week complete —
+  which was the only way it could work before, and meant the office lost sight
+  of what had actually been done. Editing, cancelling or deleting one day asks
+  whether you mean that day or the rest of the run, the same question repeating
+  visits already ask. Booked time off is unchanged and stays a single block.
+- **A crew that finishes early can call off the rest of the run.** Cancelling
+  one day of a multi-day job offers to cancel the following days too, in one
+  action, and the crew gets a single notification rather than one per day.
+- **Clients who share a building can be filtered as a group.** The clients list
+  gains an Address menu listing every street address more than one client sits
+  at, busiest first, and each row shows how many units are at that address.
+  Eighteen customers in one condo tower were previously scattered through the
+  whole roster with no way to see them together. The menu stays hidden when no
+  address is shared.
+- **"Building" is now a client type,** replacing "Property mgmt" on the filter
+  chips and the client form.
+
+### Changed
+- **A client's address is stored once, not twice.** The address box held the
+  whole address while the city, province, postal code and country sat in their
+  own boxes underneath repeating it — so editing the city in one place left the
+  two copies disagreeing. The address box now holds the street line alone, and
+  every screen that needs the whole address composes it. Existing clients are
+  unaffected and read correctly either way.
+- **Photos taken on a later day of a job stay with that day.** They previously
+  all landed in one pile on the job as a whole.
+- **A multi-day job can no longer be given a repeat rule,** and the length of a
+  run is fixed once booked — shorten it by cancelling the tail, extend it by
+  booking another job. A weekly three-day job would have made "this and the
+  following" mean two different things at once.
+
+### Fixed
+- **An exported contact card no longer repeats the city and postal code.**
+  A client saved in the app exported as "1234 Rue Principale, Montréal, QC H2X
+  1Y4, Canada, Montréal, QC, H2X 1Y4, Canada."
+- **Opening a job no longer forgets which client's address it uses.** Every
+  appointment opened in "custom address" mode and never offered the client's
+  own address back, because the stored address and the client's address were
+  being compared in two different forms.
+- **A map that fails to open now leaves a record.** It showed the error but
+  logged nothing, so a phone with no map app installed was invisible to
+  support.
+- **Booking a multi-day job no longer calls its days "future visits".** A
+  Monday-to-Friday job announced "4 future visits booked", borrowing the
+  wording for a repeating appointment — it is one job over five days. It now
+  reads "Job booked — 5 days".
+- **A job with a damaged day-of-run marker can be repaired instead of getting
+  stuck.** Such a job could only have been produced by editing the database
+  directly, but once it existed every save was refused with no way back.
+- **A multi-day job counts as one job, not one per day.** A client booked for
+  Monday to Friday had their job count read five, and their job history listed
+  the same visit five times over.
+- **Correcting a client's address now reaches their booked jobs when the
+  address has a unit number.** The apartment was written one way on the client
+  and another on the job, so the two never matched and the correction reached
+  nothing — silently, for exactly the clients most likely to have one.
+- **Editing a job can no longer stretch it across several days.** Doing so
+  produced a job that looked like a multi-day run but closed every day at once
+  the moment one was marked complete. Multi-day work is booked as such from the
+  start; time off is unaffected.
+- **"Cancel this and the following days" now follows the run, not the
+  calendar.** If a day of a run had been moved to a later date, cancelling from
+  it could quietly cancel nothing, or take days it should not have.
+
+## [1.52.0+81] - 2026-08-25
+
+A day off now tells you what it is for. If someone typed a reason when they
+booked it, that reason is what you read on the calendar and on the block
+itself, instead of a row of identical "is off" lines you have to open one by
+one. Alongside it, a round of fixes to booking time off — saving a day off
+could leave the Save button doing nothing, and a day off could send the person
+a "time to leave" reminder for it.
+
+### Added
+- **A day off says what it is for.** The reason typed on the block is now the
+  line you read on the calendar, with the person's name in smaller text
+  underneath — "Vacation", over "Marc is off". A block with nothing typed reads
+  "Marc is off" exactly as it did before. Opening the block shows the same
+  thing: the reason first, the person under it. Until now the reason was
+  stored but shown nowhere, so a week off and a day at the dentist looked
+  identical.
+
+### Changed
+- **A day off is easier to pick out of a day.** The strip now has a visible
+  edge — it was previously the same colour as the page behind it, so two days
+  off in a row ran together — and carries the person's colour down its left
+  side as a dashed line, so you can tell whose absence is whose before reading
+  a word.
+- **Job photos are no longer storable by shared caches.** They were marked
+  publicly cacheable, which allowed a shared cache between the app and Firebase
+  to keep a copy of a photo for up to a year. Photos are unaffected on your own
+  device, where they are still kept for offline viewing.
+
+### Fixed
+- **A cancelled job is no longer counted as a job, or called done.** A day
+  holding one called-off visit read "1 JOB · 1 DONE" in the agenda header. It
+  now reads "0 JOBS" — the visit is not happening, so it is neither work on the
+  day nor work behind you — which is also what the dots on the month grid have
+  said all along. The cancelled card still appears in the list, and the "Done"
+  divider above the finished jobs no longer counts cancellations either.
+- **Saving a day off no longer gets stuck.** Turning on "Day off" after picking
+  a start and end time left Save doing nothing at all, with no message
+  explaining why — the form had hidden the very time fields it was still
+  waiting on. A day off is now set to all day when you mark it, which is what
+  the form was already showing you.
+- **A day off no longer sends a "time to leave" reminder.** A day off that had
+  been saved with times on it counted as a job to drive to, so the person got a
+  travel reminder on their day off.
+- **Closing the time-off clash list while a swap is saving no longer crashes
+  the app.**
+- **Undo on the time-off clash list puts the right person back.** After two
+  swaps on the same job, Undo restored the job as it was before the *first*
+  swap, silently undoing the second one as well.
+- **A day off no longer keeps an address you cleared.** The address field is
+  hidden once a block is marked a day off, but a value typed before that was
+  still saved.
+- **Initials are right for every name.** An avatar for a name beginning with an
+  emoji, an accented letter or a non-Latin script showed a broken square
+  instead of the character.
+- **Searching a long client list is faster.**
+
+## [1.51.0+80] - 2026-08-24
+
+Booking someone who isn't there is now hard to do by accident. The people
+picker greys out anyone who can't take the job on the day you've chosen and
+says why underneath, and booking time off over jobs somebody already has now
+tells you which jobs those are and offers to hand each one to a colleague.
+
+### Added
+- **The people picker shows who can't take the job.** Once a date and time are
+  set, anyone who is off or already booked in that window is greyed out and
+  can't be picked, with a line underneath saying why — "Marc is off" with the
+  dates he's away, or "Nadia is on another job" with the hours that job runs,
+  so you can see that moving the visit to the afternoon would free her. Past
+  two of them the rest fold behind "3 more aren't free", which opens on a tap.
+  Nobody free at all? The lines give way to a single note suggesting another
+  time, or booking the job now and assigning someone later.
+- **Somebody already on the job is never greyed out.** If you put Marc on a
+  visit and he later books that day off, his chip stays selected and tappable
+  and the line reads "Marc is off — still on this job". You keep the choice:
+  leave him on it, or take him off yourself.
+- **Booking time off over existing jobs now tells you what it ran into.** Save
+  a day off — or any personal block — for someone who already has jobs inside
+  it, and a list of those jobs appears. Each row offers "Swap", which shows
+  only the colleagues actually free during that job's hours; picking one hands
+  the job over immediately, and "Undo" on the row puts it straight back. A job
+  nobody else can cover says so and offers to open it. The time off is saved
+  either way — closing the list changes nothing, and the jobs simply stay as
+  they were.
+
+### Changed
+- **Saving a day off no longer asks you to confirm a double booking first.**
+  It used to warn "Marc is already booked" and make you push past it, then say
+  nothing about which jobs were affected. That prompt is gone for personal
+  blocks — the new list replaces it, and it names the jobs and offers a fix
+  instead of just naming the person. Ordinary client jobs still warn exactly as
+  before.
+
+## [1.50.0+79] - 2026-08-24
+
+Time you book off is no longer counted as work. A personal block can now be
+marked as a day off, which keeps it off every job tally in the app while still
+showing on the day it covers. Alongside that, dispatchers stopped being offered
+as people you can send to a job, and adding a client from the booking screen no
+longer loses their phone number.
+
+### Added
+- **A personal block can be marked "Day off".** Turn on "Personal job" and a
+  Day off chip appears beside it. A block marked that way stops being counted
+  as a job everywhere the app counts them — the dots on the month grid, the
+  day's job count above the schedule, the badge in the menu, each person's
+  "jobs today" on the team list, and every number on the dashboard, including
+  how full a day looks. Booking one still makes that person show as busy if you
+  try to put them on a job at the same time — that was always the point of
+  blocking the time.
+- **A day off looks like time off, not like a job.** It appears on the day as a
+  quiet strip reading "Marc Tremblay is off" rather than as a job card, and it
+  names the person instead of whatever the block was called. Opening it shows
+  who is away, which days, and your note — nothing else. The form drops
+  everything a day off has no use for: no address, no materials or photos, no
+  start and end times, and no status.
+- **A day off finishes by itself at the end of the last day.** There is no
+  "Mark as complete" to remember and no "Cancel" — once the day is over the
+  strip reads "Marc Tremblay was off" and shows as complete on its own. If you
+  booked one by mistake, delete it.
+
+### Changed
+- **Dispatchers are no longer offered when you assign someone to a job.** They
+  schedule the work rather than go out on it, so they were only ever there to
+  be scrolled past. They have also left the dashboard's per-person numbers,
+  where each one sat at a permanent zero on the workload list and quietly added
+  their daily job limit to how much capacity the day appeared to have — so the
+  load-against-capacity chart was reading low. Anyone already assigned to a job
+  keeps their place on it and can still be taken off by hand.
+
+### Fixed
+- **Adding a client while booking a job now keeps their phone number.** Clients
+  are searched for by number, and adding one straight from that search carried
+  the number into the name and left the phone field empty — so nothing could
+  dial them afterwards: not the Call button, not the job they were booked for,
+  not the copy sent to Wave. The number now moves into the phone field on that
+  path too, and a number written with brackets no longer leaves a stray
+  bracket behind in the name.
+
+## [1.49.0+78] - 2026-08-22
+
+Job photos have finished moving into a store of their own. You will not see
+the move, but two things follow from it that you will: a photo you have just
+added shows up straight away, and nothing hands out a permanent link to a
+photo any more. Alongside that, creating an employee account — which had been
+failing every time since the last release — works again.
+
+### Changed
+- **Job photos no longer travel with the job.** A visit used to carry its
+  photos on the record itself, so every screen that loaded a range of
+  visits — the calendar, the dashboard, history — carried them too, whether
+  or not anything was going to show them. Photos are now fetched only by the
+  job you actually open.
+- **The app no longer creates a shareable link for a photo.** Each photo used
+  to be given a permanent web address that worked for anyone who had it,
+  signed in or not, and kept working after the person holding it left the
+  company. Nothing creates or stores one now, and photos are fetched with your
+  own account and re-checked every single time, so access ends when your
+  access does. Links already recorded against older jobs go when those old
+  records are cleared.
+- **Deleting a job now clears its photos properly.** The clean-up moved to the
+  server, so it finishes even if you close the app straight after deleting —
+  photos used to be left behind, taking up space, if it did not.
+- **Signing out empties the search data the app was holding.** The client and
+  job lists kept in memory to make search instant used to stay there until the
+  app was fully closed, which on a shared phone meant they outlived the
+  session that loaded them.
+
+### Fixed
+- **A photo you had just added could vanish when you reopened the job.** The
+  job's photo counter is updated by a background task a couple of seconds
+  later, and the sheet was skipping the photos entirely whenever that counter
+  still said none — so a photo added seconds earlier read as no photos at all.
+  If that counter update ever failed, the photos stayed hidden for good.
+- **Creating an employee account failed every time.** Since the last release
+  the generated starting password no longer contained a symbol, while the
+  sign-in rules still demanded one, so account creation was refused outright —
+  four attempts failed in a row before it was caught. Generated passwords
+  carry a symbol again.
+- **Setup now says what is wrong when it cannot run.** If the app is newer
+  than the service behind it, finishing setup used to fail with "Something
+  went wrong" — on a screen where the password had already changed, so
+  retrying could not work either. It now says setup is not available yet and
+  to try again shortly or ask an administrator.
+
+## [1.48.0+77] - 2026-08-21
+
+Setting up a new account is shorter and safer at the same time. The
+email-verification step is gone, and what replaces it is a real one: every
+account an admin creates now gets its own randomly generated starting
+password instead of the one everybody shared.
+
+### Changed
+- **Every new account gets its own starting password.** Accounts used to be
+  created on a single password that was the same for everyone and never
+  changed, so knowing somebody's email address was very nearly enough to sign
+  in as them before they had set up. Each account is now given a fresh random
+  password, shown to the admin once when the account is created so they can
+  pass it on. Hand it over at the moment you create the account, not weeks
+  ahead.
+- **Setting up your account no longer asks you to verify your email.** You
+  used to have to leave the app, find a message, open a link and come back
+  before you could finish. Now you sign in with the password you were given,
+  choose your own, and you are in — the password you were handed is what
+  proves it is you.
+- **You cannot finish setup by re-entering the password you were given.**
+  Choosing it again would have left your account live on a password your
+  admin still has, which is the one thing setting up is meant to end. The
+  form now says so and asks for a different one.
+- **A password no longer has to contain a symbol.** Eight characters with an
+  upper-case letter, a lower-case letter and a number is enough. The strength
+  meter now rewards a longer password instead.
+- **New people are always created as employees.** The admin switch moved off
+  the create form: you make somebody an admin by creating them normally and
+  then turning that on in their profile once they have finished setting up.
+  It means an account nobody has claimed yet can never be an admin one.
+- **A pending person's starting password is only shown while the app still
+  has it.** Because the password is now generated per account and stored
+  nowhere, reopening that row later shows the address with the password
+  hidden, and the Copy button copies just the address. **Reset password**
+  issues a new one and shows it.
+
+## [1.47.0+76] - 2026-08-19
+
+A full audit pass sits behind this release. Two things you will notice straight
+away: job photos now open with no signal, and **Mark as complete** is always
+there when a job is still open. Behind them is a round of fixes to things that
+went wrong quietly — a pin left behind on the live map after signing out, a
+photo that never arrived, an app lock that switched itself off.
+
+### Added
+- **Job photos now open offline.** A photo you have opened once is kept on the
+  phone, so it opens again in a basement, a tunnel, or anywhere with no signal
+  — instantly, with no spinner and no "couldn't load". Signing out clears them
+  off the device.
+
+### Changed
+- **"Mark as complete" is always offered on an open job.** It used to appear
+  only once the start time had passed, so a crew that finished early, or was on
+  day two of a multi-day job, had no way to close a job the app kept nudging
+  them about — and only an admin can change a status from the edit form. The
+  only things that hide the button now are a job already done or cancelled.
+- **A cancelled visit no longer marks its day on the calendar.** The dots
+  answer "how busy is this day", and a called-off visit is work that is not
+  happening, so a day holding only a cancellation now reads as free. Finished
+  jobs still show a dot — that work happened.
+- **Client search, history search and a client's job history no longer stop at
+  the first page.** Each now reads through to its limit instead of showing
+  whatever the first batch happened to contain. On a long client list that
+  quietly hid everyone past the first page from search and from the filter
+  chips at the same time, with no error anywhere.
+- **Importing from Wave puts the customer's number where you can dial it.**
+  Wave keeps a number in two places, and this business also names people by
+  their phone number — so an imported customer routinely arrived with the
+  number sitting somewhere the Call button couldn't see. It is now resolved
+  into the one phone field and formatted the way the app formats it.
+
+### Fixed
+- **Your last known location could stay on the live staff map after you signed
+  out.** If location sharing hadn't started that session — you had turned the
+  permission off, for example — signing out cleared nothing, and the pin from a
+  previous launch stayed on the admin's map looking exactly like a live one.
+- **A signed-out phone could keep receiving that account's job notifications.**
+  Sign-out and account deletion now finish tearing down the device's
+  registrations instead of racing a refresh that could re-register it.
+- **The app lock could switch itself off, permanently.** A momentary hiccup
+  reading Face ID on resume was being written down as "biometrics unavailable"
+  and saved over the setting you had chosen, with nothing to tell you.
+- **Photos attached to a job could silently never arrive.** If the upload queue
+  failed at the wrong moment the photos were dropped from the queue while their
+  files stayed on the phone, so nothing could ever retry them and nothing said
+  so.
+- **Deleting your account could leave the button spinning with no error.** If
+  the screen was closed while the deletion was in flight, the real failure was
+  replaced by a crash you never saw.
+- **Tapping a notification while the app was still starting could do nothing.**
+  The tap was discarded silently if the app took too long to come up.
+- **French: two labels lost their accent** — job counts on the calendar and in
+  history read "TACHE" instead of "TÂCHE".
+- **Small typography fixes:** the separator in the drawer's role line, the dash
+  in an employee's working hours, and the placeholder shown for a person with
+  no name had all been flattened to a plain hyphen.
+
+## [1.46.2+75] - 2026-08-16
+
+Two clients had been unable to reach Wave for days, and the evening "tomorrow's
+jobs" notification had a way of going quiet for everyone at once. Both are
+fixed here, along with a photo-sharing hole that outlived switching an account
+off.
+
+### Fixed
+- **A client could get permanently stuck as "failed to sync" with Wave.** If
+  the customer had been deleted on the Wave side, every push — and every press
+  of **Retry failed** — sent it to the same missing record and failed the same
+  way, so the count never came down and there was nothing you could do about
+  it. The client is now reconnected to its Wave customer, or a new one is
+  created, instead. Two real clients were in this state and are recovered.
+- **One typo in an address could stop a client syncing, for good.** Putting a
+  province in the country box, or having a client outside Canada, sent Wave a
+  code it doesn't recognise and killed the whole update — not just that one
+  line. Retrying could never help, because it resent the same thing. Unknown
+  country or province values are now left off instead, and the rest of the
+  client still syncs.
+- **"Retry failed" could report success while nothing had actually gone
+  through.** It told you what it had queued up again, not what Wave accepted —
+  so it read as good news over a row still saying clients had failed. It now
+  reports what landed and what didn't, and what didn't is shown as an error.
+- **The 6 p.m. "tomorrow's jobs" notification could stop reaching everyone.**
+  Once enough finished-but-never-closed jobs built up, the evening summary
+  filled up with old work and found nothing about tomorrow, so nobody's crew
+  got one — with nothing to indicate it had happened.
+- **Job photos could still be opened by someone whose account had been
+  switched off.** Showing a photo used to create a permanent web link for it,
+  and those links kept working for anyone whose phone had already received
+  them. Disabling someone now invalidates the links on every job they were
+  assigned to. Two honest limits: this covers their most recent 500 jobs, and
+  it cannot reach a link that was saved somewhere outside the app.
+- **Photos stayed in the phone's memory after signing out** — worth knowing on
+  a shared device. Signing out now clears them.
+- **A failed address lookup could copy the address being typed into the
+  server's logs.** Only the error code is recorded now.
+
+### Changed
+- **A long job history scrolls and searches more smoothly.** The screen was
+  re-counting and re-grouping the whole loaded history on every keystroke and
+  every redraw, which got heavier the further you scrolled.
+
+## [1.46.1+74] - 2026-08-15
+
+A correctness and privacy pass over the whole codebase. The headline is that a
+client's typed name could be silently replaced by their phone number when you
+saved them.
+
+### Changed
+- **Job photos are checked against your account every time they're shown.**
+  Displaying a photo used to mint a permanent web link for it. That link never
+  expired and needed no sign-in, so a photo someone saw while they worked here
+  kept opening for them long after their account was switched off. Photos now
+  load through your account on every view, and no shareable link is created at
+  all. The cost, and it's a real one: **photos no longer work offline**, and
+  they download once per session instead of being kept on the phone. This does
+  not reach back — a link somebody already saved under an older version of the
+  app still works.
+
+### Fixed
+- **Saving a client could replace their name with their phone number.** The
+  Name field is required while First and Last are optional, so filling in just
+  the name — the ordinary way to add someone — left the number as the only
+  thing stored. The client then showed as a bare number on every card, in
+  search and on their own page, and re-typing the name just did it again. The
+  typed name is now kept. Clients this already happened to are recovered
+  separately, from the names their past visits still carry.
+- **Photos could vanish from a job.** A job whose photos had been moved to the
+  new storage showed only the moved ones and dropped the rest.
+- **A cancelled job could be marked complete.** An assignee could put a
+  cancelled visit back into the schedule as a finished one.
+- **Some saves failed with "something went wrong" and no way to fix it.**
+  Saving an appointment for a client with a long name, or a client with a long
+  street address plus an apartment number, was rejected outright.
+- **One bad record could blank a whole screen.** A client, employee or staff
+  location edited outside the app — in the Firebase console — could stop the
+  list it belonged to from loading at all, and for an employee record it could
+  stop that person signing in.
+- **Reporting a failure could itself crash the app.** The same fault behind the
+  address-lookup crash fixed last release was present in twelve other places,
+  each one turning a handled error into a crash if the screen had already
+  closed.
+- **The photo-upload warning's "Open" button could do nothing** when the job it
+  pointed at had since been deleted.
+
+## [1.46.0+73] - 2026-08-14
+
+Changes how clients are named — in the app and on your Wave invoices — replaces
+the date wheel on the appointment form with a real calendar, and makes edits
+reach Wave in seconds instead of minutes.
+
+### Added
+- **Picking a date now drops a whole month down under the row.** The
+  appointment form had a spinning wheel in a pop-up that showed three days at a
+  time and covered the form behind it. Tapping a date row now opens the month
+  right where the row is, so you can see which day of the week the 12th falls
+  on before you commit. The start and end dates each get their own row, and
+  picking a day doesn't slam the calendar shut — changing your mind costs one
+  more tap, not a reopen. Days you can't book are greyed out and won't take a
+  tap, and the other end of the run is tinted so you can see the whole job at
+  once.
+- **The new-clients card on the dashboard shows the trend, not just the
+  number.** A small bar per week with "this week" marked at the end, and one
+  line telling you whether that's more or fewer than the weeks before it.
+  It names how many more clients came in than the card lists, so five rows
+  never reads as five clients.
+- **Settings › Wave tells you what's still waiting.** It shows how many client
+  edits are queued to reach Wave and how many gave up, and a **Retry failed**
+  button puts the failed ones back in the queue and pushes them straight away —
+  so after a Wave outage you can clear the backlog yourself instead of waiting
+  for the overnight sync.
+
+### Changed
+- **A person is now named by their phone number in Wave, and a business keeps
+  its name.** The invoicing side identifies people by number, so that is what
+  shows on the customer list and on an invoice; the real name is still on the
+  client and is what the app shows you everywhere. A company — "Vogas
+  Plumbing", "1505 Village de Bergerac" — keeps its own name, because a number
+  in its place is unrecognisable on an invoice. In the app nothing reads as a
+  bare number: a person shows their first and last name, a business shows the
+  business.
+- **Phone numbers all read the same way now.** Numbers that came in from Wave
+  or from older records were stored as bare digits, so the customer list mixed
+  "(514) 234-0818" with "4506220931". They're all formatted now.
+- **Typing a phone number into the client's Name field moves it to the phone
+  field.** Only when the phone field is still empty, and it leaves the name
+  alone if the number is all that was typed.
+- **A client edit reaches Wave in seconds.** It used to wait for a sync that
+  ran every five minutes. Saving a client now pushes it immediately.
+- **Today reads as a ring around the date instead of a blue number.** The blue
+  was also the colour of the date you'd picked, so "today" and "your choice"
+  looked the same. This applies to the month grid, the week strip and the new
+  date picker alike.
+
+### Fixed
+- **Editing a client could rename that customer in Wave.** Opening the edit
+  sheet for a business filled the Name field with the contact person's name, so
+  saving anything at all — even a phone number correction — replaced the
+  company's name on its live invoices. The field now shows the name that is
+  actually stored.
+- **Some clients whose name was replaced with their number were companies.**
+  House of Jazz, La Scala, Yokohama and nine others had been renamed on real
+  invoices; their names are restored and they're marked as businesses so it
+  can't happen again.
+- **The dashboard and the client detail showed a client's phone number as part
+  of their name.**
+- **The day route could keep showing yesterday.** It read the clock once
+  instead of following the current day, so an app left open overnight stayed on
+  the previous day's stops.
+- **A failed address lookup could crash the app** if the sheet it belonged to
+  had already been closed.
+- **Signing out could leave this device still registered.** If the first
+  clean-up step failed, the two after it were skipped — including the ones that
+  stop your location showing on the admin map.
+- **A photo that the app accepted could be deleted by the server.** The two
+  checks on what makes a valid image file disagreed by one byte.
+
+## [1.45.0+72] - 2026-08-11
+
+Gives everyone a place to edit their own details, rebuilds the dashboard and
+History screens, and finishes the job multi-day appointments started — a job
+that runs Monday to Friday now shows up on all five days everywhere, not just
+the day it began.
+
+### Added
+- **You can now change your own details.** Settings › My details used to hold
+  an emergency contact and nothing else. It now covers your phone number, your
+  emergency contact, and your whole availability — which days you work, your
+  hours, and whether you're on call. Availability applies the moment you tap it;
+  the phone and emergency fields wait behind a Save button, because a half-typed
+  phone number saving itself is worse than one extra tap. If you switch off a
+  day you already have work booked on, it says so and leaves the jobs alone for
+  a human to move.
+- **You can change the email you sign in with.** Same screen. It asks for your
+  password first and makes you type the new address twice — a typo there locks
+  you out until an admin undoes it. Your administrators are told when you change
+  it, and you're told when they change it for you.
+- **Time-to-leave alerts can be switched off per person.** Settings ›
+  Notifications. Off means you still get the ordinary half-hour reminder — you
+  just stop getting the traffic-aware "leave now" version.
+- **The dashboard covers Today, this Week, or this Month.** A period control at
+  the top switches the summary between them; booked, completed and cancelled
+  counts follow it. There's also a jobs-per-day chart for the week that marks
+  any day booked past the crew's capacity, and a new-clients section whose rows
+  open the client.
+- **The dashboard flags two more things worth knowing.** Accounts that were
+  created but never set up, and anyone booked on a day they're not available.
+- **Appointment cards show when a job has photos.** A small camera icon on the
+  card, and the day's header now reads "4 JOBS · 1 DONE" so you can see at a
+  glance how much of the day is behind you.
+
+### Changed
+- **History has been rebuilt.** Dates moved to a rail down the left, each month
+  gets a heading that sticks to the top while you scroll through it, and one
+  line tells you what you're looking at — "18 JOBS · 2 CANCELLED". Two quick
+  filters sit beside the year and staff pickers so you can jump to just the
+  completed or just the cancelled jobs. Searching switches to a flat list, since
+  results from all over the calendar don't group into months usefully.
+- **A personal job can have an address again.** A dentist appointment or a
+  supply run still happens somewhere, and the crew wants directions to it. The
+  address field stays on screen, marked optional. It no longer auto-fills from a
+  client you removed when you turned the job personal.
+- **A multi-day job now appears on every day it runs.** Previously it showed up
+  only on the day it started, which meant the home-screen widget went blank on
+  day two, Siri said "nothing today", and the assignment notification named only
+  the first morning. Each day now shows that day's hours plus a "Day 3 of 5"
+  counter, and a job spanning days reads as a date range in notifications.
+
+### Fixed
+- **The dashboard judged a running job by its first morning.** On day three of a
+  job that starts at 2pm, the counts included it while the list underneath said
+  "No visits today", and it sorted above jobs that were genuinely earlier.
+- **Live job cards were always orange, whoever the job belonged to.** Cards also
+  no longer appear for jobs spanning several days — a five-day countdown on your
+  Lock Screen is worse than no card at all.
+- **A job photo you're no longer entitled to see could still load.** It now
+  shows as an unavailable tile instead.
+- **The widget and Siri went blank on a temporary error.** A failed read was
+  being treated as "signed out", which wiped the schedule instead of leaving the
+  last one in place.
+
 ## [1.44.1+71] - 2026-08-08
 
 Restores work that was reverted in error before 1.44.0 went out, and which the

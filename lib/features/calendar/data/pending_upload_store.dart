@@ -11,19 +11,26 @@ class PendingUpload {
     required this.appointmentId,
     required this.paths,
     required this.enqueuedAtMs,
+    required this.ownerUid,
+    required this.ownerEmployeeId,
     this.uploaded = const [],
   });
 
   final String appointmentId;
   final List<String> paths;
   final int enqueuedAtMs;
+  /// Who staged this batch. Empty on a LEGACY entry — one written by a build
+  /// from before the queue carried an owner. Such an entry is never uploaded
+  /// (an empty id matches nobody, which is the point: on a shared or
+  /// handed-over phone the next account must not finish somebody else's
+  /// upload) but it is still PARSED, so `prune` reaches it and deletes its
+  /// staged files. Dropping it at parse time stranded those files forever.
+  final String ownerUid;
+  final String ownerEmployeeId;
 
-  /// Images already uploaded to Storage on a previous pass whose
-  /// appointment-doc link (the `arrayUnion` append) hasn't landed yet. They're
-  /// re-attempted append-only on the next drain — never re-uploaded, since
-  /// their local files are already gone. Preserving each image's exact
-  /// `uploadedAt` keeps the `arrayUnion` re-link idempotent if the earlier
-  /// append actually committed server-side.
+  bool get hasOwner => ownerUid.isNotEmpty && ownerEmployeeId.isNotEmpty;
+
+  /// Already-uploaded images waiting for an append-only retry.
   final List<AppointmentImage> uploaded;
 
   String get id => '${appointmentId}_$enqueuedAtMs';
@@ -32,6 +39,8 @@ class PendingUpload {
     'appointmentId': appointmentId,
     'paths': paths,
     'enqueuedAtMs': enqueuedAtMs,
+    'ownerUid': ownerUid,
+    'ownerEmployeeId': ownerEmployeeId,
     if (uploaded.isNotEmpty) 'uploaded': uploaded.map(_imageToJson).toList(),
   };
 
@@ -41,6 +50,8 @@ class PendingUpload {
     final appointmentId = (map['appointmentId'] ?? '').toString();
     final enqueuedAtMs = map['enqueuedAtMs'];
     final paths = map['paths'];
+    final ownerUid = (map['ownerUid'] ?? '').toString();
+    final ownerEmployeeId = (map['ownerEmployeeId'] ?? '').toString();
     if (appointmentId.isEmpty || enqueuedAtMs is! int || paths is! List) {
       return null;
     }
@@ -49,6 +60,8 @@ class PendingUpload {
       appointmentId: appointmentId,
       paths: paths.map((p) => p.toString()).toList(),
       enqueuedAtMs: enqueuedAtMs,
+      ownerUid: ownerUid,
+      ownerEmployeeId: ownerEmployeeId,
       uploaded: rawUploaded is List
           ? rawUploaded
                 .whereType<Map<Object?, Object?>>()
@@ -58,18 +71,15 @@ class PendingUpload {
     );
   }
 
-  // Reuse toMap() for the shared fields; only override uploadedAt, which
-  // toMap() leaves as a DateTime that jsonEncode can't handle. ISO-8601 round-
-  // trips through fromMap, so an uploaded image survives SharedPreferences.
+  // JSON-safe image shape for SharedPreferences.
   static Map<String, dynamic> _imageToJson(AppointmentImage image) => {
     ...image.toMap(),
+    if (image.storagePath.isNotEmpty) 'url': '',
     'uploadedAt': image.uploadedAt?.toIso8601String(),
   };
 }
 
-/// A durable queue of photo batches that failed to upload, or just haven't
-/// uploaded yet. It's stored as a JSON list under one SharedPreferences key,
-/// and if that data ever comes back corrupt, we just reset it to empty.
+/// Durable SharedPreferences queue for pending photo uploads.
 class PendingUploadStore {
   PendingUploadStore({AppLogger? logger}) : _logger = logger ?? AppLogger();
 
@@ -78,16 +88,12 @@ class PendingUploadStore {
 
   final AppLogger _logger;
 
-  /// Every mutation goes through [_serialized], because the whole queue
-  /// lives under one SharedPreferences key and reads/writes need to run
-  /// one at a time to stay consistent.
+  /// Serializes read-modify-write queue mutations.
   Future<void> _mutations = Future<void>.value();
 
   Future<T> _serialized<T>(Future<T> Function() action) {
     final result = _mutations.then((_) => action());
-    // We swallow the error only on the internal chain, so one failed
-    // mutation doesn't block every mutation after it. The caller still sees
-    // the real error through `result`.
+    // Keep the internal chain alive while returning the real result.
     _mutations = result.then((_) {}, onError: (_) {});
     return result;
   }
@@ -107,8 +113,7 @@ class PendingUploadStore {
           .whereType<PendingUpload>()
           .toList();
     } on FormatException catch (e, st) {
-      // Worth logging loudly here: resetting the queue silently drops photo
-      // batches that a technician thinks are still waiting to upload.
+      // Resetting the queue drops batches the user expects to upload.
       _logger.warn('IMG-UPLOAD pending queue decode failed; reset', e, st);
       return const [];
     }
@@ -132,16 +137,37 @@ class PendingUploadStore {
     await _save(entries.where((e) => e.id != id).toList());
   });
 
+  /// Replaces [id] atomically so failed requeues keep the old entry reachable.
+  Future<void> replace(String id, PendingUpload entry) => _serialized(() async {
+    final entries = await load();
+    await _save([
+      ...entries.where((e) => e.id != id && e.id != entry.id),
+      entry,
+    ]);
+  });
+
   /// Drops entries older than [_maxAge] and returns them so the caller can
   /// clean up their files.
   Future<List<PendingUpload>> prune({required DateTime now}) =>
       _serialized(() async {
         final entries = await load();
         final cutoff = now.subtract(_maxAge).millisecondsSinceEpoch;
-        final pruned = entries.where((e) => e.enqueuedAtMs < cutoff).toList();
+        final kept = <PendingUpload>[];
+        final pruned = <PendingUpload>[];
+        for (final entry in entries) {
+          (entry.enqueuedAtMs < cutoff ? pruned : kept).add(entry);
+        }
         if (pruned.isNotEmpty) {
-          await _save(entries.where((e) => e.enqueuedAtMs >= cutoff).toList());
+          await _save(kept);
         }
         return pruned;
       });
+
+  Future<List<PendingUpload>> clearAll() => _serialized(() async {
+    final entries = await load();
+    if (entries.isEmpty) return const [];
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key);
+    return entries;
+  });
 }

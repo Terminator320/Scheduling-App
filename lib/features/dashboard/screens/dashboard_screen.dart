@@ -12,8 +12,11 @@ import 'package:scheduling/features/dashboard/application/dashboard_providers.da
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/features/dashboard/widgets/sections/attention_flags_section.dart';
 import 'package:scheduling/features/dashboard/widgets/sections/business_trends_section.dart';
+import 'package:scheduling/features/dashboard/widgets/sections/daily_load_section.dart';
 import 'package:scheduling/features/dashboard/widgets/sections/dashboard_hero.dart';
 import 'package:scheduling/features/dashboard/widgets/sections/employee_workload_section.dart';
+import 'package:scheduling/features/dashboard/widgets/sections/new_clients_section.dart';
+import 'package:scheduling/features/dashboard/widgets/sections/period_summary_section.dart';
 import 'package:scheduling/features/dashboard/widgets/sections/upcoming_today_section.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
@@ -59,7 +62,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       previous,
       next,
     ) {
-      if (!next.hasError || (previous?.hasError ?? false)) return;
+      if (!isFirstAsyncError(previous, next)) return;
       ref
           .read(loggerProvider)
           .warn('DASH-LOAD dashboard failed', next.error, next.stackTrace);
@@ -78,8 +81,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       scope: _tour.scope,
       isAdmin: widget.isAdmin,
       stepKeys: _tour.keys,
-      // Gated on the data: an ungated start against the loading skeleton
-      // finds zero targets and permanently marks the screen seen.
+      // Gated on the data: an ungated start against the loading skeleton finds
+      // zero targets and permanently marks the screen seen.
       ready: stats is AsyncData<DashboardStats>,
       autoScroll: true,
       child: _buildScaffold(context, stats),
@@ -94,8 +97,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       appBar: AppTopBar(
         title: context.l10n.dashboard_title,
         compact: context.isLandscape,
-        // A pushed route now, so back means back. The Calendar pill covers
-        // go-home.
+        // A pushed route now, so back means back.
         onBack: () => Navigator.maybePop(context),
         actions: const [AppHeaderPair()],
       ),
@@ -114,6 +116,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           AsyncError() => CenteredErrorText(
             message: context.l10n.error_introLoadDashboard,
+            onRetry: () => ref.invalidate(dashboardStatsProvider),
           ),
           _ => const _LoadingList(),
         },
@@ -143,8 +146,8 @@ class _StatsList extends ConsumerWidget {
     final colorMap = ref.watch(employeeColorMapProvider);
     final nameMap = ref.watch(employeeNameMapProvider);
     final now = ref.watch(dashboardClockProvider)();
-    // List padding is zero so the hero bleeds edge-to-edge — the sections
-    // below add their own sp16 inset.
+    // List padding is zero so the hero bleeds edge-to-edge — the sections below
+    // add their own sp16 inset.
     return ListView(
       padding: EdgeInsets.zero,
       children: [
@@ -157,6 +160,23 @@ class _StatsList extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Its own provider, so changing the period recomputes four
+              // counters instead of every section on the screen.
+              ?switch (ref.watch(dashboardPeriodSummaryProvider)) {
+                AsyncData(:final value) => Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sp24),
+                  child: PeriodSummarySection(summary: value),
+                ),
+                AsyncError() => Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sp24),
+                  child: CenteredErrorText(
+                    message: context.l10n.error_introLoadDashboard,
+                    onRetry: () =>
+                        ref.invalidate(dashboardPeriodSummaryProvider),
+                  ),
+                ),
+                _ => null,
+              },
               tour.stepIf(
                 TourStepId.dashboardUpcoming,
                 UpcomingTodaySection(
@@ -172,11 +192,26 @@ class _StatsList extends ConsumerWidget {
                 EmployeeWorkloadSection(workload: stats.workload),
               ),
               const SizedBox(height: AppSpacing.sp24),
+              DailyLoadSection(days: stats.dailyLoad),
+              const SizedBox(height: AppSpacing.sp24),
               BusinessTrendsSection(
                 buckets: stats.weekBuckets,
                 busiestWeekday: stats.busiestWeekday,
               ),
               const SizedBox(height: AppSpacing.sp24),
+              ?ref
+                  .watch(newClientsProvider)
+                  .whenOrNull(
+                    data: (clients) => Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sp24),
+                      child: NewClientsSection(
+                        clients: clients,
+                        weeklyCounts: [
+                          for (final b in stats.weekBuckets) b.newClients,
+                        ],
+                      ),
+                    ),
+                  ),
               tour.stepIf(
                 TourStepId.dashboardAttention,
                 AttentionFlagsSection(
@@ -184,6 +219,13 @@ class _StatsList extends ConsumerWidget {
                   colorMap: colorMap,
                   nameMap: nameMap,
                   isAdmin: isAdmin,
+                  // Both default to empty, so a source still settling shows the
+                  // appointment flags rather than blocking the section.
+                  neverSetUp:
+                      ref.watch(neverSetUpAccountsProvider).value ?? const [],
+                  availabilityConflicts:
+                      ref.watch(availabilityConflictsProvider).value ??
+                      const [],
                 ),
               ),
               const SizedBox(height: AppSpacing.sp16),

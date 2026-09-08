@@ -17,6 +17,12 @@ analyzer:
     # Build outputs.
     - "build/**"
     - ".dart_tool/**"
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
 
 linter:
   rules:

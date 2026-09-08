@@ -1,17 +1,17 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:live_activities/live_activities.dart';
 import 'package:live_activities/models/activity_update.dart';
 
+import 'package:scheduling/core/app/device_deregistration.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/platform/ios_platform.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/core/utils/reentrant_sync.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
-import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart'
     show widgetAppGroupId;
 import 'package:scheduling/features/live_activity/application/live_activity_preference.dart';
@@ -57,12 +57,21 @@ class LiveActivityRegistrationController with ReentrantSync {
     this._ref, {
     FirebaseAuth? auth,
     LiveActivities? plugin,
+    this.isIosPlatform = defaultIsIosPlatform,
   }) : _injectedAuth = auth,
        _injectedPlugin = plugin;
 
   final Ref _ref;
   final FirebaseAuth? _injectedAuth;
   final LiveActivities? _injectedPlugin;
+
+  /// Injected for the same reason `AppSyncListeners` takes one: `flutter test`
+  /// runs on the host, so a bare `Platform.isIOS` returns before any injectable
+  /// point and leaves this whole controller unreachable from the harness — on
+  /// the ONLY platform that ships. Everything below the three gates it guards
+  /// (the token upserts, the opt-out sweep that deletes stale server rows, the
+  /// local-card teardown) was untested for exactly that reason.
+  final bool Function() isIosPlatform;
 
   // Resolved lazily rather than in the constructor, since endLocalCards runs
   // in unit tests that don't have Firebase set up.
@@ -84,13 +93,12 @@ class LiveActivityRegistrationController with ReentrantSync {
 
   AppLogger get _logger => _ref.read(loggerProvider);
 
-  static String _currentLocale() =>
-      AppLanguageController.instance.value == 'fr' ? 'fr' : 'en';
+  static String _currentLocale() => currentServerLocale;
 
   /// Idempotent and safe to call on every account-doc emission or language
   /// change. Concurrent calls coalesce, so whichever finishes last wins.
   Future<void> sync() async {
-    if (!Platform.isIOS) return;
+    if (!isIosPlatform()) return;
     await runCoalesced(_runSync);
   }
 
@@ -106,21 +114,30 @@ class LiveActivityRegistrationController with ReentrantSync {
 
   /// The body of [sync], run under the [ReentrantSync] guard.
   Future<void> _syncGuarded() async {
+    // Teardown runs BEFORE signOut(), so a body resuming mid-teardown still
+    // holds a valid credential and its token upsert SUCCEEDS — re-registering
+    // a device that just signed out, with nothing logging an error.
+    final generation = syncGeneration;
     // Wait for ready before reading the preference — on cold start it
     // defaults to true, which would re-register a device that opted out.
     await _ref.read(liveActivityEnabledProvider.notifier).ready;
+    if (isSyncStale(generation)) return;
     if (!_ref.read(liveActivityEnabledProvider)) {
-      await _cancelStreams();
+      // A stored opt-out is authoritative, so reconcile by actively removing
+      // any stale server rows left behind by an interrupted previous opt-out
+      // rather than only stopping local streams. Straight to `_teardown` -
+      // going through `unregister` would invalidate the generation and drop a
+      // preference flip that arrived while this run was in flight.
+      await _teardown();
       return;
     }
-    final signedIn = _auth.currentUser != null;
-    final doc = _ref.read(currentUserDocProvider).value ?? const {};
-    final role = (doc['role'] ?? '').toString().trim();
-    final status = (doc['status'] ?? '').toString().trim();
+    final gate = readAccountGateInputs(_ref, _auth);
+    // Null is "we don't know yet" — leave the registration as it is.
+    if (gate == null) return;
     if (!shouldRegisterLiveActivity(
-      role: role,
-      status: status,
-      signedIn: signedIn,
+      role: gate.role,
+      status: gate.status,
+      signedIn: gate.signedIn,
     )) {
       await _cancelStreams();
       return;
@@ -138,10 +155,11 @@ class LiveActivityRegistrationController with ReentrantSync {
     }
 
     await _ref.read(firebaseReadyProvider.future).catchError((Object _) {});
-    if (uid == null) return;
-    if (!await _ensurePlugin()) return;
+    if (uid == null || isSyncStale(generation)) return;
+    if (!await _ensurePlugin() || isSyncStale(generation)) return;
 
     final docId = await _resolveUserDocId();
+    if (isSyncStale(generation)) return;
     if (docId == null) {
       _logger.warn('LIVE-ACT no users doc for uid; skip token upsert');
       return;
@@ -158,7 +176,7 @@ class LiveActivityRegistrationController with ReentrantSync {
   /// Whether this device can host a push-started card — needs iOS 17.2+,
   /// ActivityKit available, and the user opted in. Never throws.
   Future<bool> canHostCards() async {
-    if (!Platform.isIOS) return false;
+    if (!isIosPlatform()) return false;
     try {
       return await _plugin.areActivitiesSupported() &&
           await _plugin.areActivitiesEnabled() &&
@@ -278,7 +296,7 @@ class LiveActivityRegistrationController with ReentrantSync {
   /// device-wide and can't target a single appointment. Terminal transitions
   /// are ended server-side instead, by `endCardOnTerminal`.
   Future<void> endLocalCards() async {
-    if (!Platform.isIOS || !_pluginReady) return;
+    if (!isIosPlatform() || !_pluginReady) return;
     try {
       await _plugin.endAllActivities();
     } catch (e, st) {
@@ -295,6 +313,13 @@ class LiveActivityRegistrationController with ReentrantSync {
   /// live card and deletes this device's token rows. Never throws, so
   /// sign-out is never blocked on this.
   Future<void> unregister() async {
+    invalidateSync();
+    await _teardown();
+  }
+
+  /// The teardown itself, without the sync invalidation — the opt-out
+  /// reconcile in [_syncGuarded] runs this while a sync is legitimately alive.
+  Future<void> _teardown() async {
     try {
       // Ends the cards and drops every per-activity row. The push-to-start
       // row is handled separately just below.
@@ -326,19 +351,12 @@ class LiveActivityRegistrationController with ReentrantSync {
 
   /// The users-doc id for the signed-in uid, or null when signed out or the
   /// lookup fails; never throws, so [unregister] is never blocked.
-  Future<String?> _resolveUserDocId() async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return null;
-    try {
-      final match = await _ref
-          .read(employeesRepositoryProvider)
-          .findUserByUid(uid);
-      return match?.id;
-    } catch (e, st) {
-      _logger.warn('LIVE-ACT resolve users doc failed', e, st);
-      return null;
-    }
-  }
+  Future<String?> _resolveUserDocId() => resolveUserDocId(
+    ref: _ref,
+    auth: _auth,
+    logger: _logger,
+    tag: 'LIVE-ACT',
+  );
 
   Future<void> _cancelStreams() async {
     await _pushToStartSub?.cancel();

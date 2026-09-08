@@ -25,6 +25,7 @@ class EmployeeCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
+    final name = employee.displayName;
     // One shared day-range listener behind this — not a query per row. The
     // `select` narrows it further to THIS row's count: the provider rebuilds a
     // fresh Map on every emission, so watching it whole rebuilt every roster
@@ -36,14 +37,14 @@ class EmployeeCard extends ConsumerWidget {
     // ListItemTile's InkWell already exposes button semantics, so we don't
     // need an explicit Semantics label here.
     return ListItemTile(
-      avatarName: employee.name.isEmpty ? '?' : employee.name,
+      avatarName: name,
       avatarColor: employee.isDisabled ? scheme.outlineVariant : employee.color,
-      title: employee.name.isEmpty ? '—' : employee.name,
+      title: name,
       subtitle: teamRowSubtitle(
         l10n: context.l10n,
         jobTitle: employee.jobTitle,
         jobsToday: jobsToday,
-        email: employee.email,
+        email: name == employee.email ? '' : employee.email,
       ),
       selected: selected,
       dimmed: employee.isDisabled,

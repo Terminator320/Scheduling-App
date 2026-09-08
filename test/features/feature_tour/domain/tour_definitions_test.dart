@@ -4,8 +4,7 @@ import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 
-/// Destinations that mount a FeatureTourHost. A new destination must
-/// either join this set with a catalog, or keep an empty one.
+/// Destinations that mount a FeatureTourHost.
 const toured = <AppDestination>{
   HubTab.calendar,
   HubTab.clients,
@@ -18,11 +17,11 @@ const toured = <AppDestination>{
 };
 
 /// The destinations an employee can actually reach — exactly the drawer rows
-/// `drawerGroups(isAdmin: false)` offers. Everything else is admin-only, so
-/// its employee catalog must be empty.
+/// `drawerGroups(isAdmin: false)` offers.
 const employeeToured = <AppDestination>{
   HubTab.calendar,
   PushedDestination.dayRoute,
+  PushedDestination.history,
   PushedDestination.settings,
 };
 
@@ -68,10 +67,7 @@ void main() {
     'every toured destination has an admin tour and no catalog has duplicates',
     () {
       for (final destination in allDestinations) {
-        final steps = tourStepsFor(
-          DestinationTour(destination),
-          isAdmin: true,
-        );
+        final steps = tourStepsFor(DestinationTour(destination), isAdmin: true);
         if (toured.contains(destination)) {
           expect(
             steps,
@@ -107,17 +103,21 @@ void main() {
   test('the gap-filled catalogs grew to their new lengths', () {
     int len(AppDestination d) =>
         tourStepsFor(DestinationTour(d), isAdmin: true).length;
-    expect(len(HubTab.calendar), 5);
-    expect(len(HubTab.clients), 4);
+    // 7 since 1.57 added the week toggle and the crew filter.
+    expect(len(HubTab.calendar), 7);
+    // 5 since 1.58 toured the sort control 1.57 shipped untoured.
+    expect(len(HubTab.clients), 5);
     expect(len(HubTab.employees), 3);
     expect(len(PushedDestination.history), 3);
   });
 
-  test('the appointment walkthrough is admin-only and 6 steps in order', () {
+  test('the appointment walkthrough is admin-only and 7 steps in order', () {
     const scope = FormTour(TourForm.addAppointment);
     expect(tourStepsFor(scope, isAdmin: true), [
       TourStepId.apptTemplates,
       TourStepId.apptClient,
+      // The job address moved out of Details into WHO, under the client.
+      TourStepId.apptJobAddress,
       TourStepId.apptCrew,
       TourStepId.apptSchedule,
       TourStepId.apptDetails,
@@ -136,16 +136,15 @@ void main() {
     ]);
   });
 
-  test('the invite walkthrough separates job title from access, in order', () {
+  test('the invite walkthrough is 4 steps in order', () {
     const scope = FormTour(TourForm.invitePerson);
-    final steps = tourStepsFor(scope, isAdmin: true);
-    expect(steps, hasLength(5));
-    // Conflating the two is the footgun this walkthrough exists to prevent:
-    // the job title grants nothing, the access toggle is the real switch.
-    expect(
-      steps.indexOf(TourStepId.personJobTitle),
-      lessThan(steps.indexOf(TourStepId.personAccess)),
-    );
+    expect(tourStepsFor(scope, isAdmin: true), [
+      TourStepId.personDetails,
+      TourStepId.personJobTitle,
+      TourStepId.personColour,
+      TourStepId.personCreate,
+    ]);
+    expect(tourStepsFor(scope, isAdmin: false), isEmpty);
   });
 
   test('no catalog anywhere repeats a step', () {
@@ -157,5 +156,78 @@ void main() {
         reason: '${scope.storageKey} catalog has duplicate steps',
       );
     }
+  });
+
+  test('the job details sheet has a tour for both roles', () {
+    const scope = FormTour(TourForm.jobDetails);
+    expect(tourStepsFor(scope, isAdmin: true), isNotEmpty);
+    expect(tourStepsFor(scope, isAdmin: false), isNotEmpty);
+  });
+
+  test('the job details tour splits by what each role may do', () {
+    const scope = FormTour(TourForm.jobDetails);
+    final admin = tourStepsFor(scope, isAdmin: true);
+    final crew = tourStepsFor(scope, isAdmin: false);
+    // Push back and book again are the admin's.
+    expect(admin, contains(TourStepId.jobPushBack));
+    expect(admin, contains(TourStepId.jobBookAgain));
+    expect(crew, isNot(contains(TourStepId.jobPushBack)));
+    expect(crew, isNot(contains(TourStepId.jobBookAgain)));
+    // The field record is offered to a non-admin assignee only.
+    expect(crew, contains(TourStepId.jobFieldRecord));
+    expect(admin, isNot(contains(TourStepId.jobFieldRecord)));
+    // Starting and closing a job belong to both.
+    expect(admin, contains(TourStepId.jobStart));
+    expect(crew, contains(TourStepId.jobStart));
+    expect(admin, contains(TourStepId.jobMarkDone));
+    expect(crew, contains(TourStepId.jobMarkDone));
+  });
+
+  test('the three create-flow sheets stay admin-only', () {
+    const createFlows = [
+      TourForm.addAppointment,
+      TourForm.addClient,
+      TourForm.invitePerson,
+    ];
+    for (final form in createFlows) {
+      expect(
+        tourStepsFor(FormTour(form), isAdmin: false),
+        isEmpty,
+        reason: '$form is admin-only',
+      );
+    }
+  });
+
+  test('the calendar week toggle is offered to both roles', () {
+    expect(
+      tourStepsFor(const DestinationTour(HubTab.calendar), isAdmin: false),
+      contains(TourStepId.calendarWeekToggle),
+    );
+    expect(
+      tourStepsFor(const DestinationTour(HubTab.calendar), isAdmin: true),
+      contains(TourStepId.calendarWeekToggle),
+    );
+  });
+
+  test('the crew filter is admin-only', () {
+    expect(
+      tourStepsFor(const DestinationTour(HubTab.calendar), isAdmin: false),
+      isNot(contains(TourStepId.calendarCrewFilter)),
+    );
+  });
+
+  test('every step id belongs to some catalog', () {
+    final owned = <TourStepId>{};
+    for (final scope in allTourScopes) {
+      for (final isAdmin in [true, false]) {
+        owned.addAll(tourStepsFor(scope, isAdmin: isAdmin));
+      }
+    }
+    // A step in no catalog is copy nobody can ever see.
+    expect(
+      TourStepId.values.where((id) => !owned.contains(id)),
+      isEmpty,
+      reason: 'these ids are in no catalog',
+    );
   });
 }

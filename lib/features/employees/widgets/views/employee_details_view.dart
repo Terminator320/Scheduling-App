@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/launchers/phone_call_launcher.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
@@ -42,26 +43,12 @@ class EmployeeDetailsView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
-    final materialL10n = MaterialLocalizations.of(context);
-    final locale = Localizations.localeOf(context).toString();
-    final weekStart = CalendarMonthGrid.weekStartOf(context);
 
     // Handlers built here (where `ref` lives) so the widgets stay
     // presentational. Both delegate to launchExternalUri.
     final onCall = employee.phone.isEmpty
         ? null
         : () => launchPhoneCall(context, ref, employee.phone);
-    // Its own document (users/{id}/private/emergency), gated by rules to an
-    // admin and the person themselves. Team is admin-only, so a viewer here
-    // always passes that rule and a failed read means the read failed — NOT
-    // that there is none on file. If this view is ever reused on a non-admin
-    // surface it must distinguish the two, the way MyDetailsScreen does.
-    final emergency =
-        ref.watch(emergencyContactProvider(employee.id)).value ??
-        EmergencyContact.empty;
-    final onCallEmergency = emergency.phone.isEmpty
-        ? null
-        : () => launchPhoneCall(context, ref, emergency.phone);
     final onEmail = employee.email.isEmpty
         ? null
         : () => EmailComposeLauncher.showEmailChoices(
@@ -70,13 +57,63 @@ class EmployeeDetailsView extends ConsumerWidget {
             email: employee.email,
           );
 
+    // Its own document (users/{id}/private/emergency), gated by rules to an
+    // admin and the person themselves. Team is admin-only, so a viewer here
+    // always passes that rule and a failed read means the read failed - not
+    // that there is none on file. If this view is ever reused on a non-admin
+    // surface it must distinguish the two, the way MyDetailsScreen does.
+    //
+    // Loading and error deliberately render the SAME thing here (the panel is
+    // omitted below when the rows are empty), which is what "not shown" means
+    // on a read-only surface. The failure itself is not swallowed: the
+    // provider logs it once per error emission.
+    final emergency =
+        ref.watch(emergencyContactProvider(employee.id)).value ??
+        EmergencyContact.empty;
+    final onCallEmergency = emergency.phone.isEmpty
+        ? null
+        : () => launchPhoneCall(context, ref, emergency.phone);
+
+    return DetailSheetListView(
+      scrollController: scrollController,
+      showHandle: showHandle,
+      bottomPadding: bottomPadding,
+      children: [
+        EmployeeProfileCard(
+          employee: employee,
+          onEdit: isCurrentUserAdmin ? onEdit : null,
+        ),
+        ..._quickActions(l10n, onCall: onCall, onEmail: onEmail),
+        ..._panels(
+          l10n,
+          _emergencyRows(l10n, emergency, onCall: onCallEmergency),
+          _infoRows(context, onCall: onCall, onEmail: onEmail),
+        ),
+        EmployeeTodaySection(
+          employeeId: employee.id,
+          onJobTap: (appointmentId) =>
+              _openJob(context, ref, appointmentId, employee.id),
+        ),
+      ],
+    );
+  }
+
+  /// Hours, days, cap and access level, plus the two contact rows when there
+  /// is something behind them.
+  List<KeyValueRow> _infoRows(
+    BuildContext context, {
+    VoidCallback? onCall,
+    VoidCallback? onEmail,
+  }) {
+    final l10n = context.l10n;
+    final materialL10n = MaterialLocalizations.of(context);
     final hoursValue = employee.workingDays.contains(true)
         ? '${materialL10n.formatTimeOfDay(minutesToTimeOfDay(employee.workStartMinutes))}'
               ' – '
               '${materialL10n.formatTimeOfDay(minutesToTimeOfDay(employee.workEndMinutes))}'
         : l10n.employees_noWorkingDays;
 
-    final infoRows = <KeyValueRow>[
+    return [
       if (employee.phone.isNotEmpty)
         KeyValueRow(
           label: l10n.employees_phoneKey,
@@ -99,16 +136,21 @@ class EmployeeDetailsView extends ConsumerWidget {
         value: formatWorkingDays(
           l10n,
           employee.workingDays,
-          weekStart: weekStart,
-          labels: weekdayAbbreviationsForLocale(locale),
+          weekStart: CalendarMonthGrid.weekStartOf(context),
+          labels: weekdayAbbreviationsForLocale(
+            Localizations.localeOf(context).toString(),
+          ),
         ),
       ),
+      // No "No cap" row here, unlike the two edit surfaces: this is a
+      // read-only body, which omits empty sections rather than rendering a
+      // placeholder - an uncapped person has no daily cap to report.
       if (employee.maxJobsPerDay > 0)
         KeyValueRow(
           label: l10n.employees_maxPerDayKey,
           value: l10n.employees_jobsPerDay(employee.maxJobsPerDay),
         ),
-      // NO `ON CALL` row — the profile card carries it as a chip, and a row
+      // No `ON CALL` row - the profile card carries it as a chip, and a row
       // here would state the same boolean twice on one screen.
       KeyValueRow(
         label: l10n.employees_accessKey,
@@ -117,47 +159,29 @@ class EmployeeDetailsView extends ConsumerWidget {
             : l10n.common_employeeRoleValue,
       ),
     ];
-
-    // Its own panel, not two more rows in the block above: who to call if
-    // something goes wrong on site is a different question from someone's
-    // hours and access level, and it is the one you scan for in a hurry.
-    final emergencyRows = <KeyValueRow>[
-      if (emergency.contact.isNotEmpty)
-        KeyValueRow(
-          label: l10n.employees_emergencyKey,
-          value: emergency.contact,
-        ),
-      if (emergency.phone.isNotEmpty)
-        KeyValueRow(
-          label: l10n.employees_emergencyPhoneKey,
-          value: emergency.phone,
-          onTap: onCallEmergency,
-          emphasize: true,
-        ),
-    ];
-
-    return DetailSheetListView(
-      scrollController: scrollController,
-      showHandle: showHandle,
-      bottomPadding: bottomPadding,
-      children: [
-        EmployeeProfileCard(
-          employee: employee,
-          onEdit: isCurrentUserAdmin ? onEdit : null,
-        ),
-        ..._quickActions(l10n, onCall: onCall, onEmail: onEmail),
-        ..._panels(l10n, emergencyRows, infoRows),
-        EmployeeTodaySection(
-          employeeId: employee.id,
-          onJobTap: (appointmentId) =>
-              _openJob(context, ref, appointmentId, employee.id),
-        ),
-      ],
-    );
   }
 
+  /// Its own panel, not two more rows in the block above: who to call if
+  /// something goes wrong on site is a different question from someone's hours
+  /// and access level, and it is the one you scan for in a hurry.
+  List<KeyValueRow> _emergencyRows(
+    AppLocalizations l10n,
+    EmergencyContact emergency, {
+    VoidCallback? onCall,
+  }) => [
+    if (emergency.contact.isNotEmpty)
+      KeyValueRow(label: l10n.employees_emergencyKey, value: emergency.contact),
+    if (emergency.phone.isNotEmpty)
+      KeyValueRow(
+        label: l10n.employees_emergencyPhoneKey,
+        value: emergency.phone,
+        onTap: onCall,
+        emphasize: true,
+      ),
+  ];
+
   /// Opens the appointment sheet for the tapped card. `showActions` carries
-  /// the caller's resolved role — never `true`.
+  /// the caller's resolved role - never `true`.
   void _openJob(
     BuildContext context,
     WidgetRef ref,
@@ -167,13 +191,13 @@ class EmployeeDetailsView extends ConsumerWidget {
     final jobs = ref.read(employeeTodayJobsProvider(employeeId));
     for (final job in jobs) {
       if (job.id == appointmentId) {
-        showEventDetails(context, job, showActions: isCurrentUserAdmin);
+        showEventDetails(context, job, analyticsSource: AnalyticsSources.employees, showActions: isCurrentUserAdmin);
         return;
       }
     }
   }
 
-  /// Only the buttons whose data exists — a tile with nothing behind it is
+  /// Only the buttons whose data exists - a tile with nothing behind it is
   /// worse than no tile.
   List<Widget> _quickActions(
     AppLocalizations l10n, {

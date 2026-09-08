@@ -4,24 +4,31 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-/// Result of a series rewrite: the updated record, plus how many future
-/// bookings were created and how many old ones were removed.
+/// Result counts for a repeat-series rewrite.
 typedef SeriesRewriteResult = ({
   AppointmentRecord updated,
   int futureBookings,
   int removedBookings,
 });
 
-/// Handles series-level appointment mechanics backed by the repo: rewriting
-/// a series, and applying an edit to all future occurrences.
+typedef SeriesRewritePlan = ({
+  AppointmentRecord updated,
+  List<String> deleteIds,
+  List<AppointmentRecord> copies,
+});
+
+typedef SeriesPropagatePlan = ({
+  AppointmentRecord updated,
+  List<AppointmentRecord> propagated,
+});
+
+/// Plans and commits series rewrites or future-occurrence propagation.
 class AppointmentSeriesEditor {
   const AppointmentSeriesEditor(this._repo);
 
   final AppointmentsRepository _repo;
 
-  /// Called when the repeat interval changes. Rewrites the series by dropping
-  /// the old future occurrences and booking the new cadence, all atomically.
-  Future<SeriesRewriteResult> rewrite({
+  Future<SeriesRewritePlan> planRewrite({
     required AppointmentRecord updated,
     required AppointmentRecord appointment,
     required String id,
@@ -46,24 +53,26 @@ class AppointmentSeriesEditor {
             copyStart: copyStart,
           ),
           status: 'pending',
-          pictures: const [],
+          // New repeat copies start without photo subcollection documents.
         ),
     ];
+    return (updated: withSeries, deleteIds: deleteIds, copies: copies);
+  }
+
+  Future<SeriesRewriteResult> commitRewrite(SeriesRewritePlan plan) async {
     await _repo.rewriteSeries(
-      updated: withSeries,
-      deleteIds: deleteIds,
-      copies: copies,
+      updated: plan.updated,
+      deleteIds: plan.deleteIds,
+      copies: plan.copies,
     );
     return (
-      updated: withSeries,
-      futureBookings: copies.length,
-      removedBookings: deleteIds.length,
+      updated: plan.updated,
+      futureBookings: plan.copies.length,
+      removedBookings: plan.deleteIds.length,
     );
   }
 
-  /// The "apply to all" option: propagates the edited details to this visit
-  /// and to its future non-terminal siblings in the series.
-  Future<int> propagate({
+  Future<SeriesPropagatePlan> planPropagate({
     required AppointmentRecord updated,
     required AppointmentRecord appointment,
     required String id,
@@ -75,6 +84,7 @@ class AppointmentSeriesEditor {
       series,
       excludeId: id,
       after: appointment.startTime,
+      anchor: appointment,
     );
     final propagated = siblings.map((v) {
       final copyStart = withTimeOfDay(v.startTime, start);
@@ -89,25 +99,25 @@ class AppointmentSeriesEditor {
         notes: updated.notes,
         materialsNeeded: updated.materialsNeeded,
         repeat: updated.repeat,
-        // Both flags MUST travel with the instants derived from them. Omitting
-        // isAllDay wrote a sibling spanning midnight-23:59 while still reading
-        // isAllDay:false, which every off-screen mirror keys on — the travel
-        // sweep stopped skipping it and fired a "time to leave" push at ~23:30
-        // for a block with no departure time. Any new AppointmentRecord field
-        // that the edit form can change belongs in this list too.
+        // Editable schedule flags travel with the propagated instants.
         isAllDay: updated.isAllDay,
         isPersonal: updated.isPersonal,
+        isDayOff: updated.isDayOff,
         startTime: copyStart,
         endTime: occurrenceEnd(
           originalStart: start,
           originalEnd: end,
           copyStart: copyStart,
         ),
-        // Normalize each sibling's status so a legacy or unknown value doesn't get rejected.
+        // Normalize each sibling's status so legacy values stay writable.
         status: AppointmentStatus.storedRaw(v.status),
       );
     }).toList();
-    await _repo.updateAppointments([updated, ...propagated]);
-    return propagated.length;
+    return (updated: updated, propagated: propagated);
+  }
+
+  Future<int> commitPropagate(SeriesPropagatePlan plan) async {
+    await _repo.updateAppointments([plan.updated, ...plan.propagated]);
+    return plan.propagated.length;
   }
 }

@@ -125,6 +125,23 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
+		<!-- Usage Data: Product Interaction (Firebase Analytics, 2026-09-07).
+		     NOT linked: `setUserId` is never called and no analytics parameter
+		     carries a name, email, phone, address or note, so nothing joins this
+		     to the account system. Review alongside the App Store Connect
+		     nutrition labels before submitting. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeProductInteraction</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+			</array>
+		</dict>
 		<!-- Diagnostics: Crash Data -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>

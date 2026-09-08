@@ -136,8 +136,8 @@ describe("syncUsersByUid bridge/presence isolation", () => {
     };
     presenceDelete = jest.fn().mockRejectedValue(new Error("boom"));
     // recursiveDeletes records the collection paths passed to
-    // db.recursiveDelete, and collectionDeletes records the deleted
-    // doc-marker paths.
+    // db.recursiveDelete, and collectionDeletes records the deleted doc-marker
+    // paths.
     recursiveDeletes = [];
     collectionDeletes = [];
     db = {
@@ -185,6 +185,52 @@ describe("syncUsersByUid bridge/presence isolation", () => {
         .toBeLessThan(presenceDelete.mock.invocationCallOrder[0]);
   });
 
+  // The doc-DELETED branch. Fourteen makeEvent(...) calls existed and not one
+  // passed `after` as null, so this path never ran — and it is the teardown for
+  // `usersByUid`, which is assertAdmin's ONLY data source and the collection
+  // every rules role gate resolves through. Break it and a deleted user's
+  // bridge row survives carrying `role: "admin", status: "active"`: a live
+  // admin credential for an account that no longer exists.
+  test("a DELETED user doc removes its bridge row", async () => {
+    presenceDelete.mockResolvedValue(undefined);
+    const before = {uid: "auth1", status: "active", role: "admin"};
+
+    await syncUsersByUid.run(makeEvent("u_doc", before, null));
+
+    expect(collectionDeletes).toContain("usersByUid/auth1");
+    // Terminal cleanup, so nothing is re-created.
+    expect(batch.set).not.toHaveBeenCalled();
+  });
+
+  test("a deleted doc with no uid deletes no bridge row", async () => {
+    // A pre-P4c doc that never got an Auth account has nothing to tear down,
+    // and deleting `usersByUid/` (empty id) would be a path error.
+    presenceDelete.mockResolvedValue(undefined);
+    const before = {uid: "", status: "invited", role: "employee"};
+
+    await syncUsersByUid.run(makeEvent("u_doc", before, null));
+
+    // Scoped to the bridge: the delivery-state purge legitimately deletes other
+    // markers on this same event.
+    expect(
+        collectionDeletes.filter((p) => p.startsWith("usersByUid/")),
+    ).toEqual([]);
+    expect(batch.set).not.toHaveBeenCalled();
+  });
+
+  test("a deleted user doc also revokes the Auth credential", async () => {
+    // authAccessChange already pins "revokes when the user doc is deleted";
+    // this is the same rule reached through the real handler, so the two cannot
+    // drift.
+    presenceDelete.mockResolvedValue(undefined);
+    const before = {uid: "auth1", status: "active", role: "admin"};
+
+    await syncUsersByUid.run(makeEvent("u_doc", before, null));
+
+    expect(auth.updateUser).toHaveBeenCalledWith("auth1", {disabled: true});
+    expect(auth.revokeRefreshTokens).toHaveBeenCalledWith("auth1");
+  });
+
   test("a successful presence purge resolves", async () => {
     const before = {uid: "auth1", status: "active", role: "employee"};
     const after = {uid: "auth1", status: "disabled", role: "employee"};
@@ -208,8 +254,8 @@ describe("syncUsersByUid bridge/presence isolation", () => {
             syncUsersByUid.run(makeEvent("u_doc", before, after)),
         ).resolves.toBeUndefined();
 
-        // Both token subcollections were recursively deleted — that's what
-        // lets us paginate past the 500-write batch cap.
+        // Both token subcollections were recursively deleted — that's what lets
+        // us paginate past the 500-write batch cap.
         expect(recursiveDeletes).toEqual([
           "users/u_doc/fcmTokens",
           "users/u_doc/liveActivityTokens",
@@ -282,8 +328,75 @@ describe("syncUsersByUid bridge/presence isolation", () => {
 
     await syncUsersByUid.run(makeEvent("u_doc", before, after));
 
-    expect(batch.commit).toHaveBeenCalledTimes(1);
     expect(db.doc).not.toHaveBeenCalled();
     expect(presenceDelete).not.toHaveBeenCalled();
+  });
+
+  test("an edit that touches nothing the bridge mirrors writes nothing",
+      async () => {
+        // The hot path: My details' availability panel commits per switch with
+        // no debounce, so flipping five working days is five invocations of
+        // this trigger.
+        const before = {
+          uid: "auth1", status: "active", role: "employee",
+          workingDays: [false, true, true, true, true, true, false],
+        };
+        const after = {
+          uid: "auth1", status: "active", role: "employee",
+          workingDays: [true, true, true, true, true, true, false],
+        };
+
+        await syncUsersByUid.run(makeEvent("u_doc", before, after));
+
+        expect(batch.set).not.toHaveBeenCalled();
+        expect(batch.commit).not.toHaveBeenCalled();
+      });
+
+  test("a role change still rewrites the bridge", async () => {
+    // Role is exactly what the rules resolve through the bridge, so this one
+    // must never be skipped.
+    const before = {uid: "auth1", status: "active", role: "employee"};
+    const after = {uid: "auth1", status: "active", role: "admin"};
+
+    await syncUsersByUid.run(makeEvent("u_doc", before, after));
+
+    expect(batch.set).toHaveBeenCalledTimes(1);
+    expect(batch.set.mock.calls[0][1])
+        .toEqual({role: "admin", docId: "u_doc", status: "active"});
+    expect(batch.commit).toHaveBeenCalledTimes(1);
+  });
+
+  test("a status change still rewrites the bridge", async () => {
+    const before = {uid: "auth1", status: "disabled", role: "employee"};
+    const after = {uid: "auth1", status: "active", role: "employee"};
+
+    await syncUsersByUid.run(makeEvent("u_doc", before, after));
+
+    expect(batch.set.mock.calls[0][1])
+        .toEqual({role: "employee", docId: "u_doc", status: "active"});
+  });
+
+  test("a uid rotation still deletes the stale bridge doc and writes the new",
+      async () => {
+        const before = {uid: "old", status: "active", role: "employee"};
+        const after = {uid: "new", status: "active", role: "employee"};
+
+        await syncUsersByUid.run(makeEvent("u_doc", before, after));
+
+        // Both halves land in ONE batch, so a crash between them can't leave
+        // two live bridge docs.
+        expect(batch.delete).toHaveBeenCalledTimes(1);
+        expect(batch.set).toHaveBeenCalledTimes(1);
+        expect(batch.commit).toHaveBeenCalledTimes(1);
+      });
+
+  test("a doc creation still writes the bridge", async () => {
+    // No `before` at all, so the no-op guard must not swallow it.
+    const after = {uid: "auth1", status: "active", role: "employee"};
+
+    await syncUsersByUid.run(makeEvent("u_doc", null, after));
+
+    expect(batch.set).toHaveBeenCalledTimes(1);
+    expect(batch.commit).toHaveBeenCalledTimes(1);
   });
 });

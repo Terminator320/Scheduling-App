@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
+import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
@@ -47,71 +48,16 @@ class AuthService {
     required String password,
   }) {
     return _auth.signInWithEmailAndPassword(
-      email: email.trim().toLowerCase(),
+      email: normalizeEmail(email),
       password: password.trim(),
     );
   }
 
   Future<void> sendPasswordResetEmail(String email) {
-    return _auth.sendPasswordResetEmail(email: email.trim().toLowerCase());
+    return _auth.sendPasswordResetEmail(email: normalizeEmail(email));
   }
 
-  /// Whether the signed-in address has been verified.
-  ///
-  /// Load-bearing during setup: the account is minted on a SHARED starting
-  /// password, so signing in proves nothing about who you are.
-  /// `completeEmployeeSetup` refuses without a verified email, which is what
-  /// keeps a stranger who knows the address stuck on the setup screen instead
-  /// of activating the account and leaving the `invited` state (where the
-  /// rules grant nothing).
-  bool get isEmailVerified => _auth.currentUser?.emailVerified ?? false;
-
-  /// Sends Firebase's own verification email to the signed-in address.
-  Future<void> sendVerificationEmail() async {
-    final user = _auth.currentUser;
-    if (user == null) throw const AuthFailureSessionExpired();
-    try {
-      await user.sendEmailVerification();
-    } catch (e, st) {
-      final failure = _mapSetupError(e);
-      _logger.authFailure(
-        'sendVerificationEmail failed',
-        failure,
-        e,
-        st,
-      );
-      throw failure;
-    }
-  }
-
-  /// Re-reads the account and, once verified, forces a fresh ID token.
-  ///
-  /// The token refresh is the half that matters: `completeEmployeeSetup` reads
-  /// `email_verified` off the **token**, which was minted at sign-in. A bare
-  /// [User.reload] updates the local object and leaves the callable still
-  /// seeing `false`, so setup would keep failing after the person had done
-  /// everything right.
-  Future<bool> refreshEmailVerified() async {
-    final user = _auth.currentUser;
-    if (user == null) return false;
-    await user.reload();
-    final refreshed = _auth.currentUser;
-    if (refreshed == null || !refreshed.emailVerified) return false;
-    await refreshed.getIdToken(true);
-    return true;
-  }
-
-  /// Completes the signed-in employee's own account setup.
-  ///
-  /// ORDER IS THE GUARANTEE. The password is replaced FIRST, then the account
-  /// is activated. The server cannot see a password, so "you must replace the
-  /// shared default" is true only because activation is refused until this
-  /// method gets past [User.updatePassword]. Swap the two and an interrupted
-  /// setup leaves an active account still on the default password.
-  ///
-  /// A failure after the password change is safe: the account stays `invited`,
-  /// so the next sign-in routes back here and simply asks again — the screen
-  /// never assumes the current password is still the default.
+  /// Replaces the starting password before activating the signed-in employee.
   Future<void> completeAccountSetup({
     required String newPassword,
     String firstName = '',
@@ -123,12 +69,14 @@ class AuthService {
     final user = _auth.currentUser;
     if (user == null) throw const AuthFailureSessionExpired();
 
+    await _refuseIfStillTheStartingPassword(user, newPassword.trim());
+
     try {
       await user.updatePassword(newPassword.trim());
     } catch (e, st) {
       final failure = _mapSetupError(e);
       _logger.authFailure(
-        'completeAccountSetup: updatePassword failed',
+        'AUTH-SETUP completeAccountSetup: updatePassword failed',
         failure,
         e,
         st,
@@ -146,12 +94,9 @@ class AuthService {
       );
     } catch (e, st) {
       final failure = _mapSetupError(e);
-      // No rollback of the password change: the new password is the one the
-      // person just chose and typed twice. Reverting it to the shared default
-      // would be strictly worse than leaving them `invited` with a password
-      // that works.
+      // Keep the chosen password even if activation fails.
       _logger.authFailure(
-        'completeAccountSetup: completeEmployeeSetup failed',
+        'AUTH-SETUP completeAccountSetup: completeEmployeeSetup failed',
         failure,
         e,
         st,
@@ -160,17 +105,48 @@ class AuthService {
     }
   }
 
-  /// Only the codes whose meaning CHANGES during setup are handled here;
-  /// everything else falls through to the shared [AuthErrorMapper] rather than
-  /// being re-tabulated. A second copy of that table would silently bucket any
-  /// code it forgot into `AuthFailureUnknown`, which is `isExpected: false` and
-  /// so files a Crashlytics non-fatal for an ordinary user mistake.
+  /// Refuses a setup password that is still the admin-issued credential.
+  Future<void> _refuseIfStillTheStartingPassword(
+    User user,
+    String candidate,
+  ) async {
+    final email = user.email;
+    if (email == null || email.isEmpty) return;
+    try {
+      await user.reauthenticateWithCredential(
+        EmailAuthProvider.credential(email: email, password: candidate),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (_isWrongPasswordCode(e.code)) return;
+      final failure = _mapSetupError(e);
+      _logger.authFailure(
+        'AUTH-SETUP completeAccountSetup: starting-password check failed',
+        failure,
+        e,
+        StackTrace.current,
+      );
+      throw failure;
+    }
+    // Reauth SUCCEEDED, so the password is unchanged.
+    const failure = AuthFailureStartingPasswordReused();
+    _logger.breadcrumb(
+      'AUTH-SETUP completeAccountSetup: refused the starting password '
+      '(${failure.runtimeType})',
+    );
+    throw failure;
+  }
+
+  /// Firebase codes that mean the candidate is not the current password.
+  static bool _isWrongPasswordCode(String code) =>
+      code == 'wrong-password' ||
+      code == 'invalid-credential' ||
+      code == 'invalid-login-credentials';
+
+  /// Maps setup-only auth failures before falling back to the shared mapper.
   AuthFailure _mapSetupError(Object e) {
     if (e is FirebaseAuthException) {
       switch (e.code) {
-        // The shared mapper calls these "requires recent login" / "no such
-        // user"; mid-setup they all mean the same thing to the person, which
-        // is that the session backing this screen is gone.
+        // Mid-setup, these all mean the setup session is gone.
         case 'requires-recent-login':
         case 'user-token-expired':
         case 'user-not-found':
@@ -178,20 +154,16 @@ class AuthService {
       }
     }
     if (e is FirebaseFunctionsException) {
-      // The account was already activated — a replayed call, or two devices
-      // finishing setup at once. The password change above still landed, so
-      // this is not something to make the person fix.
+      // Replayed setup completion is already successful for the user.
       if (e.message == 'setup-not-pending') {
         return const AuthFailureSetupAlreadyComplete();
       }
       if (e.message == 'account-not-found') {
         return const AuthFailureNoAccountRecord();
       }
-      // The screen gates on this before submitting, so reaching it means the
-      // token still carried the pre-verification claim — which the "Check
-      // again" action fixes by forcing a refresh.
+      // Old-backend compatibility for the setup availability guard.
       if (e.message == 'email-not-verified') {
-        return const AuthFailureEmailNotVerified();
+        return const AuthFailureSetupNotAvailableYet();
       }
       if (e.code == 'resource-exhausted') {
         return const AuthFailureTooManyRequests();
@@ -204,16 +176,31 @@ class AuthService {
   }
 
   Future<void> signOut() async {
+    Object? signOutError;
+    StackTrace? signOutStack;
     try {
       await _auth.signOut();
+    } catch (e, st) {
+      signOutError = e;
+      signOutStack = st;
     } finally {
       // Best-effort cache clear — if the keystore fails here it shouldn't fail
       // signOut too, since we check the cached uid again on next launch.
       try {
         await _authCache.clear();
       } catch (e, st) {
-        _logger.warn('signOut: auth cache clear failed', e, st);
+        _logger.warn('ACCT-SIGNOUT auth cache clear failed', e, st);
       }
     }
+    if (signOutError == null) return;
+    if (_auth.currentUser == null) {
+      _logger.warn(
+        'ACCT-SIGNOUT local signOut threw after auth state cleared',
+        signOutError,
+        signOutStack,
+      );
+      return;
+    }
+    Error.throwWithStackTrace(signOutError, signOutStack!);
   }
 }

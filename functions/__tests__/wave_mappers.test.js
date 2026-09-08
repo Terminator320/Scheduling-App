@@ -191,6 +191,57 @@ describe("toWaveCustomerInput", () => {
     expect(result.address).not.toHaveProperty("countryCode");
   });
 
+  // These are enum fields. A value outside the vocabulary is not an
+  // `inputErrors` entry the worker can report against the field — GraphQL
+  // refuses to coerce the whole `$input` and answers with a top-level error,
+  // which is non-retryable, so the job dead-letters and no "Retry failed"
+  // press can ever move it. Dropping one address line is the cheap outcome.
+  test("a province typed into the country box is dropped, not sent", () => {
+    const result = toWaveCustomerInput({name: "T", country: "ON"});
+    expect(result.address).not.toHaveProperty("countryCode");
+  });
+
+  test("a two-letter non-country is dropped, not sent", () => {
+    const result = toWaveCustomerInput({name: "T", country: "XX"});
+    expect(result.address).not.toHaveProperty("countryCode");
+  });
+
+  test("a real foreign country code still passes through", () => {
+    const result = toWaveCustomerInput({name: "T", country: "fr"});
+    expect(result.address.countryCode).toBe("FR");
+  });
+
+  test("a US client's plain province is prefixed US-, never CA-", () => {
+    // `CA-NY` is a subdivision of nowhere. It used to be what a New York
+    // client was sent as, which killed that client's sync permanently.
+    const result = toWaveCustomerInput({
+      name: "T",
+      province: "NY",
+      country: "US",
+    });
+    expect(result.address.provinceCode).toBe("US-NY");
+  });
+
+  test("a province that is not one of its country's is dropped", () => {
+    const result = toWaveCustomerInput({
+      name: "T",
+      province: "QC",
+      country: "US",
+    });
+    expect(result.address).not.toHaveProperty("provinceCode");
+    expect(result.address.countryCode).toBe("US");
+  });
+
+  test("an already-coded province that exists nowhere is dropped", () => {
+    const result = toWaveCustomerInput({name: "T", province: "CA-NY"});
+    expect(result.address).not.toHaveProperty("provinceCode");
+  });
+
+  test("a bare province still reads as Canadian, the business's own", () => {
+    const result = toWaveCustomerInput({name: "T", province: "ON"});
+    expect(result.address.provinceCode).toBe("CA-ON");
+  });
+
   test("name-only minimal client → valid input with empty address", () => {
     const result = toWaveCustomerInput({name: "Solo"});
     expect(result.name).toBe("Solo");
@@ -257,6 +308,88 @@ describe("toWaveCustomerInput", () => {
   test("name with trailing space → trimmed in output", () => {
     const result = toWaveCustomerInput({name: "Acme "});
     expect(result.name).toBe("Acme");
+  });
+
+  test("sends the stored name VERBATIM, phone number and all", () => {
+    // `clients/{id}.name` carries the client's phone on the end (owner call
+    // 2026-08-14, `ClientNamePolicy`) precisely because Wave's customer list
+    // and its invoices are what the number has to show up on — the app shows
+    // `displayName` instead. Nothing else pins this, so a future "cleanup"
+    // applying the display name here would break invoice identification with
+    // no test failing. It is the reason `clientDisplayName` exists as a
+    // SEPARATE function rather than being folded into the mapper.
+    const result = toWaveCustomerInput({
+      name: "Marc Tremblay (514) 555-1234",
+      firstName: "Marc",
+      lastName: "Tremblay",
+      phone: "(514) 555-1234",
+    });
+    expect(result.name).toBe("Marc Tremblay (514) 555-1234");
+  });
+
+  test("a business name reaches Wave as the business, not its contact", () => {
+    const result = toWaveCustomerInput({
+      name: "Vogas Plumbing (514) 555-1234",
+      firstName: "Marc",
+      lastName: "Tremblay",
+      phone: "(514) 555-1234",
+    });
+    expect(result.name).toBe("Vogas Plumbing (514) 555-1234");
+  });
+
+  // Merged in from the former `mappers.test.js` (2026-08-15): the cases below
+  // were the only ones that suite covered and this one did not.
+
+  test("null/undefined clientFields never throws and yields an empty name",
+      () => {
+        // The trigger hands this whatever the doc snapshot held, so a deleted
+        // or empty doc must degrade rather than take down the enqueue path.
+        expect(toWaveCustomerInput(null)).toEqual({name: "", address: {}});
+        expect(toWaveCustomerInput(undefined))
+            .toEqual({name: "", address: {}});
+      });
+
+  test("a whitespace-only optional field is omitted, not sent as ''", () => {
+    const result = toWaveCustomerInput({name: "Jane Doe", email: "  "});
+    expect(result).toEqual({name: "Jane Doe", address: {}});
+    expect(result).not.toHaveProperty("email");
+  });
+
+  test("legacy businessName-only doc: name stays empty (no fallback)", () => {
+    // Unlike ClientRecord.fromMap (Dart), this mapper does NOT fall back to
+    // businessName — legacy business-only docs reach Wave with an empty name
+    // by design, and `businessName` itself is never part of the payload.
+    const result = toWaveCustomerInput({
+      name: "",
+      businessName: "Acme Plumbing",
+      email: "acme@example.com",
+    });
+    expect(result.name).toBe("");
+    expect(result).not.toHaveProperty("businessName");
+  });
+
+  test("empty address and no apt yields no addressLine1", () => {
+    const result = toWaveCustomerInput({name: "A", address: ""});
+    expect(result.address).not.toHaveProperty("addressLine1");
+  });
+
+  test("apt alone (no street) becomes addressLine1", () => {
+    const result = toWaveCustomerInput({name: "A", address: "", apt: "4"});
+    expect(result.address.addressLine1).toBe("4");
+  });
+
+  test("a full province NAME (unknown format) omits provinceCode", () => {
+    // Only a 2-letter code or an already-prefixed subdivision maps; "Quebec"
+    // is not guessed at, the same way an unknown country is not.
+    expect(toWaveCustomerInput({name: "A", province: "Quebec"}).address)
+        .not.toHaveProperty("provinceCode");
+  });
+
+  test("country name matching is case-insensitive", () => {
+    expect(toWaveCustomerInput({name: "A", country: "CANADA"})
+        .address.countryCode).toBe("CA");
+    expect(toWaveCustomerInput({name: "A", country: "usa"})
+        .address.countryCode).toBe("US");
   });
 });
 
@@ -348,8 +481,10 @@ describe("fromWaveCustomer", () => {
       firstName: "Jane",
       lastName: "Doe",
       email: "jane@acme.com",
-      phone: "514-555-1234",
-      mobile: "514-555-9876",
+      // Rendered the way the app stores a number, and folded into the ONE
+      // phone field the app has — see the "imported phone" block below.
+      phone: "(514) 555-1234",
+      mobile: "",
       address: "12-3450 Main St",
       addressLine2: "",
       apt: "",
@@ -501,6 +636,155 @@ describe("fromWaveCustomer", () => {
 
   test("null node → does not throw", () => {
     expect(() => fromWaveCustomer(null)).not.toThrow();
+  });
+
+  // Merged in from the former `mappers.test.js` (2026-08-15).
+
+  test("a null node returns every field as a safe default", () => {
+    // Stronger than the not-throw above: the import writes this patch onto a
+    // client doc, so a missing key would leave a stale value in place rather
+    // than clearing it.
+    expect(fromWaveCustomer(null)).toEqual({
+      waveCustomerId: "",
+      name: "",
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      mobile: "",
+      address: "",
+      addressLine2: "",
+      apt: "",
+      city: "",
+      province: "",
+      country: "",
+      postalCode: "",
+    });
+  });
+
+  test("a plain province code with no subdivision prefix passes through",
+      () => {
+        expect(fromWaveCustomer({address: {province: {code: "QC"}}}).province)
+            .toBe("QC");
+      });
+
+  test("a missing province code yields ''", () => {
+    expect(fromWaveCustomer({address: {province: {}}}).province).toBe("");
+  });
+
+  test("US country code with no name falls back to the code->name lookup",
+      () => {
+        expect(fromWaveCustomer({address: {country: {code: "US"}}}).country)
+            .toBe("United States");
+      });
+
+  test("an unknown country code with no name yields ''", () => {
+    // Never guessed at — an invented country name would round-trip back to
+    // Wave as a real edit.
+    expect(fromWaveCustomer({address: {country: {code: "FR"}}}).country)
+        .toBe("");
+  });
+
+  test("an all-whitespace name falls through to first/last", () => {
+    expect(fromWaveCustomer({
+      name: "   ", firstName: "Jane", lastName: "Doe",
+    }).name).toBe("Jane Doe");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The imported phone
+// ---------------------------------------------------------------------------
+
+describe("the imported phone lands in the app's ONE phone field", () => {
+  /**
+   * @param {!Object} node Overrides on a minimal Wave customer node.
+   * @return {!Object} The imported client fields.
+   */
+  const importedFrom = (node) =>
+    fromWaveCustomer({id: "wave-1", name: "Marc Tremblay", ...node});
+
+  test("Wave's phone is rendered the way the app stores one", () => {
+    // Wave holds whatever was typed into it; `PhoneInputFormatter` masks
+    // anything typed in the app, so bare digits off an import were reaching
+    // the client detail screen and every appointment card.
+    expect(importedFrom({phone: "5145551234"}).phone).toBe("(514) 555-1234");
+    expect(importedFrom({phone: "+1 514 555 1234"}).phone)
+        .toBe("(514) 555-1234");
+  });
+
+  test("a number that is not NANP is stored exactly as Wave has it", () => {
+    // No fixed shape to render it in, and a number the app cannot dial is
+    // worse than an unformatted one.
+    expect(importedFrom({phone: "+33 1 23 45 67 89"}).phone)
+        .toBe("+33 1 23 45 67 89");
+    expect(importedFrom({phone: "5145551234 x42"}).phone)
+        .toBe("5145551234 x42");
+  });
+
+  test("a mobile-only customer's number is promoted into phone", () => {
+    // `mobile` is not editable and not rendered anywhere in the app
+    // (owner change 5), so an import that kept it there left the number
+    // where nothing could dial it.
+    const imported = importedFrom({phone: "", mobile: "514-555-9876"});
+    expect(imported.phone).toBe("(514) 555-9876");
+    expect(imported.mobile).toBe("");
+  });
+
+  test("a stored phone wins over a mobile, and the mobile is dropped", () => {
+    // Exactly what `EditClientSheet._save` does on every save — keeping the
+    // second number would un-heal a doc the app had already folded.
+    const imported = importedFrom({
+      phone: "514-555-1234", mobile: "514-555-9876",
+    });
+    expect(imported.phone).toBe("(514) 555-1234");
+    expect(imported.mobile).toBe("");
+  });
+
+  test("a customer NAMED by their number gets it lifted into phone", () => {
+    // This business names a person by their phone number in Wave, so a
+    // customer added there routinely has the number in the name and nothing
+    // in the phone box.
+    const imported = fromWaveCustomer({id: "w", name: "5145551234"});
+    expect(imported.phone).toBe("(514) 555-1234");
+    // The name is Wave's customer identity — mirrored verbatim, never
+    // rewritten here, or the next in-app edit pushes a rename to Wave.
+    expect(imported.name).toBe("5145551234");
+  });
+
+  test("a number sitting beside a name is lifted, name still verbatim", () => {
+    const imported = fromWaveCustomer({
+      id: "w", name: "Marc Tremblay 514-555-1234",
+    });
+    expect(imported.phone).toBe("(514) 555-1234");
+    expect(imported.name).toBe("Marc Tremblay 514-555-1234");
+  });
+
+  test("a name that is not a number lifts nothing", () => {
+    expect(fromWaveCustomer({id: "w", name: "Marc Tremblay"}).phone).toBe("");
+    // A street number, a postal code and a year are all left alone: the lift
+    // only ever acts on a clean ten-digit run.
+    expect(fromWaveCustomer({id: "w", name: "1505 Village de Bergerac"}).phone)
+        .toBe("");
+    expect(fromWaveCustomer({id: "w", name: "3101-5696 qc inc."}).phone)
+        .toBe("");
+  });
+
+  test("a real phone beats one sitting in the name", () => {
+    const imported = fromWaveCustomer({
+      id: "w", name: "5145551234", phone: "450-622-0931",
+    });
+    expect(imported.phone).toBe("(450) 622-0931");
+  });
+
+  test("importing twice is stable — no second write, no push-back", () => {
+    // The caller hashes these resolved fields into `wave.lastSyncedHash`, so
+    // a reshaped number must hash identically on the next run or every import
+    // rewrites every client and re-enters the outbox.
+    const node = {id: "w", name: "5145551234", mobile: "5145551234"};
+    const first = fromWaveCustomer(node);
+    expect(mappedFieldsHash(fromWaveCustomer(node)))
+        .toBe(mappedFieldsHash(first));
   });
 });
 

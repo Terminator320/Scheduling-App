@@ -1,9 +1,11 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/platform/ios_platform.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart';
@@ -13,13 +15,16 @@ import 'package:scheduling/features/presence/application/presence_sync_controlle
 import 'package:scheduling/features/siri/application/schedule_snapshot_provider.dart';
 import 'package:scheduling/features/siri/application/schedule_snapshot_service.dart';
 
-/// Cross-cutting sync wiring — device registration, mirrors, photo drain — pulled out here for testability. Account-lifecycle listeners stay in main.dart, since registration order matters there.
+/// Cross-cutting sync wiring for app-wide listeners.
 ///
 /// [registerAll] must be called from `build`, like any `ref.listen`.
 class AppSyncListeners {
-  const AppSyncListeners(this.ref);
+  const AppSyncListeners(this.ref, {this.isIosPlatform = defaultIsIosPlatform});
 
   final WidgetRef ref;
+
+  /// Injected so the iOS-only mirror listeners can register in a host test.
+  final bool Function() isIosPlatform;
 
   /// Registers every listener, in the same order as the original inline calls.
   void registerAll() {
@@ -31,72 +36,105 @@ class AppSyncListeners {
     _uploadDrain();
   }
 
+  void _fireAndForget(String tag, Future<void> Function() action) {
+    final logger = ref.read(loggerProvider);
+    unawaited(
+      Future<void>.sync(action).catchError((Object error, StackTrace stack) {
+        logger.warn(tag, error, stack);
+      }),
+    );
+  }
+
   void _pushRegistration() {
-    // Registers this device's FCM token once an active employee's or admin's
-    // account doc resolves. Admins also get time-based nudges for jobs
-    // they're assigned to. This is a no-op for signed-out users.
     ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
       prev,
       next,
     ) {
-      unawaited(ref.read(pushRegistrationControllerProvider).sync());
+      _fireAndForget(
+        'APP-SYNC push registration sync failed',
+        () => ref.read(pushRegistrationControllerProvider).sync(),
+      );
     });
   }
 
   void _presenceSync() {
-    // Starts or stops the foreground location stream that feeds the travel-time
-    // "leave now" reminders — same emission-driven shape as push registration above.
+    // Starts or stops the foreground location stream for leave-now reminders.
     ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
       prev,
       next,
     ) {
-      unawaited(ref.read(presenceSyncControllerProvider).sync());
+      _fireAndForget(
+        'APP-SYNC presence sync failed',
+        () => ref.read(presenceSyncControllerProvider).sync(),
+      );
     });
   }
 
   void _liveActivitySync() {
-    // Registers this device's Live Activity APNs tokens so the server can show
-    // the "time to leave" card on a locked phone. That only works on iOS 17.2+ —
-    // other devices just get the plain leaveNow push.
+    // Registers Live Activity APNs tokens for lock-screen leave-now cards.
     ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
       prev,
       next,
     ) {
-      unawaited(ref.read(liveActivityRegistrationControllerProvider).sync());
+      _fireAndForget(
+        'APP-SYNC live activity sync failed',
+        () => ref.read(liveActivityRegistrationControllerProvider).sync(),
+      );
     });
   }
 
+  /// True when an emission says nothing about whether the person is signed out.
+  ///
+  /// Both mirrors below publish `null` to mean SIGNED OUT and clear the App
+  /// Group. But an `AsyncError` carries a null value too, and so does
+  /// `AsyncLoading` — so keying on `value == null` alone made a failed Firestore
+  /// read (past `retryAsync`) blank the home-screen widget and have Siri answer
+  /// "no appointments" to someone who has jobs. Both surfaces are off-screen,
+  /// so nothing reported it. A stale mirror beats a wrongly-empty one: keeping
+  /// the last good payload is the honest degradation while the read is broken.
+  @visibleForTesting
+  static bool isUnsettled(AsyncValue<Object?> next) =>
+      next.isLoading || next.hasError;
+
   void _widgetSync() {
-    // iOS home-screen widget only. It never wires up on Android, so the
-    // employee-appointments listener it would open never opens.
-    if (!Platform.isIOS) return;
+    if (!isIosPlatform()) return;
     ref.listen<AsyncValue<Map<String, dynamic>?>>(widgetPayloadProvider, (
       prev,
       next,
     ) {
+      if (isUnsettled(next)) return;
       final payload = next.value;
       final service = ref.read(widgetSyncServiceProvider);
       if (payload == null) {
-        unawaited(service.clear());
+        _fireAndForget('APP-SYNC widget clear failed', service.clear);
       } else {
-        unawaited(service.sync(payload));
+        _fireAndForget(
+          'APP-SYNC widget sync failed',
+          () => service.sync(payload),
+        );
       }
     });
   }
 
   void _snapshotSync() {
-    // iOS Siri App Intents extension only — same App Group, separate key.
-    if (!Platform.isIOS) return;
+    if (!isIosPlatform()) return;
     ref.listen<AsyncValue<Map<String, dynamic>?>>(scheduleSnapshotProvider, (
       prev,
       next,
     ) {
+      if (isUnsettled(next)) return;
       final payload = next.value;
       final service = ref.read(scheduleSnapshotServiceProvider);
       if (payload == null) {
-        unawaited(service.clearSnapshot());
+        _fireAndForget(
+          'APP-SYNC snapshot clear failed',
+          service.clearSnapshot,
+        );
       } else {
-        unawaited(service.writeSnapshot(payload));
+        _fireAndForget(
+          'APP-SYNC snapshot write failed',
+          () => service.writeSnapshot(payload),
+        );
       }
     });
   }
@@ -109,7 +147,10 @@ class AppSyncListeners {
         final isSignedIn =
             ref.read(currentUserDocProvider).value?.isNotEmpty ?? false;
         if (previous == true && !next && isSignedIn) {
-          unawaited(ref.read(appointmentImageUploadProvider).drainPending());
+          _fireAndForget(
+            'APP-SYNC photo drain failed',
+            () => ref.read(appointmentImageUploadProvider).drainPending(),
+          );
         }
       })
       // On startup or sign-in, drain once as soon as the account doc first
@@ -121,8 +162,12 @@ class AppSyncListeners {
       ) {
         final wasEmpty = previous?.value?.isEmpty ?? true;
         final hasDoc = next.value?.isNotEmpty ?? false;
-        if (wasEmpty && hasDoc) {
-          unawaited(ref.read(appointmentImageUploadProvider).drainPending());
+        final offline = ref.read(isOfflineProvider);
+        if (wasEmpty && hasDoc && !offline) {
+          _fireAndForget(
+            'APP-SYNC photo drain failed',
+            () => ref.read(appointmentImageUploadProvider).drainPending(),
+          );
         }
       });
   }

@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'app_settings.dart';
@@ -9,6 +9,7 @@ part of 'app_settings.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
@@ -25,16 +26,21 @@ $AppSettingsCopyWith<AppSettings> get copyWith => _$AppSettingsCopyWithImpl<AppS
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppSettings&&(identical(other.themeMode, themeMode) || other.themeMode == themeMode)&&(identical(other.textScale, textScale) || other.textScale == textScale)&&(identical(other.language, language) || other.language == language));
+  final _this = this as AppSettings;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppSettings&&(identical(other.themeMode, _this.themeMode) || other.themeMode == _this.themeMode)&&(identical(other.textScale, _this.textScale) || other.textScale == _this.textScale)&&(identical(other.language, _this.language) || other.language == _this.language));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,themeMode,textScale,language);
+int get hashCode {
+  final _this = this as AppSettings;
+  return Object.hash(runtimeType,_this.themeMode,_this.textScale,_this.language);
+}
 
 @override
 String toString() {
-  return 'AppSettings(themeMode: $themeMode, textScale: $textScale, language: $language)';
+  final _this = this as AppSettings;
+  return 'AppSettings(themeMode: ${_this.themeMode}, textScale: ${_this.textScale}, language: ${_this.language})';
 }
 
 
@@ -63,7 +69,7 @@ class _$AppSettingsCopyWithImpl<$Res>
 /// Create a copy of AppSettings
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? themeMode = null,Object? textScale = null,Object? language = null,}) {
-  return _then(_self.copyWith(
+  return _then(AppSettings(
 themeMode: null == themeMode ? _self.themeMode : themeMode // ignore: cast_nullable_to_non_nullable
 as ThemeMode,textScale: null == textScale ? _self.textScale : textScale // ignore: cast_nullable_to_non_nullable
 as double,language: null == language ? _self.language : language // ignore: cast_nullable_to_non_nullable
@@ -225,16 +231,18 @@ _$AppSettingsCopyWith<_AppSettings> get copyWith => __$AppSettingsCopyWithImpl<_
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppSettings&&(identical(other.themeMode, themeMode) || other.themeMode == themeMode)&&(identical(other.textScale, textScale) || other.textScale == textScale)&&(identical(other.language, language) || other.language == language));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppSettings&&(identical(other.themeMode, themeMode) || other.themeMode == themeMode)&&(identical(other.textScale, textScale) || other.textScale == textScale)&&(identical(other.language, language) || other.language == language));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,themeMode,textScale,language);
+int get hashCode {
+    return Object.hash(runtimeType,themeMode,textScale,language);
+}
 
 @override
 String toString() {
-  return 'AppSettings(themeMode: $themeMode, textScale: $textScale, language: $language)';
+    return 'AppSettings(themeMode: $themeMode, textScale: $textScale, language: $language)';
 }
 
 

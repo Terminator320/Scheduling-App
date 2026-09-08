@@ -23,6 +23,17 @@ AppointmentRecord _appt({
   seriesId: seriesId,
 );
 
+/// One day of a 5-day run, anchored on day 1's id.
+AppointmentRecord _runDay(
+  String id,
+  DateTime start, {
+  required int dayIndex,
+  int dayCount = 5,
+}) => _appt(id: id, start: start, seriesId: 'r1').copyWith(
+  dayIndex: dayIndex,
+  dayCount: dayCount,
+);
+
 void main() {
   setUpAll(() {
     registerFallbackValue(
@@ -58,13 +69,15 @@ void main() {
         final appointment = _appt(id: 'a1', start: start); // seriesId is empty
         final updated = appointment.copyWith(repeat: RepeatInterval.oneYear);
 
-        final result = await editor.rewrite(
-          updated: updated,
-          appointment: appointment,
-          id: 'a1',
-          start: start,
-          end: start.add(const Duration(hours: 1)),
-          repeat: RepeatInterval.oneYear,
+        final result = await editor.commitRewrite(
+          await editor.planRewrite(
+            updated: updated,
+            appointment: appointment,
+            id: 'a1',
+            start: start,
+            end: start.add(const Duration(hours: 1)),
+            repeat: RepeatInterval.oneYear,
+          ),
         );
 
         // oneYear across the 60-month horizon books 5 future occurrences.
@@ -86,10 +99,11 @@ void main() {
         final copies = (captured[2] as List).cast<AppointmentRecord>();
         expect(deleteIds, isEmpty);
         expect(copies, hasLength(5));
-        // Copies start fresh — they're pending, have no shared pictures, and keep
+        // Copies start fresh — pending, no photos of their own (each document
+        // has its own `images` subcollection, and a copy simply has none), and
         // the same series id.
         expect(
-          copies.every((c) => c.status == 'pending' && c.pictures.isEmpty),
+          copies.every((c) => c.status == 'pending' && c.pictureCount == 0),
           isTrue,
         );
         expect(copies.every((c) => c.seriesId == 'a1'), isTrue);
@@ -118,13 +132,15 @@ void main() {
         ];
         when(() => repo.getSeries('s1')).thenAnswer((_) async => series);
 
-        final result = await editor.rewrite(
-          updated: appointment.copyWith(repeat: RepeatInterval.oneYear),
-          appointment: appointment,
-          id: 'a2',
-          start: start,
-          end: start.add(const Duration(hours: 1)),
-          repeat: RepeatInterval.oneYear,
+        final result = await editor.commitRewrite(
+          await editor.planRewrite(
+            updated: appointment.copyWith(repeat: RepeatInterval.oneYear),
+            appointment: appointment,
+            id: 'a2',
+            start: start,
+            end: start.add(const Duration(hours: 1)),
+            repeat: RepeatInterval.oneYear,
+          ),
         );
 
         expect(result.removedBookings, 1);
@@ -170,12 +186,14 @@ void main() {
           endTime: DateTime(2026, 1, 15, 12),
         );
 
-        final count = await editor.propagate(
-          updated: updated,
-          appointment: appointment,
-          id: 'p1',
-          start: editedStart,
-          end: DateTime(2026, 1, 15, 12),
+        final count = await editor.commitPropagate(
+          await editor.planPropagate(
+            updated: updated,
+            appointment: appointment,
+            id: 'p1',
+            start: editedStart,
+            end: DateTime(2026, 1, 15, 12),
+          ),
         );
 
         expect(count, 1);
@@ -196,47 +214,111 @@ void main() {
       },
     );
 
-    test('carries isAllDay and isPersonal onto every sibling', () async {
-      final anchorStart = DateTime(2026, 1, 15, 9);
-      final appointment = _appt(id: 'p1', start: anchorStart, seriesId: 'ps');
-      final sibling = _appt(
-        id: 'p2',
-        start: DateTime(2026, 3, 20, 14),
-        seriesId: 'ps',
-      );
-      when(
-        () => repo.getSeries('ps'),
-      ).thenAnswer((_) async => [appointment, sibling]);
+    test(
+      'carries isAllDay, isPersonal and isDayOff onto every sibling',
+      () async {
+        final anchorStart = DateTime(2026, 1, 15, 9);
+        final appointment = _appt(id: 'p1', start: anchorStart, seriesId: 'ps');
+        final sibling = _appt(
+          id: 'p2',
+          start: DateTime(2026, 3, 20, 14),
+          seriesId: 'ps',
+        );
+        when(
+          () => repo.getSeries('ps'),
+        ).thenAnswer((_) async => [appointment, sibling]);
 
-      // Turning All day on rewrites the anchor to midnight-23:59.
-      final allDayStart = DateTime(2026, 1, 15);
-      final allDayEnd = DateTime(2026, 1, 15, 23, 59);
-      final updated = appointment.copyWith(
-        isAllDay: true,
-        isPersonal: true,
-        startTime: allDayStart,
-        endTime: allDayEnd,
-      );
+        // Turning All day on rewrites the anchor to midnight-23:59.
+        final allDayStart = DateTime(2026, 1, 15);
+        final allDayEnd = DateTime(2026, 1, 15, 23, 59);
+        final updated = appointment.copyWith(
+          isAllDay: true,
+          isPersonal: true,
+          isDayOff: true,
+          startTime: allDayStart,
+          endTime: allDayEnd,
+        );
 
-      await editor.propagate(
-        updated: updated,
-        appointment: appointment,
-        id: 'p1',
-        start: allDayStart,
-        end: allDayEnd,
-      );
+        await editor.commitPropagate(
+          await editor.planPropagate(
+            updated: updated,
+            appointment: appointment,
+            id: 'p1',
+            start: allDayStart,
+            end: allDayEnd,
+          ),
+        );
 
-      final written =
-          (verify(() => repo.updateAppointments(captureAny())).captured.single
-                  as List)
-              .cast<AppointmentRecord>();
-      final propagated = written[1];
-      // Without the flags the sibling spans midnight-23:59 while still reading
-      // isAllDay:false — the travel sweep then stops skipping it and pushes a
-      // "time to leave" for a block that has no departure time.
-      expect(propagated.isAllDay, isTrue);
-      expect(propagated.isPersonal, isTrue);
-      expect(propagated.startTime, DateTime(2026, 3, 20));
+        final written =
+            (verify(() => repo.updateAppointments(captureAny())).captured.single
+                    as List)
+                .cast<AppointmentRecord>();
+        final propagated = written[1];
+        // Without the flags the sibling spans midnight-23:59 while still reading
+        // isAllDay:false — the travel sweep then stops skipping it and pushes a
+        // "time to leave" for a block that has no departure time.
+        expect(propagated.isAllDay, isTrue);
+        expect(propagated.isPersonal, isTrue);
+        // A week of holiday booked as a series must be time off on every
+        // occurrence, or the siblings go back to counting as jobs.
+        expect(propagated.isTimeOff, isTrue);
+        expect(propagated.startTime, DateTime(2026, 3, 20));
+      },
+    );
+
+    // A RUN is scoped by stored `dayIndex`, never by `startTime` — a run day's
+    // start date is editable, so the two axes disagree the moment one is
+    // moved. `futureSeriesRecords` takes an `anchor` for exactly this, and
+    // propagate is the third run-scoped call site beside cancel and delete.
+    group('a moved run day stays scoped by dayIndex', () {
+      // Mon-Fri, one doc per day, anchored on day 1's id.
+      List<AppointmentRecord> runWithDay1On(DateTime day1Start) => [
+        _runDay('r1', day1Start, dayIndex: 1),
+        _runDay('r2', DateTime(2026, 8, 2, 9), dayIndex: 2),
+        _runDay('r3', DateTime(2026, 8, 3, 9), dayIndex: 3),
+        _runDay('r4', DateTime(2026, 8, 4, 9), dayIndex: 4),
+        _runDay('r5', DateTime(2026, 8, 5, 9), dayIndex: 5),
+      ];
+
+      test('day 1 moved past the run still reaches days 2-5', () async {
+        // Day 1 was moved out to Aug 10 — later than every sibling.
+        final moved = DateTime(2026, 8, 10, 9);
+        final series = runWithDay1On(moved);
+        final appointment = series.first;
+        when(() => repo.getSeries('r1')).thenAnswer((_) async => series);
+
+        final plan = await editor.planPropagate(
+          updated: appointment.copyWith(title: 'New Title'),
+          appointment: appointment,
+          id: 'r1',
+          start: moved,
+          end: moved.add(const Duration(hours: 1)),
+        );
+
+        // On `startTime` no sibling starts after Aug 10, so this silently
+        // propagated to nothing and still reported success.
+        expect(plan.propagated.map((a) => a.id), ['r2', 'r3', 'r4', 'r5']);
+        expect(plan.propagated.every((a) => a.title == 'New Title'), isTrue);
+      });
+
+      test('day 4 does not sweep up the moved day 1', () async {
+        final series = runWithDay1On(DateTime(2026, 8, 10, 9));
+        final day4 = series[3];
+        when(() => repo.getSeries('r1')).thenAnswer((_) async => series);
+
+        final plan = await editor.planPropagate(
+          updated: day4.copyWith(title: 'New Title'),
+          appointment: day4,
+          id: 'r4',
+          start: day4.startTime,
+          end: day4.endTime,
+        );
+
+        // Day 1 sits at Aug 10 — after day 4 in TIME but before it in the run.
+        // Scoped on startTime it was overwritten with day 4's fields and had
+        // its clock time rewritten, undoing the move.
+        expect(plan.propagated.map((a) => a.id), ['r5']);
+      });
     });
   });
 }

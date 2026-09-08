@@ -28,6 +28,11 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
   @override
   void initState() {
     super.initState();
+    // Resolved here rather than inside the handler: a stream error can arrive
+    // after this consumer is unmounted, and Riverpod 3's `ref.read` throws on
+    // an unmounted consumer — which would replace the logged notice failure
+    // with a StateError escaping to the zone handler as a FATAL.
+    final logger = ref.read(loggerProvider);
     // Without onError a stream failure escapes to the zone handler and is
     // recorded as a FATAL crash — for a notice we could not display.
     _sub = ref
@@ -36,14 +41,18 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
         .listen(
           _show,
           onError: (Object e, StackTrace st) =>
-              ref.read(loggerProvider).warn('NOTICE stream error', e, st),
+              logger.warn('NOTICE stream error', e, st),
         );
   }
 
   @override
   void dispose() {
     _sub?.cancel();
-    _currentEntry?.remove();
+    // `remove()` detaches, `dispose()` releases — an entry removed without
+    // being disposed trips Flutter's leak tracking in widget tests.
+    _currentEntry
+      ?..remove()
+      ..dispose();
     _currentEntry = null;
     super.dispose();
   }
@@ -63,22 +72,20 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
         : AppMotion.noticeCycle;
     final theme = Theme.of(context);
 
-    // The surface is the same dark ink for all three kinds now; only the
-    // status dot carries the meaning.
     final dot = switch (notice) {
       NoticeSuccess() => theme.palette.noticeMint,
       NoticeInfo() => theme.palette.noticeInfo,
       NoticeError() => theme.palette.noticeRed,
     };
 
-    // Fire off a haptic cue alongside the visual notice too — best effort,
-    // doesn't need to succeed.
     unawaited(switch (notice) {
       NoticeError() => HapticFeedback.mediumImpact(),
       NoticeSuccess() || NoticeInfo() => HapticFeedback.lightImpact(),
     });
 
-    _currentEntry?.remove();
+    _currentEntry
+      ?..remove()
+      ..dispose();
     _currentEntry = null;
 
     late final OverlayEntry entry;
@@ -87,7 +94,9 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
     void dismiss() {
       if (dismissed) return;
       dismissed = true;
-      entry.remove();
+      entry
+        ..remove()
+        ..dispose();
       if (_currentEntry == entry) _currentEntry = null;
     }
 
@@ -95,6 +104,7 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
       builder: (_) => _TopNotice(
         dot: dot,
         message: notice.message,
+        action: notice.action,
         duration: duration,
         showClose: accessible,
         onDismiss: dismiss,
@@ -113,6 +123,7 @@ class _TopNotice extends StatefulWidget {
   const _TopNotice({
     required this.dot,
     required this.message,
+    required this.action,
     required this.duration,
     required this.showClose,
     required this.onDismiss,
@@ -120,6 +131,7 @@ class _TopNotice extends StatefulWidget {
 
   final Color dot;
   final String message;
+  final NoticeAction? action;
   final Duration duration;
 
   /// The design has no close button. It renders only under accessible
@@ -135,7 +147,8 @@ class _TopNoticeState extends State<_TopNotice>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<Offset> _slide;
-  late final Animation<double> _fade;
+  late final CurvedAnimation _slideCurve;
+  late final CurvedAnimation _fade;
 
   @override
   void initState() {
@@ -144,14 +157,18 @@ class _TopNoticeState extends State<_TopNotice>
       vsync: this,
       duration: AppAnimationDurations.banner,
     );
-    _slide = Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
-        .animate(
-          CurvedAnimation(
-            parent: _controller,
-            curve: AppAnimationCurves.entrance,
-          ),
-        );
+    // Held rather than inlined so both can be disposed: a `CurvedAnimation`
+    // registers a status listener on its parent, and only `dispose()` removes
+    // it. Its sibling `fade_in_item.dart` already does this.
+    _slideCurve = CurvedAnimation(
+      parent: _controller,
+      curve: AppAnimationCurves.entrance,
+    );
     _fade = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, -1),
+      end: Offset.zero,
+    ).animate(_slideCurve);
 
     _controller.forward();
     Future.delayed(widget.duration, () {
@@ -161,6 +178,8 @@ class _TopNoticeState extends State<_TopNotice>
 
   @override
   void dispose() {
+    _slideCurve.dispose();
+    _fade.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -244,6 +263,32 @@ class _TopNoticeState extends State<_TopNotice>
                                 ),
                               ),
                             ),
+                            if (widget.action != null) ...[
+                              const SizedBox(width: AppSpacing.sp8),
+                              TextButton(
+                                onPressed: () {
+                                  final action = widget.action!;
+                                  _dismiss();
+                                  unawaited(
+                                    Future<void>.sync(
+                                      action.onPressed,
+                                    ),
+                                  );
+                                },
+                                style: TextButton.styleFrom(
+                                  foregroundColor: scheme.onInverseSurface,
+                                  minimumSize: const Size(48, 48),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.sp8,
+                                  ),
+                                ),
+                                child: Text(
+                                  widget.action!.label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                             if (widget.showClose) ...[
                               const SizedBox(width: AppSpacing.sp4),
                               // A real IconButton for the 48px tap target plus

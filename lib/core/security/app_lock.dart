@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/security/biometric_auth_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/settings/application/app_lock_provider.dart';
@@ -45,8 +47,17 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
   /// Resolves the flag through the controller — the ONE reader of the stored
   /// value, so the widget and the Settings switch can't disagree about it.
   Future<void> _lockOnStartIfEnabled() async {
-    await ref.read(appLockEnabledProvider.notifier).ensureLoaded();
+    final controller = ref.read(appLockEnabledProvider.notifier);
+    await controller.ensureLoaded();
     if (!mounted) return;
+    if (!controller.isResolved) {
+      setState(() {
+        _locked = true;
+        _lockedUnresolved = true;
+      });
+      unawaited(controller.retryIfUnresolved().then((_) => _afterRetry()));
+      return;
+    }
     _lockIfEnabled();
   }
 
@@ -123,16 +134,43 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
   Future<void> _authenticate() async {
     if (_authenticating || !mounted) return;
     _authenticating = true;
-    final reason = context.l10n.applock_reason;
-    final ok = await ref
-        .read(biometricAuthServiceProvider)
-        .authenticate(reason);
-    _authenticating = false;
-    if (ok && mounted) {
-      setState(() {
-        _locked = false;
-        _lockedUnresolved = false;
-      });
+    // Riverpod 3 throws on `ref.read` from an unmounted consumer, so every
+    // provider this path needs is resolved before the first await.
+    final logger = ref.read(loggerProvider);
+    final notices = ref.read(noticeServiceProvider);
+    final service = ref.read(biometricAuthServiceProvider);
+    try {
+      final available = await service.isAvailable();
+      if (!mounted) return;
+      if (!available) {
+        // Release the gate for THIS SESSION only, and say so. Never persist it:
+        // `isAvailable()` is `try { isDeviceSupported() } catch { false }`, so
+        // it returns false for the pre-first-unlock `local_auth` channel window
+        // this whole subsystem exists to handle — and writing the flag there
+        // turns the user's app lock off forever, silently, on one hiccup.
+        logger.warn(
+          'APPLOCK unavailable after lock engaged; opening for this session',
+        );
+        notices.error(context.l10n.settings_appLockUnavailable);
+        setState(() {
+          _locked = false;
+          _lockedUnresolved = false;
+        });
+        return;
+      }
+
+      final reason = context.l10n.applock_reason;
+      final ok = await service.authenticate(reason);
+      if (ok && mounted) {
+        setState(() {
+          _locked = false;
+          _lockedUnresolved = false;
+        });
+      }
+    } catch (e, st) {
+      logger.warn('APPLOCK authenticate flow failed', e, st);
+    } finally {
+      _authenticating = false;
     }
   }
 

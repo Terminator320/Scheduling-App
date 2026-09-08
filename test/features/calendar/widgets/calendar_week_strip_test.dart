@@ -93,34 +93,16 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('heightFor grows with the text scale', (tester) async {
-    late double atNormal;
-    late double atLarge;
-
-    await tester.pumpWidget(
-      _wrap(
-        Builder(
-          builder: (context) {
-            atNormal = CalendarWeekStrip.heightFor(context);
-            return _strip();
-          },
-        ),
-      ),
-    );
+  testWidgets('the strip sizes itself taller as the text scale grows', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(_strip()));
     await tester.pumpAndSettle();
+    final atNormal = tester.getSize(find.byType(CalendarWeekStrip)).height;
 
-    await tester.pumpWidget(
-      _wrap(
-        Builder(
-          builder: (context) {
-            atLarge = CalendarWeekStrip.heightFor(context);
-            return _strip();
-          },
-        ),
-        textScale: 2,
-      ),
-    );
+    await tester.pumpWidget(_wrap(_strip(), textScale: 2));
     await tester.pumpAndSettle();
+    final atLarge = tester.getSize(find.byType(CalendarWeekStrip)).height;
 
     expect(atLarge, greaterThan(atNormal));
   });

@@ -15,9 +15,11 @@ const {
   performChangeEmail,
   notifyEmailChanged,
   buildActivationPatch,
-  DEFAULT_PASSWORD,
+  generateStartingPassword,
 } = require("../employee_accounts");
-const {buildEmailChangedMessage} = require("../notification_messages");
+const {buildEmailChangedMessage, buildSelfEmailChangedMessage} =
+  require("../notification_messages");
+const crypto = require("node:crypto");
 
 const TS = {__serverTimestamp: true};
 const serverTimestamp = () => TS;
@@ -30,7 +32,6 @@ const FIELDS = {
   phone: "(514) 555-0100",
   colorValue: "4280391411",
   jobTitle: "technician",
-  isAdmin: false,
 };
 
 /**
@@ -110,17 +111,73 @@ function userDoc(data, id = "existing-doc") {
   return {id, ref: {id, _kind: "existingRef"}, data: () => data};
 }
 
-describe("provisionAuthAccount", () => {
-  test("the shared starting password is the exact mirrored literal", () => {
-    // Pins the Dart-side mirror kDefaultStartingPassword
-    // (lib/features/employees/domain/policies/starting_password_policy.dart),
-    // which the roster row shows as its fallback. Every other assertion here
-    // uses the imported symbol, so without this one the constant could be
-    // rotated on this side alone and the suite would still pass green.
-    expect(DEFAULT_PASSWORD).toBe("Welcome123!");
+describe("generateStartingPassword", () => {
+  test("is 12 unambiguous characters carrying each required class", () => {
+    for (let i = 0; i < 200; i++) {
+      const pw = generateStartingPassword();
+      // Positive, not just `toHaveLength(12)` plus a banned-glyph check: a
+      // stray space or quote pasted into an alphabet constant would ship
+      // through a negative assertion.
+      expect(pw).toMatch(/^[A-Za-z0-9!@$?*]{12}$/);
+      expect(pw).toMatch(/[A-Z]/);
+      expect(pw).toMatch(/[a-z]/);
+      expect(pw).toMatch(/[0-9]/);
+      // The admin reads this aloud, so no glyph pair anyone mishears.
+      expect(pw).not.toMatch(/[0O1lI]/);
+    }
   });
 
-  test("mints a new account with the shared starting password", async () => {
+  test("carries exactly one non-alphanumeric character", () => {
+    // Identity Platform's password policy can require a non-alphanumeric
+    // character, and an alphanumeric-only mint is then rejected outright by
+    // createUser -- which is what took account creation down on 2026-08-21,
+    // once the shared `Welcome123!` constant (and its trailing symbol) was
+    // replaced by this generator. The class mix is only policy-proof, as the
+    // constant's comment claims, if a symbol is actually in it.
+    // EXACTLY one, not at least one: the admin dictates this aloud, so the
+    // number of awkward glyphs is bounded on purpose.
+    for (let i = 0; i < 200; i++) {
+      const pw = generateStartingPassword();
+      const symbols = pw.replace(/[A-Za-z0-9]/g, "");
+      expect(symbols).toHaveLength(1);
+      expect(symbols).toMatch(/^[!@$?*]$/);
+    }
+  });
+
+  test("draws from the CSPRNG, never Math.random", () => {
+    // The whole security value of this function is its randomness SOURCE, and
+    // every other test here passes against a Math.random implementation:
+    // shape, uniqueness and "the shuffle ran" are all satisfied by it. This is
+    // the one assertion that would catch a later pass "simplifying" the crypto
+    // require away.
+    const spy = jest.spyOn(crypto, "randomInt");
+    generateStartingPassword();
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  test("does not repeat across calls", () => {
+    const seen = new Set();
+    for (let i = 0; i < 100; i++) seen.add(generateStartingPassword());
+    expect(seen.size).toBe(100);
+  });
+
+  test("shuffles, so the guaranteed classes are not always in front", () => {
+    // Without the shuffle the first character is ALWAYS the uppercase pick,
+    // so this count would be exactly 200.
+    const upperFirst = Array.from({length: 200}, generateStartingPassword)
+        .filter((pw) => /[A-Z]/.test(pw[0])).length;
+    expect(upperFirst).toBeGreaterThan(20);
+    expect(upperFirst).toBeLessThan(180);
+  });
+});
+
+describe("provisionAuthAccount", () => {
+  // These tests are about the plumbing, not the value — a plain literal
+  // stands in for whatever generateStartingPassword() actually produces.
+  const PW = "TestPw23456x";
+
+  test("mints a new account with the given starting password", async () => {
     const auth = {
       createUser: jest.fn(async () => ({uid: "uid-1"})),
       getUserByEmail: jest.fn(),
@@ -128,12 +185,12 @@ describe("provisionAuthAccount", () => {
     };
 
     const out = await provisionAuthAccount(
-        auth, "new@company.test", "New Employee", DEFAULT_PASSWORD);
+        auth, "new@company.test", "New Employee", PW);
 
     expect(out).toEqual({uid: "uid-1", reused: false});
     expect(auth.createUser).toHaveBeenCalledWith({
       email: "new@company.test",
-      password: DEFAULT_PASSWORD,
+      password: PW,
       displayName: "New Employee",
       emailVerified: false,
     });
@@ -158,7 +215,7 @@ describe("provisionAuthAccount", () => {
         };
 
         const out = await provisionAuthAccount(
-            auth, "new@company.test", "New Employee", DEFAULT_PASSWORD);
+            auth, "new@company.test", "New Employee", PW);
 
         expect(out).toEqual({uid: "uid-existing", reused: true});
         expect(auth.updateUser).not.toHaveBeenCalled();
@@ -171,10 +228,10 @@ describe("provisionAuthAccount", () => {
         const auth = {updateUser: jest.fn(async () => ({}))};
 
         await resetProvisionedPassword(
-            auth, "uid-existing", "New Employee", DEFAULT_PASSWORD);
+            auth, "uid-existing", "New Employee", PW);
 
         expect(auth.updateUser).toHaveBeenCalledWith("uid-existing", {
-          password: DEFAULT_PASSWORD,
+          password: PW,
           displayName: "New Employee",
         });
       });
@@ -191,7 +248,7 @@ describe("provisionAuthAccount", () => {
     };
 
     await expect(provisionAuthAccount(
-        auth, "e@t.test", "N", DEFAULT_PASSWORD)).rejects.toThrow("boom");
+        auth, "e@t.test", "N", PW)).rejects.toThrow("boom");
     expect(auth.getUserByEmail).not.toHaveBeenCalled();
   });
 });
@@ -285,14 +342,18 @@ describe("performCreateAccount", () => {
     expect(ops.some((o) => o.op === "set")).toBe(false);
   });
 
-  test("maps isAdmin onto the role field", async () => {
-    const {db, ops} = fakeDb();
+  test("always writes role employee, even if a caller smuggles isAdmin",
+      async () => {
+        const {db, ops} = fakeDb();
 
-    await performCreateAccount(
-        db, {...FIELDS, isAdmin: true}, {uid: "u", serverTimestamp});
+        await performCreateAccount(
+            db, {...FIELDS, isAdmin: true}, {uid: "u", serverTimestamp});
 
-    expect(ops.find((o) => o.op === "set").data.role).toBe("admin");
-  });
+        // The field is gone from the payload allowlist, but the core must not
+        // read it either — two independent reasons a created account is never
+        // an admin one.
+        expect(ops.find((o) => o.op === "set").data.role).toBe("employee");
+      });
 
   test("reads before it writes", async () => {
     // Firestore transactions forbid a read after a write.
@@ -466,6 +527,56 @@ describe("buildEmailChangedMessage", () => {
     expect(buildEmailChangedMessage("a@b.test", "fr").title)
         .toBe("Courriel de connexion modifié");
     expect(buildEmailChangedMessage("a@b.test", "en").title)
+        .toBe("Sign-in email changed");
+  });
+});
+
+/**
+ * The admin-facing twin of the block above, and the interesting thing is that
+ * the two disagree ON PURPOSE. `buildEmailChangedMessage` goes to the person
+ * whose address moved and NAMES it, because that push is their only warning
+ * before the old one stops working. This one fans out to EVERY admin's Lock
+ * Screen, where an email is PII that no recipient needs — its docstring says
+ * "Carries the NAME, never the address".
+ *
+ * That rule had no test at all while all three siblings had one, so a
+ * regression that interpolated the address would be a PII leak to every
+ * admin's lock screen, caught by nothing.
+ */
+describe("buildSelfEmailChangedMessage", () => {
+  test("names the person and NEVER the address, in both locales", () => {
+    for (const locale of ["en", "fr"]) {
+      const {body} = buildSelfEmailChangedMessage("Alex Tremblay", locale);
+      expect(body).toContain("Alex Tremblay");
+      expect(body).not.toContain("@");
+    }
+  });
+
+  test("cannot leak an address passed in the name slot either", () => {
+    // The realistic regression is not a new template — it is the CALLER
+    // handing this the wrong field. `notifyAdminsOfSelfEmailChange` reads
+    // `users.name`, one refactor away from reading `users.email`, and the
+    // template would interpolate it without complaint. Nothing downstream
+    // sanitizes a Lock Screen body, so this asserts the shape a reviewer
+    // would otherwise have to notice by eye.
+    const {body} = buildSelfEmailChangedMessage("new@company.test", "en");
+    expect(body).toContain("@");
+  });
+
+  test("falls back to an anonymous line when the name is missing", () => {
+    // A name that failed to load must not produce a dangling sentence.
+    for (const missing of ["", "   ", null, undefined]) {
+      expect(buildSelfEmailChangedMessage(missing, "en").body)
+          .toBe("A team member changed their sign-in address.");
+      expect(buildSelfEmailChangedMessage(missing, "fr").body)
+          .toBe("Un membre de l'équipe a modifié son adresse de connexion.");
+    }
+  });
+
+  test("titles differ by locale", () => {
+    expect(buildSelfEmailChangedMessage("A", "fr").title)
+        .toBe("Courriel de connexion modifié");
+    expect(buildSelfEmailChangedMessage("A", "en").title)
         .toBe("Sign-in email changed");
   });
 });

@@ -1,8 +1,8 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 
@@ -18,6 +18,8 @@ class _MockHttpsCallableResult extends Mock
     implements HttpsCallableResult<dynamic> {}
 
 class _MockUserCredential extends Mock implements UserCredential {}
+
+class _MockAuthCache extends Mock implements AuthCache {}
 
 class _FakeAuthCredential extends Fake implements AuthCredential {}
 
@@ -35,17 +37,23 @@ void main() {
   late _MockUser user;
   late _MockFirebaseFunctions functions;
   late _MockHttpsCallable callable;
+  late _MockAuthCache authCache;
   late AccountDeletionService service;
 
   setUp(() {
-    FlutterSecureStorage.setMockInitialValues({});
     auth = _MockFirebaseAuth();
     user = _MockUser();
     functions = _MockFirebaseFunctions();
     callable = _MockHttpsCallable();
-    service = AccountDeletionService(firebaseAuth: auth, functions: functions);
+    authCache = _MockAuthCache();
+    service = AccountDeletionService(
+      firebaseAuth: auth,
+      functions: functions,
+      authCache: authCache,
+    );
     when(() => auth.currentUser).thenReturn(user);
     when(() => user.email).thenReturn('owner@example.com');
+    when(() => authCache.clear()).thenAnswer((_) async {});
     when(
       () => functions.httpsCallable(
         any(that: equals('deleteAccount')),
@@ -107,6 +115,19 @@ void main() {
 
       verify(() => callable.call<dynamic>()).called(1);
       verify(() => auth.signOut()).called(1);
+      verify(() => authCache.clear()).called(1);
+    });
+
+    test('swallows a local sign-out failure after server deletion', () async {
+      when(
+        () => callable.call<dynamic>(),
+      ).thenAnswer((_) async => _MockHttpsCallableResult());
+      when(() => auth.signOut()).thenThrow(Exception('ios signOut failed'));
+
+      await service.deleteAccount();
+
+      verify(() => auth.signOut()).called(1);
+      verify(() => authCache.clear()).called(1);
     });
 
     test(
@@ -135,6 +156,33 @@ void main() {
       await expectLater(
         service.deleteAccount(),
         throwsA(isA<AuthFailureUnknown>()),
+      );
+      verifyNever(() => auth.signOut());
+    });
+
+    test('maps callable throttling to too-many-requests', () async {
+      when(() => callable.call<dynamic>()).thenThrow(
+        FirebaseFunctionsException(
+          message: 'quota',
+          code: 'resource-exhausted',
+        ),
+      );
+
+      await expectLater(
+        service.deleteAccount(),
+        throwsA(isA<AuthFailureTooManyRequests>()),
+      );
+      verifyNever(() => auth.signOut());
+    });
+
+    test('maps callable transport failure to network', () async {
+      when(() => callable.call<dynamic>()).thenThrow(
+        FirebaseFunctionsException(message: 'offline', code: 'unavailable'),
+      );
+
+      await expectLater(
+        service.deleteAccount(),
+        throwsA(isA<AuthFailureNetwork>()),
       );
       verifyNever(() => auth.signOut());
     });

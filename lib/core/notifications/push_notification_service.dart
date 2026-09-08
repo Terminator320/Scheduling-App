@@ -49,7 +49,8 @@ class PushNotificationService {
       status == AuthorizationStatus.authorized ||
       status == AuthorizationStatus.provisional;
 
-  /// Opens the OS Settings page to re-enable notifications after the one-time prompt.
+  /// Opens the OS Settings page to re-enable notifications after the one-time
+  /// prompt.
   Future<bool> openSystemSettings() async {
     try {
       return await openAppSettings();
@@ -99,7 +100,14 @@ class PushNotificationService {
   Stream<String> get onTokenRefresh => _messaging.onTokenRefresh;
 
   /// The message that launched the app from a terminated state (tap), if any.
-  Future<RemoteMessage?> initialMessage() => _messaging.getInitialMessage();
+  Future<RemoteMessage?> initialMessage() async {
+    try {
+      return await _messaging.getInitialMessage();
+    } catch (e, st) {
+      _logger.warn('PUSH getInitialMessage failed', e, st);
+      return null;
+    }
+  }
 
   /// Fired when a background (not terminated) notification is tapped.
   Stream<RemoteMessage> get onMessageOpenedApp =>

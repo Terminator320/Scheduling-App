@@ -39,6 +39,12 @@ void main() {
       expect(errors['email'], l10n.error_nameAndEmailAreRequired);
     });
 
+    test('a malformed email is flagged with the email-format message', () {
+      final errors = validate(firstName: 'Alex', email: 'alex');
+      expect(errors, hasLength(1));
+      expect(errors['email'], l10n.validation_pleaseEnterAValidEmailAddress);
+    });
+
     test('both empty flags both fields', () {
       final errors = validate();
       expect(errors['name'], l10n.error_nameAndEmailAreRequired);

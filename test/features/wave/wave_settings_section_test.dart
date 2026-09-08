@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -5,10 +7,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/notices/app_notice.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
+import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/settings/screens/settings_screen.dart';
 import 'package:scheduling/features/wave/application/wave_providers.dart';
 import 'package:scheduling/features/wave/data/wave_service.dart';
@@ -64,10 +68,20 @@ Widget _wrapSection(
 }
 
 /// Wraps the full SettingsScreen for admin-gating tests.
-Widget _wrapSettings({required String? role, WaveService? service}) {
+///
+/// [liveRole] is the LIVE user doc, which is a separate question from the
+/// push-time [role] argument — the admin sections are gated on both.
+Widget _wrapSettings({
+  required String? role,
+  WaveService? service,
+  String liveRole = 'admin',
+}) {
   return ProviderScope(
     overrides: [
       if (service != null) waveServiceProvider.overrideWithValue(service),
+      currentUserDocProvider.overrideWith(
+        (ref) => Stream.value({'role': liveRole, 'status': 'active'}),
+      ),
     ],
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
@@ -145,14 +159,249 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('shows the outbox depth once connected', (tester) async {
+      final service = _mockService();
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+          pendingCount: 3,
+          failedCount: 2,
+        ),
+      );
+
+      await tester.pumpWidget(_wrapSection(service));
+      await tester.pumpAndSettle();
+
+      expect(find.text('3 clients waiting to sync'), findsOneWidget);
+      expect(find.text('2 clients failed to sync'), findsOneWidget);
+      // A dead-lettered job never retries on its own, so the recovery has to be
+      // offered right beside the count.
+      expect(find.text('Retry failed'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an UNKNOWN count renders nothing, never zero', (tester) async {
+      // null is not 0. Zero means the outbox is empty, which is the one reading
+      // an admin would act on by not pressing Sync — so a count the server
+      // could not take must not be able to claim it.
+      final service = _mockService();
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+        ),
+      );
+
+      await tester.pumpWidget(_wrapSection(service));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('waiting to sync'), findsNothing);
+      expect(find.textContaining('failed to sync'), findsNothing);
+      expect(find.text('Retry failed'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an empty outbox shows no rows', (tester) async {
+      final service = _mockService();
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+          pendingCount: 0,
+          failedCount: 0,
+        ),
+      );
+
+      await tester.pumpWidget(_wrapSection(service));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('waiting to sync'), findsNothing);
+      expect(find.text('Retry failed'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Retry failed requeues and reports what reached Wave', (
+      tester,
+    ) async {
+      final service = _mockService();
+      final notices = NoticeService();
+      final emitted = <String>[];
+      notices.stream.listen((n) => emitted.add(n.message));
+
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+          failedCount: 2,
+        ),
+      );
+      when(service.retryFailedJobs).thenAnswer(
+        (_) async => const WaveRetryResult(
+          requeued: 2,
+          scanned: 2,
+          pushed: 2,
+          failed: 0,
+        ),
+      );
+
+      await tester.pumpWidget(_wrapSection(service, noticeService: notices));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Retry failed'));
+      await tester.pumpAndSettle();
+
+      verify(service.retryFailedJobs).called(1);
+      expect(emitted.last, contains('2 clients sent to Wave'));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a requeue whose push failed still reports success', (
+      tester,
+    ) async {
+      // The requeue is the durable half — those jobs ARE back in the queue and
+      // will drain.
+      final service = _mockService();
+      final notices = NoticeService();
+      final emitted = <String>[];
+      notices.stream.listen((n) => emitted.add(n.message));
+
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+          failedCount: 3,
+        ),
+      );
+      when(service.retryFailedJobs).thenAnswer(
+        (_) async => const WaveRetryResult(
+          requeued: 3,
+          scanned: 3,
+          pushed: null,
+          failed: null,
+        ),
+      );
+
+      await tester.pumpWidget(_wrapSection(service, noticeService: notices));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Retry failed'));
+      await tester.pumpAndSettle();
+
+      expect(emitted.last, contains('3 clients queued for Wave again'));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a job that dies again is surfaced as a failure, not success', (
+      tester,
+    ) async {
+      // The press that looked broken: the drain behind the requeue dead-letters
+      // a non-retryable job in the same call, so the failed row does not move —
+      // a success notice over it is an affirmative lie.
+      final service = _mockService();
+      final notices = NoticeService();
+      final emitted = <AppNotice>[];
+      notices.stream.listen(emitted.add);
+
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+          failedCount: 1,
+        ),
+      );
+      when(service.retryFailedJobs).thenAnswer(
+        (_) async => const WaveRetryResult(
+          requeued: 1,
+          scanned: 1,
+          pushed: 0,
+          failed: 1,
+        ),
+      );
+
+      await tester.pumpWidget(_wrapSection(service, noticeService: notices));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Retry failed'));
+      await tester.pumpAndSettle();
+
+      expect(emitted.last.message, contains("still couldn't be sent"));
+      expect(emitted.last, isA<NoticeError>());
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Retry with nothing left to recover says so', (tester) async {
+      final service = _mockService();
+      final notices = NoticeService();
+      final emitted = <String>[];
+      notices.stream.listen((n) => emitted.add(n.message));
+
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+          failedCount: 1,
+        ),
+      );
+      when(service.retryFailedJobs).thenAnswer(
+        (_) async => const WaveRetryResult(
+          requeued: 0,
+          scanned: 1,
+          pushed: 0,
+          failed: 0,
+        ),
+      );
+
+      await tester.pumpWidget(_wrapSection(service, noticeService: notices));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Retry failed'));
+      await tester.pumpAndSettle();
+
+      expect(emitted.last, contains('Nothing to retry'));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Sync is disabled while a Retry is in flight', (tester) async {
+      // Both drain the same queue; two presses at once would have each
+      // reporting the other's work.
+      final service = _mockService();
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+          failedCount: 1,
+        ),
+      );
+      final gate = Completer<WaveRetryResult>();
+      when(service.retryFailedJobs).thenAnswer((_) => gate.future);
+
+      await tester.pumpWidget(_wrapSection(service));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Retry failed'));
+      await tester.pump();
+
+      final sync = tester.widget<AnimatedLoadingButton>(
+        find.byType(AnimatedLoadingButton),
+      );
+      expect(sync.onPressed, isNull);
+
+      gate.complete(
+        const WaveRetryResult(requeued: 1, scanned: 1, pushed: 1, failed: 0),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('Sync is not offered before connecting', (tester) async {
       final service = _mockService();
 
       await tester.pumpWidget(_wrapSection(service));
       await tester.pumpAndSettle();
 
-      // Sync only appears once connected, so a disconnected admin can't
-      // trigger a guaranteed-to-fail sync in the first place.
+      // Sync only appears once connected, so a disconnected admin can't trigger
+      // a guaranteed-to-fail sync in the first place.
       expect(find.text('Sync with Wave'), findsNothing);
       verifyNever(service.syncCustomers);
       expect(tester.takeException(), isNull);
@@ -234,6 +483,31 @@ void main() {
       // No business name shown (connection was not established).
       expect(find.text('Acme Corp'), findsNothing);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a NON-WaveFailure throw still surfaces a notice', (
+      tester,
+    ) async {
+      // Shipped as a FATAL on 2026-08-31: the catch was narrowed to `on
+      // WaveFailure`, so any other throw escaped to the zone handler with NO
+      // notice shown — the admin taps Connect and nothing visibly happens.
+      final service = _mockService();
+      final notices = NoticeService();
+      final emitted = <String>[];
+      notices.stream.listen((n) => emitted.add(n.message));
+
+      when(service.bootstrap).thenThrow(StateError('not a WaveFailure'));
+
+      await tester.pumpWidget(_wrapSection(service, noticeService: notices));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Connect to Wave'));
+      await tester.pumpAndSettle();
+
+      expect(emitted, isNotEmpty);
+      expect(tester.takeException(), isNull);
+      // And the busy flag was released, so the button is usable again.
+      expect(find.text('Connect to Wave'), findsOneWidget);
     });
 
     testWidgets('Sync success after Connect names both directions', (
@@ -365,6 +639,30 @@ void main() {
 
       expect(find.textContaining('INTEGRATIONS'), findsOneWidget);
       expect(find.text('Connect to Wave'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    // The route argument is a push-time snapshot: a stale back stack or a deep
+    // link can carry `role: 'admin'` for someone the user doc no longer says
+    // is one. The live gate is what refuses them.
+    testWidgets('Wave section is hidden when the live doc is not an admin', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        _wrapSettings(
+          role: 'admin',
+          service: _mockService(),
+          liveRole: 'employee',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('INTEGRATIONS'), findsNothing);
+      expect(find.text('Connect to Wave'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 

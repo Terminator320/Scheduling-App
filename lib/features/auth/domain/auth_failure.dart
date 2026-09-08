@@ -44,9 +44,13 @@ sealed class AuthFailure extends Failure {
     // credential that went stale mid-setup. Signing in again fixes either.
     AuthFailureSetupAlreadyComplete() ||
     AuthFailureSessionExpired() ||
-    // Ordinary onboarding state, not a defect: they have not opened the link
-    // yet, or the token predates their doing so.
-    AuthFailureEmailNotVerified() => true,
+    // Choosing the starting password again is an ordinary thing to try,
+    // not a defect — the screen asks for a different one and they retype.
+    AuthFailureStartingPasswordReused() ||
+    // A backend older than this build refusing setup. Nothing the person did
+    // wrong, and nothing they can fix — so it must not file a non-fatal on
+    // every retry while they sit in a loop they cannot leave.
+    AuthFailureSetupNotAvailableYet() => true,
     // Console misconfiguration, a rules rejection, an unmapped error, or a
     // signed-in uid with no users doc — all real defects worth a non-fatal.
     AuthFailureOperationNotAllowed() ||
@@ -182,14 +186,33 @@ class AuthFailureNoAccountRecord extends AuthFailure {
       c.l10n.error_noAccountRecordContactAdmin;
 }
 
-// Setup was attempted before the address was verified. The account is minted
-// on a shared starting password, so verification is what proves the person
-// signing in owns the mailbox — see AuthService.isEmailVerified.
-class AuthFailureEmailNotVerified extends AuthFailure {
-  const AuthFailureEmailNotVerified();
+// The password they chose IS the starting password the admin issued.
+// Detected by [AuthService.completeAccountSetup] reauthenticating with the
+// typed value: if that SUCCEEDS it is still the current credential, so
+// setup would leave the account active on a password the admin holds.
+// Surfaced as a field error on the password, never a banner — it names the
+// one field the person has to change.
+class AuthFailureStartingPasswordReused extends AuthFailure {
+  const AuthFailureStartingPasswordReused();
   @override
   String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
-      c.l10n.error_verifyYourEmailBeforeFinishing;
+      c.l10n.validation_passwordMustDifferFromStarting;
+}
+
+// The backend still enforces the retired `email_verified` guard, i.e. it
+// predates the simplified-auth deploy while this build does not.
+//
+// Deliberately NOT named for that guard, and deliberately not asking anyone to
+// verify an address: this build has no verification UI left to offer, so the
+// person cannot satisfy the check and the only true statement is that setup is
+// unavailable right now. Reachable only in the rollout window
+// (`docs/DEPLOYMENT.md` §3) — a backend rolled back under a shipped app build.
+// Retire it once no pre-simplified-auth backend can be live.
+class AuthFailureSetupNotAvailableYet extends AuthFailure {
+  const AuthFailureSetupNotAvailableYet();
+  @override
+  String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
+      c.l10n.error_setupNotAvailableYet;
 }
 
 // The credential went stale mid-setup (token expired, or the write needed a
@@ -250,8 +273,9 @@ extension AuthFailureForgotPassword on AuthFailure {
       AuthFailureRequiresRecentLogin() ||
       AuthFailureSetupAlreadyComplete() ||
       AuthFailureNoAccountRecord() ||
-      AuthFailureEmailNotVerified() ||
       AuthFailureSessionExpired() ||
+      AuthFailureStartingPasswordReused() ||
+      AuthFailureSetupNotAvailableYet() ||
       AuthFailureUnknown() =>
         context.l10n.error_somethingWentWrongPleaseTryAgain,
     };

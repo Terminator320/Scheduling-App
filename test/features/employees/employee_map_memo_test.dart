@@ -61,4 +61,35 @@ void main() {
     colorSub.close();
     container.dispose();
   });
+
+  test('name map falls back to a composed display name', () async {
+    final controller = StreamController<List<EmployeeRecord>>();
+    addTearDown(controller.close);
+    final container = ProviderContainer(
+      overrides: [
+        allUsersStreamProvider.overrideWith((ref) => controller.stream),
+      ],
+    );
+
+    // The map is autoDispose, so it needs a live listener BEFORE the stream
+    // emits - reading it afterwards subscribes too late and sees nothing.
+    final nameSub = container.listen(employeeNameMapProvider, (_, _) {});
+
+    controller.add(const [
+      EmployeeRecord(
+        id: 'e1',
+        firstName: 'Amy',
+        lastName: 'Adams',
+        email: 'amy@shop.ca',
+      ),
+    ]);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(container.read(employeeNameMapProvider), {'e1': 'Amy Adams'});
+
+    // Close in order (subscription before container) to avoid the Riverpod 3
+    // teardown race on StreamProvider futures.
+    nameSub.close();
+    container.dispose();
+  });
 }

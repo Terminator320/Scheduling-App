@@ -3,8 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -12,7 +11,6 @@ import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_address_section.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
 import 'package:scheduling/l10n/l10n.dart';
-
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 
 import '../../../../support/tour_test_support.dart';
@@ -38,7 +36,8 @@ void main() {
   });
 
   // A viewport tall enough that the whole sheet (a DraggableScrollableSheet at
-  // 95% of height) lays out its fields without scrolling, so finders are stable.
+  // 95% of height) lays out its fields without scrolling, so finders are
+  // stable.
   Future<void> setTallViewport(WidgetTester tester) async {
     tester.view.physicalSize = const Size(800, 2400);
     tester.view.devicePixelRatio = 1.0;
@@ -46,23 +45,26 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
   }
 
-  // The sheet is presented via showModalBottomSheet (as in the app) so the
-  // DraggableScrollableSheet inside FormSheetScaffold gets a real sheet route
-  // + Material ancestor, and its post-save Navigator.pop has a route to remove.
-  Future<_FakeClientsRepository> pumpSheet(WidgetTester tester) async {
+  // The sheet is presented via showModalBottomSheet (as in the app) so
+  // FormSheetFrame gets a real sheet route + Material ancestor, and its
+  // post-save Navigator.pop has a route to remove.
+  Future<_FakeClientsRepository> pumpSheet(
+    WidgetTester tester, {
+    String? initialName,
+  }) async {
     await setTallViewport(tester);
     final repo = _FakeClientsRepository();
     await tester.pumpWidget(
       ProviderScope(
         overrides: [clientsRepositoryProvider.overrideWithValue(repo)],
-        child: const MaterialApp(
-          localizationsDelegates: [
+        child: MaterialApp(
+          localizationsDelegates: const [
             AppLocalizations.delegate,
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
           ],
           supportedLocales: AppLocalizations.supportedLocales,
-          home: _SheetHost(),
+          home: _SheetHost(initialName: initialName),
         ),
       ),
     );
@@ -90,8 +92,7 @@ void main() {
     final repo = await pumpSheet(tester);
 
     // Customer name (first field) satisfies the name requirement; the phone
-    // field satisfies the contact-method requirement. With no-fixed-address on,
-    // no address is required.
+    // field satisfies the contact-method requirement.
     await tester.enterText(find.byType(TextField).first, 'City of Montreal');
     await tester.enterText(
       find.widgetWithText(TextField, 'Phone'),
@@ -150,6 +151,196 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repo.added!.type, ClientType.unset);
+  });
+
+  // I4: `repo.added!.name` had zero assertions here, though the stored name IS
+  // the Wave customer name — the one field a wrong save renames on live
+  // invoices.
+  testWidgets('a PERSON is stored under their phone number', (tester) async {
+    final repo = await pumpSheet(tester);
+
+    await tester.enterText(find.byType(TextField).first, 'Marc Tremblay');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Phone'),
+      '5145550101',
+    );
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+
+    expect(repo.added!.name, '5145550101');
+  });
+
+  testWidgets('a PERSON keeps the typed name in the halves', (tester) async {
+    // Name is required here and both halves are optional, so composing alone
+    // would leave the typed name nowhere — the card would render a bare number
+    // and nothing in the app could recover it.
+    final repo = await pumpSheet(tester);
+
+    await tester.enterText(find.byType(TextField).first, 'Marc Tremblay');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Phone'),
+      '5145550101',
+    );
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+
+    expect(repo.added!.firstName, 'Marc');
+    expect(repo.added!.lastName, 'Tremblay');
+  });
+
+  // The inline 'add client while booking' flow seeds the name from whatever was
+  // typed into the client search — and this business searches people by phone
+  // number, so that seed IS the number.
+  testWidgets('a seeded phone number is lifted into the phone field', (
+    tester,
+  ) async {
+    final repo = await pumpSheet(tester, initialName: '5145551234');
+
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+
+    expect(repo.added, isNotNull);
+    expect(repo.added!.phone, '(514) 555-1234');
+  });
+
+  testWidgets('a seeded name and number lands the name in the halves', (
+    tester,
+  ) async {
+    final repo = await pumpSheet(
+      tester,
+      initialName: 'Marc Tremblay 5145551234',
+    );
+
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+
+    expect(repo.added!.phone, '(514) 555-1234');
+    expect(repo.added!.firstName, 'Marc');
+    expect(repo.added!.lastName, 'Tremblay');
+  });
+
+  // The everyday paste: a number in the shape the app itself renders.
+  testWidgets('a pasted bracketed number leaves the name clean', (
+    tester,
+  ) async {
+    final repo = await pumpSheet(tester);
+
+    await tester.enterText(
+      find.byType(TextField).first,
+      'Marc Tremblay (514) 555-1234',
+    );
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+
+    expect(repo.added!.phone, '(514) 555-1234');
+    expect(repo.added!.name, '5145551234');
+    expect(repo.added!.firstName, 'Marc');
+    expect(repo.added!.lastName, 'Tremblay');
+  });
+
+  // The stored shape for a PERSON, spelled out end-to-end: `name` is the BARE
+  // number, the halves carry the real name, `phone` stays formatted.
+  group(
+    'a new PERSON always stores name=bare, halves=name, phone=formatted',
+    () {
+      Future<void> expectStoredShape(
+        _FakeClientsRepository repo,
+        WidgetTester tester,
+      ) async {
+        await tester.tap(find.byType(SwitchListTile));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Add'));
+        await tester.pumpAndSettle();
+
+        expect(repo.added, isNotNull);
+        expect(repo.added!.name, '5145551234');
+        expect(repo.added!.firstName, 'Marc');
+        expect(repo.added!.lastName, 'Tremblay');
+        expect(repo.added!.phone, '(514) 555-1234');
+      }
+
+      testWidgets('name typed, number typed into Phone', (tester) async {
+        final repo = await pumpSheet(tester);
+        await tester.enterText(find.byType(TextField).first, 'Marc Tremblay');
+        await tester.enterText(_fieldLabelled('Phone'), '5145551234');
+        await expectStoredShape(repo, tester);
+      });
+
+      testWidgets('name and bare number pasted together', (tester) async {
+        final repo = await pumpSheet(tester);
+        await tester.enterText(
+          find.byType(TextField).first,
+          'Marc Tremblay 5145551234',
+        );
+        await expectStoredShape(repo, tester);
+      });
+
+      testWidgets('name and BRACKETED number pasted together', (tester) async {
+        final repo = await pumpSheet(tester);
+        await tester.enterText(
+          find.byType(TextField).first,
+          'Marc Tremblay (514) 555-1234',
+        );
+        await expectStoredShape(repo, tester);
+      });
+
+      testWidgets('bare number seeded, halves typed', (tester) async {
+        final repo = await pumpSheet(tester, initialName: '5145551234');
+        await tester.enterText(_fieldLabelled('First name'), 'Marc');
+        await tester.enterText(_fieldLabelled('Last name'), 'Tremblay');
+        await expectStoredShape(repo, tester);
+      });
+
+      // The brackets must not survive into the stored name — `composeStored`
+      // reduces it through `bareNumber` even though the FIELD keeps the shape
+      // that was pasted.
+      testWidgets('BRACKETED number seeded, halves typed', (tester) async {
+        final repo = await pumpSheet(tester, initialName: '(514) 555-1234');
+        await tester.enterText(_fieldLabelled('First name'), 'Marc');
+        await tester.enterText(_fieldLabelled('Last name'), 'Tremblay');
+        await expectStoredShape(repo, tester);
+      });
+
+      testWidgets('bracketed number typed into Phone, name typed', (
+        tester,
+      ) async {
+        final repo = await pumpSheet(tester);
+        await tester.enterText(find.byType(TextField).first, 'Marc Tremblay');
+        await tester.enterText(_fieldLabelled('Phone'), '(514) 555-1234');
+        await expectStoredShape(repo, tester);
+      });
+    },
+  );
+
+  testWidgets('a COMMERCIAL client keeps its typed name', (tester) async {
+    // The type has to reach `composeStored`, or a real company is booked into
+    // Wave under a phone number.
+    final repo = await pumpSheet(tester);
+
+    await tester.enterText(find.byType(TextField).first, 'Vogas Plumbing');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Phone'),
+      '5145550101',
+    );
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Commercial'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+
+    expect(repo.added!.name, 'Vogas Plumbing');
   });
 
   testWidgets('access notes are saved', (tester) async {
@@ -235,7 +426,9 @@ Finder _fieldLabelled(String label) => find.descendant(
 // Hosts the sheet behind a button so opening it creates a poppable modal route
 // with the Material ancestor showModalBottomSheet provides.
 class _SheetHost extends StatelessWidget {
-  const _SheetHost();
+  const _SheetHost({this.initialName});
+
+  final String? initialName;
 
   @override
   Widget build(BuildContext context) {
@@ -246,7 +439,10 @@ class _SheetHost extends StatelessWidget {
             _lastResult = await showModalBottomSheet<AddClientResult>(
               context: context,
               isScrollControlled: true,
-              builder: (_) => const AddClientSheet(),
+              builder: (_) => AddClientSheet(
+                initialName: initialName,
+                analyticsSource: AnalyticsSources.clientsTab,
+              ),
             );
           },
           child: const Text('open'),

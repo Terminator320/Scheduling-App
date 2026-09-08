@@ -18,6 +18,47 @@ class _MockUser extends Mock implements User {}
 class _MockRepo extends Mock implements EmployeesRepository {}
 
 void main() {
+  group('currentUserDocProvider', () {
+    late _MockFirebaseAuth mockAuth;
+    late _MockUser mockUser;
+    late _MockRepo mockRepo;
+
+    setUp(() {
+      mockAuth = _MockFirebaseAuth();
+      mockUser = _MockUser();
+      mockRepo = _MockRepo();
+    });
+
+    test('waits for auth uid to settle before opening watchUserDoc', () async {
+      final authStates = StreamController<User?>();
+      when(
+        () => mockAuth.authStateChanges(),
+      ).thenAnswer((_) => authStates.stream);
+      when(() => mockUser.uid).thenReturn('uid1');
+      when(
+        () => mockRepo.watchUserDoc('uid1'),
+      ).thenAnswer((_) => Stream.value({'status': 'active'}));
+
+      final container = ProviderContainer(
+        overrides: [
+          firebaseAuthProvider.overrideWithValue(mockAuth),
+          employeesRepositoryProvider.overrideWithValue(mockRepo),
+        ],
+      );
+      addTearDown(authStates.close);
+      addTearDown(container.dispose);
+
+      container.listen(currentUserDocProvider, (_, _) {});
+      await pumpEventQueue();
+      verifyNever(() => mockRepo.watchUserDoc(any()));
+
+      authStates.add(mockUser);
+      await pumpEventQueue();
+
+      verify(() => mockRepo.watchUserDoc('uid1')).called(1);
+    });
+  });
+
   group('accountDisabledProvider', () {
     late _MockFirebaseAuth mockAuth;
     late _MockUser mockUser;
@@ -231,32 +272,29 @@ void main() {
       );
     });
 
-    test(
-      'false for a settled empty doc that was never populated (fresh sign-in '
-      'lag / invited-signup bootstrap window)',
-      () {
-        // There's no prior data (first emission), or just a prior empty placeholder,
-        // so the empty doc reads as a bootstrap window, not a populated->empty deletion.
-        expect(
-          isAccountDeletionSignal(
-            isSignedIn: true,
-            resolvedUid: 'uid1',
-            previous: null,
-            docState: emptyData,
-          ),
-          isFalse,
-        );
-        expect(
-          isAccountDeletionSignal(
-            isSignedIn: true,
-            resolvedUid: 'uid1',
-            previous: emptyData,
-            docState: emptyData,
-          ),
-          isFalse,
-        );
-      },
-    );
+    test('false for a settled empty doc that was never populated (fresh sign-in '
+        'lag / invited-signup bootstrap window)', () {
+      // There's no prior data (first emission), or just a prior empty placeholder,
+      // so the empty doc reads as a bootstrap window, not a populated->empty deletion.
+      expect(
+        isAccountDeletionSignal(
+          isSignedIn: true,
+          resolvedUid: 'uid1',
+          previous: null,
+          docState: emptyData,
+        ),
+        isFalse,
+      );
+      expect(
+        isAccountDeletionSignal(
+          isSignedIn: true,
+          resolvedUid: 'uid1',
+          previous: emptyData,
+          docState: emptyData,
+        ),
+        isFalse,
+      );
+    });
   });
 
   group('confirmColdStartDeletion (C3: deleted while the app was closed)', () {
@@ -288,50 +326,50 @@ void main() {
       },
     );
 
-    test(
-      'does not flag the fresh-signup window (signed in, no doc yet, '
-      'cold cache)',
-      () async {
-        var cacheReads = 0;
-        expect(
-          await confirmColdStartDeletion(
-            isSignedIn: true,
-            resolvedUid: 'uid1',
-            previous: null,
-            docState: emptyData,
-            loadWarmCache: (uid) async {
-              cacheReads++;
-              return null; // The cache only exists after a completed sign-in.
-            },
-          ),
-          isFalse,
-        );
-        expect(cacheReads, 1);
-      },
-    );
-
-    test('does not flag a transient permission-denied (stream error)', () async {
+    test('does not flag the fresh-signup window (signed in, no doc yet, '
+        'cold cache)', () async {
       var cacheReads = 0;
-      final denied = AsyncError<Map<String, dynamic>>(
-        Exception('permission-denied'),
-        StackTrace.current,
-      );
       expect(
         await confirmColdStartDeletion(
           isSignedIn: true,
           resolvedUid: 'uid1',
           previous: null,
-          docState: denied,
+          docState: emptyData,
           loadWarmCache: (uid) async {
             cacheReads++;
-            return cachedIdentity;
+            return null; // The cache only exists after a completed sign-in.
           },
         ),
         isFalse,
       );
-      // An error emission must never even consult the cache.
-      expect(cacheReads, 0);
+      expect(cacheReads, 1);
     });
+
+    test(
+      'does not flag a transient permission-denied (stream error)',
+      () async {
+        var cacheReads = 0;
+        final denied = AsyncError<Map<String, dynamic>>(
+          Exception('permission-denied'),
+          StackTrace.current,
+        );
+        expect(
+          await confirmColdStartDeletion(
+            isSignedIn: true,
+            resolvedUid: 'uid1',
+            previous: null,
+            docState: denied,
+            loadWarmCache: (uid) async {
+              cacheReads++;
+              return cachedIdentity;
+            },
+          ),
+          isFalse,
+        );
+        // An error emission must never even consult the cache.
+        expect(cacheReads, 0);
+      },
+    );
 
     test('does not flag while the doc is still loading or populated', () async {
       expect(
@@ -403,7 +441,9 @@ void main() {
           resolvedUid: 'uid1',
           previous: null,
           docState: emptyData,
-          loadWarmCache: (uid) async => throw Exception('keystore'),
+          loadWarmCache: (uid) async {
+            throw Exception('keystore');
+          },
         ),
         isFalse,
       );
@@ -499,6 +539,68 @@ void main() {
       // Sequencing matters here — admin has to appear before employee, or the
       // main.dart listener can't detect the admin → employee demotion.
       expect(emissions, containsAllInOrder(['admin', 'employee']));
+    });
+  });
+
+  group('currentUserNameProvider', () {
+    late _MockFirebaseAuth mockAuth;
+    late _MockUser mockUser;
+    late _MockRepo mockRepo;
+
+    setUp(() {
+      mockAuth = _MockFirebaseAuth();
+      mockUser = _MockUser();
+      mockRepo = _MockRepo();
+    });
+
+    ProviderContainer container0() => ProviderContainer(
+      overrides: [
+        firebaseAuthProvider.overrideWithValue(mockAuth),
+        employeesRepositoryProvider.overrideWithValue(mockRepo),
+      ],
+    );
+
+    Future<String> firstNameValue(ProviderContainer container) async {
+      final sub = container.listen<String>(currentUserNameProvider, (_, _) {});
+      addTearDown(sub.close);
+      // The doc listener opens behind an async auth-uid gate, so the name is
+      // empty by definition until the doc lands - settle it before reading.
+      await container.read(currentUserDocProvider.future);
+      return await Future.value(container.read(currentUserNameProvider));
+    }
+
+    test('falls back to first and last name when name is blank', () async {
+      when(() => mockUser.uid).thenReturn('uid1');
+      when(() => mockRepo.watchUserDoc('uid1')).thenAnswer(
+        (_) => Stream.value({
+          'firstName': 'Theo',
+          'lastName': 'Roy',
+          'status': 'active',
+        }),
+      );
+      when(
+        () => mockAuth.authStateChanges(),
+      ).thenAnswer((_) => Stream.value(mockUser));
+
+      final container = container0();
+      addTearDown(container.dispose);
+
+      expect(await firstNameValue(container), 'Theo Roy');
+    });
+
+    test('falls back to email when the doc has no name fields', () async {
+      when(() => mockUser.uid).thenReturn('uid1');
+      when(() => mockRepo.watchUserDoc('uid1')).thenAnswer(
+        (_) => Stream.value({'email': 'theo@example.com', 'status': 'active'}),
+      );
+      when(
+        () => mockAuth.authStateChanges(),
+      ).thenAnswer((_) => Stream.value(mockUser));
+
+      final container = container0();
+      addTearDown(container.dispose);
+
+      expect(await firstNameValue(container), 'theo@example.com');
     });
   });
 }

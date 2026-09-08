@@ -23,11 +23,14 @@ class _TextSizeViewState extends State<TextSizeView> {
   ];
 
   late double _selected;
+  bool _seeded = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_seeded) return;
     _selected = ThemeNotifier.of(context).textScale;
+    _seeded = true;
   }
 
   @override
@@ -303,7 +306,7 @@ class _ScaleGlyph extends StatelessWidget {
           'A',
           style: TextStyle(
             fontSize: 11 + (scale - 0.8) * 16,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
             color: isSelected ? primary : muted,
             height: 1,
           ),

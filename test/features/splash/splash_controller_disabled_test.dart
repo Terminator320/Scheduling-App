@@ -1,9 +1,11 @@
+import 'package:fake_async/fake_async.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
+import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/splash/application/splash_controller.dart';
@@ -167,6 +169,67 @@ void main() {
       verify(() => mockAuth.signOut()).called(1);
     });
 
+    test(
+      'returns SplashGoToLogin for a missing doc even if sign-out throws',
+      () async {
+        when(
+          () => mockRepo.findUserByUid('uid1'),
+        ).thenAnswer((_) async => null);
+        when(
+          () => mockAuth.signOut(),
+        ).thenThrow(Exception('ios signOut failed'));
+
+        final container = ProviderContainer(
+          overrides: [
+            firebaseAuthProvider.overrideWithValue(mockAuth),
+            employeesRepositoryProvider.overrideWithValue(mockRepo),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final result = await container.read(splashDestinationProvider.future);
+
+        expect(result, isA<SplashGoToLogin>());
+        verify(() => mockAuth.signOut()).called(1);
+      },
+    );
+
+    test(
+      'returns SplashGoToLogin for a disabled employee even if sign-out throws',
+      () async {
+        when(() => mockRepo.findUserByUid('uid1')).thenAnswer(
+          (_) async => const UserUidMatch(
+            id: 'doc1',
+            data: {
+              'uid': 'uid1',
+              'role': 'employee',
+              'status': 'disabled',
+              'name': 'Jane',
+              'email': 'jane@example.com',
+              'phone': '',
+              'colorValue': '4280391411',
+            },
+          ),
+        );
+        when(
+          () => mockAuth.signOut(),
+        ).thenThrow(Exception('ios signOut failed'));
+
+        final container = ProviderContainer(
+          overrides: [
+            firebaseAuthProvider.overrideWithValue(mockAuth),
+            employeesRepositoryProvider.overrideWithValue(mockRepo),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final result = await container.read(splashDestinationProvider.future);
+
+        expect(result, isA<SplashGoToLogin>());
+        verify(() => mockAuth.signOut()).called(1);
+      },
+    );
+
     test('rethrows when findUserByUid throws (transient errors)', () async {
       // M8: transient Firestore failures must rethrow, not sign out, so the splash UI can surface an error and retry.
       when(
@@ -189,6 +252,55 @@ void main() {
         throwsA(isA<Exception>()),
       );
       verifyNever(() => mockAuth.signOut());
+    });
+
+    test('a permission-denied walks the SHARED ladder before surfacing', () {
+      // The splash budget, pinned. This call site used to pass
+      // `const [500ms, 1500ms]`; it now inherits `kAuthPropagationDelays`
+      // (400/1200/2500) as `error-handling.md` requires — three retries rather
+      // than two, and up to 4.1 s of backoff rather than 2.0 s before a
+      // deleted or deactivated account is signed out. That is the one
+      // user-VISIBLE consequence of the single-ladder rule: a cold start on
+      // such an account sits on the splash screen ~2.1 s longer. Deliberate,
+      // but nothing pinned it, so a change to the shared ladder could move a
+      // launch-path delay with no test saying so.
+      fakeAsync((async) {
+        var attempts = 0;
+        when(() => mockRepo.findUserByUid('uid1')).thenAnswer((_) async {
+          attempts++;
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'permission-denied',
+          );
+        });
+
+        final container = ProviderContainer(
+          overrides: [
+            firebaseAuthProvider.overrideWithValue(mockAuth),
+            employeesRepositoryProvider.overrideWithValue(mockRepo),
+          ],
+          retry: (retryCount, error) => null,
+        );
+        addTearDown(container.dispose);
+
+        Object? surfaced;
+        container
+            .read(splashDestinationProvider.future)
+            .then<void>((_) {}, onError: (Object e) => surfaced = e);
+
+        async.flushMicrotasks();
+        expect(attempts, 1, reason: 'the first read is not a retry');
+
+        for (final delay in kAuthPropagationDelays) {
+          expect(surfaced, isNull, reason: 'must not surface mid-ladder');
+          async.elapse(delay);
+        }
+
+        expect(attempts, kAuthPropagationDelays.length + 1);
+        expect(async.elapsed, const Duration(milliseconds: 4100));
+        expect(surfaced, isA<FirebaseException>());
+        verifyNever(() => mockAuth.signOut());
+      });
     });
   });
 }

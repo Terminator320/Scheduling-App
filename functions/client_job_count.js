@@ -18,6 +18,8 @@
 
 const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
+const {debounceRecount} = require("./recount_claim");
+const {adminFirestore} = require("./admin_firestore");
 
 /** Firestore `NOT_FOUND` — the client was deleted out from under the job. */
 const NOT_FOUND = 5;
@@ -31,11 +33,13 @@ function clientIdOf(data) {
   if (!data) return "";
   const raw = data.clientId;
   const id = typeof raw === "string" ? raw.trim() : "";
-  // A "/" would make doc() throw synchronously, and this trigger is retry:true
-  // — an unhandled throw becomes a redelivery storm on one poisoned event.
-  // firestore.rules validates only `status` on /appointments, so a malformed
-  // clientId can reach here.
-  return id.includes("/") ? "" : id;
+  // A "/", "." or ".." would make doc() throw synchronously, and this trigger
+  // is retry:true — an unhandled throw becomes a redelivery storm on one
+  // poisoned event. `isValidDocIdField` in firestore.rules screens `clientId`
+  // on the app's paths, but the Admin SDK and the console bypass rules
+  // entirely, so a malformed clientId can still reach here.
+  if (id.includes("/") || id === "." || id === "..") return "";
+  return id;
 }
 
 /**
@@ -66,12 +70,19 @@ function clientsToRecount(beforeData, afterData) {
  * @return {!Promise<void>}
  */
 async function recountOne(db, clientId) {
-  const snapshot = await db
-      .collection("appointments")
-      .where("clientId", "==", clientId)
-      .count()
-      .get();
-  const jobCount = snapshot.data().count;
+  const base = db.collection("appointments").where("clientId", "==", clientId);
+  // A multi-day run is ONE job stored as one document per work day, so a
+  // document count would read 5 for a Monday-to-Friday booking — on a badge
+  // captioned "jobs". The later days are exactly the documents carrying
+  // `dayIndex > 1`: a single-day job omits the field entirely and day 1 stores
+  // 1, and an inequality filter excludes a document missing the field, so this
+  // subtraction needs no backfill and no per-document read. Served by the
+  // (clientId ASC, dayIndex ASC) composite.
+  const [total, laterRunDays] = await Promise.all([
+    base.count().get(),
+    base.where("dayIndex", ">", 1).count().get(),
+  ]);
+  const jobCount = total.data().count - laterRunDays.data().count;
   try {
     // update(), not set({merge:true}) — a client removed out-of-band (the app
     // has no delete path, but the Admin SDK and console bypass that) must not
@@ -81,6 +92,56 @@ async function recountOne(db, clientId) {
     if (err && err.code === NOT_FOUND) return;
     throw err;
   }
+}
+
+/**
+ * Admin-SDK-only claim ledger that collapses one booking batch's N recounts
+ * into one aggregate per client. Nothing client-side may read or write it.
+ */
+const CLIENT_RECOUNT_CLAIMS = "clientRecountClaims";
+
+/**
+ * How long the claiming invocation waits before recounting, to absorb the rest
+ * of its batch's triggers. A multi-day run commits up to 14 day-documents (a
+ * repeat series up to 16) in ONE batch, every one carrying the same
+ * `clientId` — so without this, one Save fired 14-16 `count()` aggregates and
+ * 14-16 writes at the SAME client doc within milliseconds, against Firestore's
+ * ~1 write/sec/document guidance, and each of those writes re-fired
+ * `propagateClientEdits`. Correctness never depends on this number: see
+ * `debounceRecount` for why the release/aggregate order is what matters.
+ */
+const RECOUNT_SETTLE_MS = 2000;
+
+/**
+ * True when this appointment can be one of a BATCH of writes that share a
+ * `clientId` — the only case the debounce above is worth paying for.
+ *
+ * The debounce costs `RECOUNT_SETTLE_MS` of BILLED wall-clock plus a claim
+ * `create()` and `delete()`, so on an ordinary single create or delete it
+ * takes the write from 2 Firestore writes to 4 and adds 2 s to the
+ * invocation — doubling the common path to save on the rare one. The batch it
+ * absorbs is only reachable two ways, and both are stamped on the document
+ * itself, so no extra read is needed to tell them apart:
+ *
+ * - a multi-day RUN, which commits one day-document per day (`dayCount` > 1);
+ * - a REPEAT series, whose occurrences all carry the root's id in `seriesId`.
+ *
+ * `seriesId` is tested for merely being non-empty, NOT for differing from this
+ * document's own id: `add_event_controller.dart` writes the series ROOT in the
+ * same `WriteBatch` as its siblings and gives it `seriesId == its own id`, so
+ * excluding it would leave the root recounting alone and its siblings
+ * collapsing to a second recount — two aggregates where the point is one.
+ *
+ * Errs toward debouncing: a false positive costs the old behaviour, while a
+ * false negative is the 14-16 same-document writes/second this exists to stop.
+ * @param {?Object} data Appointment fields, or null.
+ * @return {boolean}
+ */
+function mayShareABatch(data) {
+  if (!data) return false;
+  const dayCount = Number(data.dayCount);
+  if (Number.isFinite(dayCount) && dayCount > 1) return true;
+  return typeof data.seriesId === "string" && data.seriesId.trim() !== "";
 }
 
 const recountClientJobs = onDocumentWritten(
@@ -93,20 +154,28 @@ const recountClientJobs = onDocumentWritten(
     async (event) => {
       const before = event.data && event.data.before;
       const after = event.data && event.data.after;
-      const ids = clientsToRecount(
-          before && before.exists ? before.data() : null,
-          after && after.exists ? after.data() : null,
-      );
+      const beforeData = before && before.exists ? before.data() : null;
+      const afterData = after && after.exists ? after.data() : null;
+      const ids = clientsToRecount(beforeData, afterData);
       if (ids.length === 0) return;
 
-      // eslint-disable-next-line global-require
-      const {getFirestore} = require("firebase-admin/firestore");
-      const db = getFirestore();
+      // A delete leaves only `before` to read the batch markers off.
+      const batched = mayShareABatch(afterData || beforeData);
+      const db = adminFirestore().getFirestore();
       // The two ids of a reassignment are independent client docs — run them
       // concurrently rather than paying two serial round trips of billed time.
       await Promise.all(ids.map(async (clientId) => {
         try {
-          await recountOne(db, clientId);
+          if (batched) {
+            await debounceRecount(
+                CLIENT_RECOUNT_CLAIMS,
+                clientId,
+                () => recountOne(db, clientId),
+                {db, logger, settleMs: RECOUNT_SETTLE_MS},
+            );
+          } else {
+            await recountOne(db, clientId);
+          }
         } catch (err) {
           logger.error("recountClientJobs failed", {clientId, err});
           throw err;
@@ -115,4 +184,20 @@ const recountClientJobs = onDocumentWritten(
     },
 );
 
-module.exports = {clientsToRecount, recountClientJobs};
+module.exports = {
+  clientsToRecount,
+  mayShareABatch,
+  recountClientJobs,
+  // Exported so the adapter test can assert the ledger this debounces in. The
+  // name has to match the deny-all block in `firestore.rules` AND the TTL
+  // policy in `firestore.indexes.json`, and a typo in it is silent: the claim
+  // fails open on every call and the debounce simply never engages.
+  CLIENT_RECOUNT_CLAIMS,
+  RECOUNT_SETTLE_MS,
+  // Exported for __tests__/client_job_count.test.js. Both of its decisions —
+  // update() over set({merge:true}), and swallowing NOT_FOUND while rethrowing
+  // everything else so `retry: true` still means something — are silent when
+  // wrong, so they are asserted directly rather than through the trigger.
+  recountOne,
+  NOT_FOUND,
+};

@@ -112,20 +112,22 @@ class SecureStorageService {
 
   Future<String?> read(String key) async {
     await _ensureMigrated();
-    return _storage.read(key: key);
+    return await _storage.read(key: key);
   }
 
   /// Writes [value], or deletes the entry when [value] is null.
   Future<void> write(String key, String? value) async {
     await _ensureMigrated();
-    return value == null
-        ? _storage.delete(key: key)
-        : _storage.write(key: key, value: value);
+    if (value == null) {
+      await _storage.delete(key: key);
+    } else {
+      await _storage.write(key: key, value: value);
+    }
   }
 
   Future<void> delete(String key) async {
     await _ensureMigrated();
-    return _storage.delete(key: key);
+    await _storage.delete(key: key);
   }
 
   Future<bool> readFlag(String key) async => await read(key) == 'true';

@@ -126,6 +126,45 @@ reads the change back **by voice**, then commit. **Write intents MUST NOT set
 `authenticationPolicy = .alwaysAllowed`** (that is for reads only) — a write
 requires device unlock.
 
+### Reconciled against the code 2026-08-10 — five constraints this doc predates
+
+Nothing here is landed, and the write shapes above are still right. What has
+changed underneath them:
+
+- **Cancel is admin-only, in the rules.** `allow update` on `/appointments` gives an
+  assigned employee exactly one power: flipping `status` to `'done'`, with the diff
+  restricted to `status` + `updatedAt`. So "Hey Siri, cancel my 2 pm" **fails with
+  `permission-denied` for a technician** and always will — the phrase set must either
+  be admin-gated or the intent must answer "only your admin can cancel a job" rather
+  than surfacing a rules rejection as a Siri error. **Complete** is the one write every
+  role can do. Decide this before writing the phrases; it changes which intent ships first.
+- **A `done` write must carry NOTHING but `status` and `updatedAt`.** The employee rule is
+  `affectedKeys().hasOnly([...])`, so a stray field — a client-side timestamp, a
+  `seriesOpId`, an analytics breadcrumb — turns a working write into an opaque
+  `permission-denied`. The Dart repo stamps `seriesOpId` on **cancel only** for exactly
+  this reason. A Siri cancel is a single occurrence, so it needs no op-id; if a future
+  "cancel the whole series" intent appears, it does.
+- **The Live Activity ends itself.** `endCardOnTerminal` in the appointment write trigger
+  ends the Lock Screen card on done, cancelled, deleted and unassigned, unconditionally.
+  A Siri write inherits that for free — do **not** add an `endAllActivities()` call to the
+  extension, which is device-wide and would kill the card for a different job.
+- **Reschedule now edits a RUN, not a slot.** An appointment may span up to
+  `maxAppointmentSpanDays` (14) and its two times are a **daily window** — 9–5 means 9–5 on
+  each day, and an end at or before the start means the window crosses midnight. A voice
+  reschedule that rewrites `startTime`/`endTime` must resolve the pair the way the app does
+  (`appointmentSpan`), respect the cap, and — if it does a conflict check at all — compare
+  **daily windows** (`dailyWindowsOverlap`), never raw instants, or it will report a phantom
+  clash for any evening job inside a multi-day run. Given that, reschedule is a bigger step
+  than "heaviest of the four" implied in July.
+- **Book resolves a client that may be archived.** Archived clients stay **searchable and
+  bookable** by design (2026-08-03), so a name match hitting one is correct, not a bug —
+  but the confirmation read-back should say so, since the admin archived them for a reason.
+
+One thing that got easier: the snapshot already drops records with a null/empty `id`, so
+"resolve the target by the snapshot `id`" is now guaranteed rather than hoped for.
+**But if Plan 2 lands first the snapshot is v3**, carrying per-day slices — check
+`scheduleSnapshotVersion` before writing the decoder against v2's shape.
+
 ---
 
 ## Mac execution runbook (one session, in order)

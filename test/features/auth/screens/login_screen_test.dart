@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,7 +11,7 @@ import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
-import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
+import 'package:scheduling/features/auth/widgets/auth_fields.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -245,6 +247,59 @@ void main() {
 
       verify(() => auth.signOut()).called(1);
       expect(find.text('CALENDAR_REACHED'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'keyboard resubmit while sign-in is loading does not fire a second auth request',
+    (tester) async {
+      final credential = _MockUserCredential();
+      final user = _MockUser();
+      final completer = Completer<UserCredential>();
+      when(() => user.uid).thenReturn('u1');
+      when(() => credential.user).thenReturn(user);
+      when(
+        () => auth.signIn(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        ),
+      ).thenAnswer((_) => completer.future);
+      when(() => repo.findUserByUid('u1')).thenAnswer(
+        (_) async => const UserUidMatch(
+          id: 'doc1',
+          data: <String, dynamic>{
+            'name': 'Active User',
+            'email': 'user@test.com',
+            'status': 'active',
+            'role': 'admin',
+            'uid': 'u1',
+          },
+        ),
+      );
+
+      await tester.pumpWidget(_wrap(auth, repo));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).at(0), 'user@test.com');
+      await tester.enterText(find.byType(TextField).at(1), 'password123');
+
+      await tester.tap(find.byType(TextField).at(1));
+      await tester.pump();
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      verify(
+        () => auth.signIn(
+          email: 'user@test.com',
+          password: 'password123',
+        ),
+      ).called(1);
+
+      completer.complete(credential);
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     },
   );

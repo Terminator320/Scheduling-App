@@ -25,8 +25,8 @@ void main() {
   test('a pop falls back to the route beneath', () {
     observer
       ..didPush(_route('/login'), null)
-      ..didPush(_route('/accept-invite/code'), _route('/login'))
-      ..didPop(_route('/accept-invite/code'), _route('/login'));
+      ..didPush(_route('/settings'), _route('/login'))
+      ..didPop(_route('/settings'), _route('/login'));
 
     expect(observer.currentRouteName, '/login');
   });
@@ -46,4 +46,49 @@ void main() {
 
     expect(observer.currentRouteName, '/forgot-password');
   });
+
+  test('removing the current top route falls back to the route beneath', () {
+    // The hub's redirect shim calls removeRoute(this) on ITSELF after its
+    // post-frame handoff, so the same Route instance is pushed and removed.
+    final calendar = _route('/calendar');
+    final shim = _route('/hub-redirect');
+    observer
+      ..didPush(calendar, null)
+      ..didPush(shim, calendar)
+      ..didRemove(shim, calendar);
+
+    expect(observer.currentRouteName, '/calendar');
+  });
+
+  test('removing a lower route does not overwrite the current top route', () {
+    final calendar = _route('/calendar');
+    observer
+      ..didPush(calendar, null)
+      ..didPush(_route('/settings'), calendar)
+      ..didRemove(calendar, null);
+
+    expect(observer.currentRouteName, '/settings');
+  });
+
+  test(
+    'pushNamedAndRemoveUntil keeps the just-pushed name even when a removed '
+    'route shares it',
+    () {
+      // B4: the guard used to compare NAMES, so removing an older route with
+      // the same name as the new top overwrote the top with whatever sat under
+      // the removed one. pushNamedAndRemoveUntil pushes BEFORE it removes.
+      final oldLogin = _route('/login');
+      final calendar = _route('/calendar');
+      final newLogin = _route('/login');
+      observer
+        ..didPush(oldLogin, null)
+        ..didPush(calendar, oldLogin)
+        // Account disabled: push /login, then unwind everything beneath it.
+        ..didPush(newLogin, calendar)
+        ..didRemove(calendar, oldLogin)
+        ..didRemove(oldLogin, null);
+
+      expect(observer.currentRouteName, '/login');
+    },
+  );
 }

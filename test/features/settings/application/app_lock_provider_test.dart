@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -115,5 +117,24 @@ void main() {
     verify(
       () => storage.writeFlag(SecureStorageKeys.biometricEnabled, value: true),
     ).called(1);
+  });
+
+  test('an in-flight initial load cannot overwrite a newer explicit choice', () async {
+    final firstRead = Completer<bool>();
+    when(
+      () => storage.readFlag(SecureStorageKeys.biometricEnabled),
+    ).thenAnswer((_) => firstRead.future);
+
+    final notifier = container.read(appLockEnabledProvider.notifier);
+    expect(container.read(appLockEnabledProvider), isFalse);
+
+    await notifier.setEnabled(value: true);
+    expect(container.read(appLockEnabledProvider), isTrue);
+
+    firstRead.complete(false);
+    await notifier.ensureLoaded();
+
+    expect(container.read(appLockEnabledProvider), isTrue);
+    expect(notifier.isResolved, isTrue);
   });
 }

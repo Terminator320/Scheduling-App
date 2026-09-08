@@ -1,0 +1,92 @@
+"use strict";
+
+// One bounded appointment-window query, shared by the three scheduled sweeps.
+//
+// Each of them wants the same thing — open jobs whose `startTime`/`endTime`
+// falls in a window, newest or oldest first, capped, with a warn when the cap
+// truncates — and each had its own ~15-line copy. The copies had already
+// drifted: two mapped their snapshot with the shared `recordOf` while
+// `travel_utils.js` re-spelled the mapper body inline, twice.
+//
+// The caller keeps everything that legitimately differs — its own status set
+// (`PENDING_STATUSES` is deliberately narrower than `OPEN_STATUSES`), its own
+// cap, its own ordering direction and, most importantly, its own CONSEQUENCE
+// sentence, because "oldest jobs deferred to a later run" and "some crews may
+// not receive a digest" are different operational facts. Only the query and
+// the warn-at-cap mechanism are shared. Same split as `pageToCap` on the Dart
+// side.
+//
+// Pure with respect to Firestore setup: `db` is injected, nothing is resolved
+// at load, so this module is safe to `require` from a test.
+
+const {recordOf} = require("./notification_policy");
+
+/**
+ * Reads one capped window of appointments and warns when the cap truncates it.
+ *
+ * The ORDERING is not cosmetic at any call site. Firestore orders by the
+ * inequality field ascending unless told otherwise, so a descending window
+ * spends its cap on the newest jobs and an ascending one on the oldest — and
+ * which of those is right differs per sweep. Get it wrong and the cap silently
+ * discards exactly the jobs the sweep exists for.
+ *
+ * NOTHING here is optional, and that is the point. `descending` had a default
+ * and this docstring argued two paragraphs above that getting it wrong
+ * silently spends the cap on the wrong jobs — a default is exactly how the
+ * next call site gets it wrong without saying anything. `label`,
+ * `consequence` and `logger` are the warn contract: omit `logger` and the
+ * truncation warn vanishes, omit the other two and it prints `undefined`,
+ * which is the silent-truncation failure this module exists to prevent.
+ * `pageToCap` on the Dart side makes its `onCapReached` required for the same
+ * reason.
+ * @param {!Object} db Firestore handle.
+ * @param {{statuses: !Array<string>, field: string, lo: !Date,
+ *   loOp: string, hi: !Date, hiOp: string, descending: boolean, cap: number,
+ *   logger: !Object, label: string, consequence: string}} options
+ * @return {!Promise<!Array<!Object>>} Plain appointment records.
+ */
+async function scanAppointmentWindow(db, options) {
+  const {
+    statuses,
+    field,
+    lo,
+    loOp,
+    hi,
+    hiOp,
+    descending,
+    cap,
+    logger,
+    label,
+    consequence,
+  } = options;
+
+  if (!label || !consequence || !logger) {
+    throw new Error(
+        "scanAppointmentWindow: label, consequence and logger are required " +
+        "— they are the cap-truncation warn");
+  }
+  if (typeof descending !== "boolean" || !loOp || !hiOp) {
+    throw new Error(
+        "scanAppointmentWindow: loOp, hiOp and descending are required " +
+        "— the ordering decides which jobs the cap keeps");
+  }
+
+  const snap = await db
+      .collection("appointments")
+      .where("status", "in", statuses)
+      .where(field, loOp, lo)
+      .where(field, hiOp, hi)
+      .orderBy(field, descending ? "desc" : "asc")
+      .limit(cap)
+      .get();
+
+  if (snap && snap.size === cap) {
+    logger.warn(`${label}: candidate cap hit; ${consequence}`, {cap});
+  }
+
+  return ((snap && snap.docs) || []).map(recordOf);
+}
+
+module.exports = {
+  scanAppointmentWindow,
+};

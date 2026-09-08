@@ -4,11 +4,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:scheduling/core/theme/themes.dart';
+import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 
-Widget _wrap({required bool isAdmin, TextScaler? textScaler}) => ProviderScope(
+/// [liveRole] is the LIVE user doc, a separate question from the push-time
+/// [isAdmin] argument — the admin rows are gated on both.
+Widget _wrap({
+  required bool isAdmin,
+  TextScaler? textScaler,
+  String liveRole = 'admin',
+}) => ProviderScope(
+  overrides: [
+    currentUserDocProvider.overrideWith(
+      (ref) => Stream.value({'role': liveRole, 'status': 'active'}),
+    ),
+  ],
   child: MaterialApp(
     localizationsDelegates: const [
       AppLocalizations.delegate,
@@ -98,6 +110,22 @@ void main() {
     expect(find.text('THE BUSINESS'), findsNothing);
     expect(find.text('Team'), findsNothing);
     expect(find.text('Clients'), findsNothing);
+  });
+
+  // The route argument is a push-time snapshot: a stale back stack or a deep
+  // link can carry `isAdmin: true` for someone the user doc no longer says is
+  // one. The live gate is what refuses them.
+  testWidgets('an admin by argument whose live doc is not one gets neither', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(isAdmin: true, liveRole: 'employee'));
+    await tester.tap(find.byTooltip('Open menu'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('PEOPLE'), findsNothing);
+    expect(find.text('THE BUSINESS'), findsNothing);
+    expect(find.text('Team'), findsNothing);
+    expect(find.text('Live map'), findsNothing);
   });
 
   testWidgets('the drawer header shows the name and role, and a version', (

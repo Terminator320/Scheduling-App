@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/shared/widgets/primitives/app_back_button.dart';
 
-/// Standard top bar with a bold title and optional back button, [actions],
-/// and [bottom] row — pass [compact] for landscape. Use this instead of
-/// hand-building an [AppBar].
+/// Standard app bar with the project's title styling.
 class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   const AppTopBar({
     required this.title,
@@ -21,7 +19,7 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onBack;
   final List<Widget>? actions;
 
-  /// A search bar, sub-header row, etc. — anything implementing [PreferredSizeWidget], rendered beneath the toolbar.
+  /// Optional row rendered beneath the toolbar.
   final PreferredSizeWidget? bottom;
 
   /// Slims the toolbar + title for short (landscape) viewports.

@@ -13,8 +13,7 @@ import 'package:scheduling/l10n/l10n.dart';
 
 class _MockClientsRepo extends Mock implements ClientsRepository {}
 
-/// The detail view holds a live listener on its doc. This test only cares about
-/// layout, so it yields nothing and the view renders the record it was handed.
+/// The detail view holds a live listener on its doc.
 _MockClientsRepo _quietRepo() {
   final repo = _MockClientsRepo();
   when(
@@ -31,42 +30,45 @@ const _client = ClientRecord(
 );
 
 void main() {
-  testWidgets('client detail view does not overflow on small width at 2x text', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(320, 700);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets(
+    'client detail view does not overflow on small width at 2x text',
+    (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 700);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          clientsRepositoryProvider.overrideWithValue(_quietRepo()),
-        ],
-        child: ThemeNotifier(
-          themeMode: ThemeMode.light,
-          toggleTheme: () {},
-          textScale: 2,
-          setTextScale: (_) {},
-          setLanguage: (_) {},
-          child: MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            theme: lightTheme(),
-            builder: (context, child) => MediaQuery(
-              data: MediaQuery.of(
-                context,
-              ).copyWith(textScaler: const TextScaler.linear(2)),
-              child: child ?? const SizedBox.shrink(),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            clientsRepositoryProvider.overrideWithValue(_quietRepo()),
+          ],
+          child: ThemeNotifier(
+            themeMode: ThemeMode.light,
+            toggleTheme: () {},
+            textScale: 2,
+            setTextScale: (_) {},
+            setLanguage: (_) {},
+            child: MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              theme: lightTheme(),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: const TextScaler.linear(2)),
+                child: child ?? const SizedBox.shrink(),
+              ),
+              home: const Scaffold(body: ClientDetailView(client: _client)),
             ),
-            home: const Scaffold(body: ClientDetailView(client: _client)),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(tester.takeException(), isNull);
-  });
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

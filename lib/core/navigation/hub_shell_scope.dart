@@ -29,6 +29,22 @@ abstract interface class HubTabSelector {
   void goHome();
 }
 
+/// The slice of the live hub shell an inbound appointment link drives.
+///
+/// Narrow on purpose: the opener only ever shows the calendar, collapses the
+/// stack and reads the live role. Depending on the interface rather than
+/// `HubShellState` is what lets the routing be exercised without building the
+/// real four-tab shell (every tab of which reaches Firebase). It lives here
+/// beside [HubTabSelector] for that class's reason — so `core/` can name the
+/// shell without `routes/` having to import back into `core/app/`.
+abstract interface class AppointmentLinkHub {
+  bool get isAdmin;
+
+  void showCalendar();
+
+  void goHome();
+}
+
 /// Lets shell descendants reach the enclosing hub shell.
 class HubShellScope extends InheritedWidget {
   const HubShellScope({
@@ -78,7 +94,6 @@ void navigateToDestination(
     case final HubTab tab:
       final scoped = HubShellScope.maybeOf(context);
       if (scoped != null) {
-        // Inside the shell subtree — nothing is stacked above the shell.
         scoped.select(
           tab,
           isAdmin: isAdmin,
@@ -90,7 +105,6 @@ void navigateToDestination(
       }
       final live = HubShellScope.liveSelector;
       if (live != null) {
-        // A pushed route — collapse to the shell, then switch.
         live.selectAndReveal(
           tab,
           isAdmin: isAdmin,
@@ -120,7 +134,6 @@ void navigateToDestination(
         userName: userName,
         userEmail: userEmail,
       );
-      // Re-tapping the drawer row for the screen you are on is a no-op.
       if (ModalRoute.settingsOf(context)?.name == target.route) return;
       Navigator.pushNamed(context, target.route, arguments: target.arguments);
   }

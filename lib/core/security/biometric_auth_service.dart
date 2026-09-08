@@ -2,7 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 
-/// Wraps local_auth for biometric app-lock. Every call fails closed and logs exceptions.
+/// Wraps local_auth for biometric app-lock.
+///
+/// Every call fails closed and logs exceptions.
 class BiometricAuthService {
   BiometricAuthService({LocalAuthentication? auth, AppLogger? logger})
     : _auth = auth ?? LocalAuthentication(),

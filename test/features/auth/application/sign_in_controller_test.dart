@@ -185,6 +185,23 @@ void main() {
       expect(state().inProgress, isFalse);
     });
 
+    test(
+      'a failing signOut still reports no-profile instead of turning into a generic error',
+      () async {
+        stubSignedIn();
+        when(() => repo.findUserByUid('u1')).thenAnswer((_) async => null);
+        when(() => auth.signOut()).thenThrow(Exception('ios signOut failed'));
+
+        final outcome = await notifier().signIn(
+          email: 'user@test.com',
+          password: 'password123',
+        );
+
+        expect(outcome, isA<SignInNoProfile>());
+        expect(state().inProgress, isFalse);
+      },
+    );
+
     test('signs out and reports disabled for an inactive account', () async {
       stubSignedIn();
       when(
@@ -202,11 +219,28 @@ void main() {
       expect(state().inProgress, isFalse);
     });
 
+    test(
+      'a failing signOut still reports disabled for an inactive account',
+      () async {
+        stubSignedIn();
+        when(
+          () => repo.findUserByUid('u1'),
+        ).thenAnswer((_) async => _disabledDoc);
+        when(() => auth.signOut()).thenThrow(Exception('ios signOut failed'));
+
+        final outcome = await notifier().signIn(
+          email: 'user@test.com',
+          password: 'password123',
+        );
+
+        expect(outcome, isA<SignInAccountDisabled>());
+        expect(state().inProgress, isFalse);
+      },
+    );
+
     test('routes an invited account to setup and KEEPS the session', () async {
       stubSignedIn();
-      when(
-        () => repo.findUserByUid('u1'),
-      ).thenAnswer((_) async => _invitedDoc);
+      when(() => repo.findUserByUid('u1')).thenAnswer((_) async => _invitedDoc);
 
       final outcome = await notifier().signIn(
         email: 'user@test.com',
@@ -222,9 +256,7 @@ void main() {
 
     test('carries the stored name halves into the setup outcome', () async {
       stubSignedIn();
-      when(
-        () => repo.findUserByUid('u1'),
-      ).thenAnswer((_) async => _invitedDoc);
+      when(() => repo.findUserByUid('u1')).thenAnswer((_) async => _invitedDoc);
 
       final outcome = await notifier().signIn(
         email: 'user@test.com',
@@ -333,10 +365,7 @@ void main() {
       when(() => auth.currentUser).thenReturn(user);
       when(() => repo.findUserByUid('u1')).thenAnswer((_) async => null);
 
-      expect(
-        await notifier().resumeAfterSignUp(),
-        isA<SignInProfilePending>(),
-      );
+      expect(await notifier().resumeAfterSignUp(), isA<SignInProfilePending>());
     });
 
     test('resolves the signed-in employee, retrying on '
@@ -361,7 +390,49 @@ void main() {
       expect(outcome, isA<SignInSuccess>());
       expect((outcome as SignInSuccess).employee.id, 'doc1');
       expect(reads, 2);
+      verify(() => cache.save(any())).called(1);
     });
+
+    test(
+      'a still-invited doc reports a pending profile, never success',
+      () async {
+        // Mirrors signIn's gate. A stale read (offline persistence, or the
+        // permission-denied retry served from cache) would otherwise walk an
+        // invited person into the hub, where every rules gate denies them.
+        final user = _MockUser();
+        when(() => user.uid).thenReturn('u1');
+        when(() => auth.currentUser).thenReturn(user);
+        when(
+          () => repo.findUserByUid('u1'),
+        ).thenAnswer((_) async => _invitedDoc);
+
+        expect(
+          await notifier().resumeAfterSignUp(),
+          isA<SignInProfilePending>(),
+        );
+        verifyNever(() => cache.save(any()));
+      },
+    );
+
+    test(
+      'tolerates a failing identity-cache save after setup resume',
+      () async {
+        final user = _MockUser();
+        when(() => user.uid).thenReturn('u1');
+        when(() => auth.currentUser).thenReturn(user);
+        when(
+          () => repo.findUserByUid('u1'),
+        ).thenAnswer((_) async => _activeDoc);
+        when(
+          () => cache.save(any()),
+        ).thenAnswer((_) async => throw Exception('keystore flake'));
+
+        final outcome = await notifier().resumeAfterSignUp();
+
+        expect(outcome, isA<SignInSuccess>());
+        await Future<void>.delayed(Duration.zero);
+      },
+    );
 
     test('maps a throwing profile read to a pending profile instead of '
         'escaping to the zone handler', () async {
@@ -375,10 +446,7 @@ void main() {
         FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied'),
       );
 
-      expect(
-        await notifier().resumeAfterSignUp(),
-        isA<SignInProfilePending>(),
-      );
+      expect(await notifier().resumeAfterSignUp(), isA<SignInProfilePending>());
     });
   });
 }

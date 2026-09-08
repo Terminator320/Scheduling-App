@@ -13,8 +13,7 @@ import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
 
-/// The appointment history screen — searchable, filterable list. This owns the chrome
-/// and delegates the actual list to AppointmentHistoryView.
+/// The appointment history screen — searchable, filterable list.
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({
     required this.isAdmin,
@@ -51,8 +50,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     setState(() => _listSettled = true);
   }
 
-  // A pushed route now, so back means back. The Calendar pill covers
-  // go-home.
+  // A pushed route now, so back means back.
   void _back() => Navigator.maybePop(context);
 
   @override
@@ -67,9 +65,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       isAdmin: widget.isAdmin,
       stepKeys: _tour.keys,
       // The filter bar only renders once a page has supplied years/employees,
-      // and the first row doesn't exist before then. A tour started against
-      // the skeleton finds only the search bar, drops the other two steps and
-      // marks the WHOLE scope seen.
+      // and the first row doesn't exist before then.
       ready: _listSettled,
       child: Scaffold(
         appBar: AppTopBar(
@@ -83,8 +79,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
           isAdmin: widget.isAdmin,
           employeeId: widget.employeeId,
         ),
-        // The nav shell is built once; only the history view rebuilds per
-        // keystroke, so typing doesn't rebuild the NavigationRail + chrome.
+        // The screen chrome is built once; only the history view rebuilds per
+        // keystroke, so typing doesn't rebuild the app bar and search field.
         body: PrimaryScrollScope(
           child: ListenableBuilder(
             listenable: _searchController,

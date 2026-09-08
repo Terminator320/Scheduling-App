@@ -5,11 +5,13 @@ import 'package:scheduling/features/clients/data/firebase_clients_repository.dar
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/policies/client_building.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 
 final clientsRepositoryProvider = Provider<ClientsRepository>((ref) {
   final firestore = ref.watch(firestoreProvider);
-  return FirebaseClientsRepository(firestore);
+  final functions = ref.watch(firebaseFunctionsProvider);
+  return FirebaseClientsRepository(firestore, functions: functions);
 });
 
 /// Bumped after any client write so paginated list refreshes.
@@ -43,15 +45,12 @@ final clientStreamProvider = StreamProvider.autoDispose
 /// Full client search with relevance scoring. AutoDispose frees the results once each
 /// query instance is no longer watched.
 final clientSearchProvider = FutureProvider.autoDispose
-    .family<List<ClientRecord>, String>((
-      ref,
-      query,
-    ) async {
+    .family<List<ClientRecord>, String>((ref, query) async {
       if (!ClientSearchPolicy.shouldSearch(query)) return const [];
       // Watching bump invalidates results so deleted clients don't linger.
       ref.watch(clientsRefreshProvider);
       final repo = ref.watch(clientsRepositoryProvider);
-      return repo.searchClients(query);
+      return await repo.searchClients(query);
     });
 
 /// Clients of one type, for the list's filter row. AutoDispose frees it as soon
@@ -59,7 +58,49 @@ final clientSearchProvider = FutureProvider.autoDispose
 final clientsByTypeProvider = FutureProvider.autoDispose
     .family<List<ClientRecord>, ClientType>((ref, type) async {
       ref.watch(clientsRefreshProvider);
-      return ref.watch(clientsRepositoryProvider).fetchClientsByType(type);
+      return await ref
+          .watch(clientsRepositoryProvider)
+          .fetchClientsByType(type);
+    });
+
+/// Clients at one building, from the same cached window as the type filter.
+final clientsByBuildingProvider = FutureProvider.autoDispose
+    .family<List<ClientRecord>, String>((ref, key) async {
+      ref.watch(clientsRefreshProvider);
+      return await ref
+          .watch(clientsRepositoryProvider)
+          .fetchClientsByBuilding(key);
+    });
+
+/// Every address two or more clients share — the Building menu's options.
+///
+/// **This is EAGER on Clients-tab open, and that is a decision rather than an
+/// oversight** (owner call, 2026-09-01). `ClientsListView.build` watches this
+/// before the filter switch, so opening the
+/// tab pays the paged `orderBy('name')` scan window (capped at
+/// `_clientScanLimit`, ~700 clients today) on top of the paginated list's
+/// first 50 — roughly 14× read amplification on the first open per session,
+/// where it used to be paid only on a search or a filter-chip tap.
+///
+/// It is not deferrable as the surface stands. `ClientAddressFilterMenu`
+/// renders NOTHING when no address is shared — deliberately, since an empty
+/// menu reads as a broken control — so it cannot decide whether to appear
+/// without the very data a deferral would be withholding. Loading on first
+/// open would mean always showing the chip, which reverses that decision.
+///
+/// The cost is also not wasted: this is the SAME cached, TTL'd window that
+/// search, the type chips and the Archived chip read, so the tab open warms
+/// what the next interaction would have fetched anyway.
+///
+/// Removing it for real means not deriving buildings from the client
+/// collection at all — a small server-maintained `buildings` aggregate would
+/// make both the menu and the per-row pill cost O(buildings) instead of
+/// O(clients). That is a design change (function, backfill, index), not a
+/// tweak here.
+final clientBuildingsProvider =
+    FutureProvider.autoDispose<List<ClientBuilding>>((ref) async {
+      ref.watch(clientsRefreshProvider);
+      return await ref.watch(clientsRepositoryProvider).fetchBuildings();
     });
 
 /// Archived clients, read from the same bounded cached window as search and
@@ -68,5 +109,5 @@ final archivedClientsProvider = FutureProvider.autoDispose<List<ClientRecord>>((
   ref,
 ) async {
   ref.watch(clientsRefreshProvider);
-  return ref.watch(clientsRepositoryProvider).fetchArchivedClients();
+  return await ref.watch(clientsRepositoryProvider).fetchArchivedClients();
 });

@@ -1,32 +1,49 @@
 import 'dart:io';
+
 import 'package:image_picker/image_picker.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 
 class ImagePickerService {
+  ImagePickerService({ImagePicker? picker, AppLogger? logger})
+    : _picker = picker ?? ImagePicker(),
+      _logger = logger ?? AppLogger();
+
   static const double maxImageDimension = 1600;
-  // image_picker resizes and JPEG-compresses natively at decode time, so no separate compression pass is needed.
+  // image_picker handles native resize and JPEG compression.
   static const int imageQuality = 70;
 
-  final ImagePicker _picker = ImagePicker();
+  final ImagePicker _picker;
+  final AppLogger _logger;
 
   Future<File?> pickImage(ImageSource source) async {
-    final pickedFile = await _picker.pickImage(
-      source: source,
-      maxWidth: maxImageDimension,
-      maxHeight: maxImageDimension,
-      imageQuality: imageQuality,
-    );
-    if (pickedFile == null) return null;
+    try {
+      final pickedFile = await _picker.pickImage(
+        source: source,
+        maxWidth: maxImageDimension,
+        maxHeight: maxImageDimension,
+        imageQuality: imageQuality,
+      );
+      if (pickedFile == null) return null;
 
-    return File(pickedFile.path);
+      return File(pickedFile.path);
+    } catch (e, st) {
+      _logger.warn('IMG-PICK single pick failed', e, st);
+      return null;
+    }
   }
 
   Future<List<File>> pickMultiImages() async {
-    final images = await _picker.pickMultiImage(
-      maxWidth: maxImageDimension,
-      maxHeight: maxImageDimension,
-      imageQuality: imageQuality,
-    );
+    try {
+      final images = await _picker.pickMultiImage(
+        maxWidth: maxImageDimension,
+        maxHeight: maxImageDimension,
+        imageQuality: imageQuality,
+      );
 
-    return images.map((x) => File(x.path)).toList();
+      return [for (final image in images) File(image.path)];
+    } catch (e, st) {
+      _logger.warn('IMG-PICK multi pick failed', e, st);
+      return const [];
+    }
   }
 }

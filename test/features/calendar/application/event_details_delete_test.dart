@@ -15,6 +15,9 @@ class _ThrowingRepo implements AppointmentsRepository {
   }
 
   @override
+  Stream<void> get onLocalWrite => const Stream.empty();
+
+  @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('${invocation.memberName}');
 }
@@ -39,6 +42,9 @@ class _RecordingRepo implements AppointmentsRepository {
   Future<List<AppointmentRecord>> getSeries(String seriesId) async => series;
 
   @override
+  Stream<void> get onLocalWrite => const Stream.empty();
+
+  @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('${invocation.memberName}');
 }
@@ -56,8 +62,6 @@ class _RecordingStorage implements ImageStorageService {
       throw UnimplementedError('${invocation.memberName}');
 }
 
-AppointmentImage _image(String path) => AppointmentImage(storagePath: path);
-
 void main() {
   test(
     'deleteAppointment returns the error when the repository throws',
@@ -74,21 +78,34 @@ void main() {
         startTime: DateTime(2026, 6, 6, 9),
         endTime: DateTime(2026, 6, 6, 10),
       );
-      final provider = eventDetailsControllerProvider(EventDetailsKey(appointment));
+      final provider = eventDetailsControllerProvider(
+        EventDetailsKey(appointment),
+      );
       // Keep the autoDispose family's state alive across reads (see testing.md).
       final sub = container.listen(provider, (_, _) {});
       addTearDown(sub.close);
 
-      final error = await container
+      final outcome = await container
           .read(provider.notifier)
           .deleteAppointment(appointment);
 
-      expect(error, isNotNull);
-      expect(error.toString(), contains('boom'));
+      expect(outcome, isA<EventDetailsActionFailed>());
+      expect(
+        (outcome as EventDetailsActionFailed).error.toString(),
+        contains('boom'),
+      );
     },
   );
 
-  test('deleting an appointment deletes its Storage images', () async {
+  // Photo cleanup on delete moved to `cascadeDeleteAppointmentImages` at the
+  // CONTRACT step, and these two pin the client half of that handover.
+  //
+  // It was not a tidy-up. The client used to enumerate `appointment.pictures`
+  // to know which Storage objects to remove, and that array is gone — a client
+  // that no longer reads the photos cannot list what to delete. Reaching for
+  // Storage here now would delete nothing (there is nothing to enumerate) while
+  // looking like cleanup, which is exactly how bytes orphan invisibly.
+  test('deleting an appointment leaves its photos to the server', () async {
     final repo = _RecordingRepo();
     final storage = _RecordingStorage();
     final container = ProviderContainer(
@@ -103,77 +120,72 @@ void main() {
       id: 'a1',
       startTime: DateTime(2026, 6, 6, 9),
       endTime: DateTime(2026, 6, 6, 10),
-      pictures: [_image('appointments/a1/images/p1'), _image('a1/p2')],
+      pictureCount: 2,
     );
-    final provider = eventDetailsControllerProvider(EventDetailsKey(appointment));
+    final provider = eventDetailsControllerProvider(
+      EventDetailsKey(appointment),
+    );
     final sub = container.listen(provider, (_, _) {});
     addTearDown(sub.close);
 
-    final error = await container
+    final outcome = await container
         .read(provider.notifier)
         .deleteAppointment(appointment);
 
-    expect(error, isNull);
+    expect(outcome, isA<EventDetailsActionOk>());
     expect(repo.deletedIds, ['a1']);
-    expect(
-      storage.deleted.map((i) => i.storagePath),
-      ['appointments/a1/images/p1', 'a1/p2'],
-    );
+    expect(storage.deleted, isEmpty);
   });
 
-  test(
-    'series delete also removes future-visit images but preserves '
-    'terminal-visit images',
-    () async {
-      final base = DateTime(2026, 6, 6, 9);
-      final deleted = AppointmentRecord(
-        id: 's1',
-        seriesId: 's1',
-        startTime: base,
-        endTime: base.add(const Duration(hours: 1)),
-        pictures: [_image('s1/p')],
-      );
-      final futureVisit = AppointmentRecord(
-        id: 's2',
-        seriesId: 's1',
-        startTime: base.add(const Duration(days: 120)),
-        endTime: base.add(const Duration(days: 120, hours: 1)),
-        pictures: [_image('s2/future')],
-      );
-      // A completed future visit is preserved as a record — its bytes stay.
-      final doneVisit = AppointmentRecord(
-        id: 's3',
-        seriesId: 's1',
-        startTime: base.add(const Duration(days: 240)),
-        endTime: base.add(const Duration(days: 240, hours: 1)),
-        status: 'done',
-        pictures: [_image('s3/done')],
-      );
+  test('a series delete deletes the documents and nothing else', () async {
+    // Each deleted document fires its own cascade, so the server covers the
+    // future visits too — and the preserved ones keep their photos precisely
+    // because their documents survive.
+    final base = DateTime(2026, 6, 6, 9);
+    final deleted = AppointmentRecord(
+      id: 's1',
+      seriesId: 's1',
+      startTime: base,
+      endTime: base.add(const Duration(hours: 1)),
+      pictureCount: 1,
+    );
+    final futureVisit = AppointmentRecord(
+      id: 's2',
+      seriesId: 's1',
+      startTime: base.add(const Duration(days: 120)),
+      endTime: base.add(const Duration(days: 120, hours: 1)),
+      pictureCount: 1,
+    );
+    // A completed future visit is preserved as a record — and so are its bytes.
+    final doneVisit = AppointmentRecord(
+      id: 's3',
+      seriesId: 's1',
+      startTime: base.add(const Duration(days: 240)),
+      endTime: base.add(const Duration(days: 240, hours: 1)),
+      status: 'done',
+      pictureCount: 1,
+    );
 
-      final repo = _RecordingRepo(series: [deleted, futureVisit, doneVisit]);
-      final storage = _RecordingStorage();
-      final container = ProviderContainer(
-        overrides: [
-          appointmentsRepositoryProvider.overrideWithValue(repo),
-          imageStorageProvider.overrideWithValue(storage),
-        ],
-      );
-      addTearDown(container.dispose);
+    final repo = _RecordingRepo(series: [deleted, futureVisit, doneVisit]);
+    final storage = _RecordingStorage();
+    final container = ProviderContainer(
+      overrides: [
+        appointmentsRepositoryProvider.overrideWithValue(repo),
+        imageStorageProvider.overrideWithValue(storage),
+      ],
+    );
+    addTearDown(container.dispose);
 
-      final provider = eventDetailsControllerProvider(EventDetailsKey(deleted));
-      final sub = container.listen(provider, (_, _) {});
-      addTearDown(sub.close);
+    final provider = eventDetailsControllerProvider(EventDetailsKey(deleted));
+    final sub = container.listen(provider, (_, _) {});
+    addTearDown(sub.close);
 
-      final error = await container
-          .read(provider.notifier)
-          .deleteAppointment(deleted, includeFuture: true);
+    final outcome = await container
+        .read(provider.notifier)
+        .deleteAppointment(deleted, includeFuture: true);
 
-      expect(error, isNull);
-      expect(repo.deletedIds, ['s1', 's2']);
-      expect(
-        storage.deleted.map((i) => i.storagePath),
-        ['s1/p', 's2/future'],
-      );
-    },
-  );
+    expect(outcome, isA<EventDetailsActionOk>());
+    expect(repo.deletedIds, ['s1', 's2']);
+    expect(storage.deleted, isEmpty);
+  });
 }

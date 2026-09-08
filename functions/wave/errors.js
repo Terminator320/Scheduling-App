@@ -24,6 +24,11 @@ const {WaveValidationError} = require("./customers");
  *   - `WaveApiError` graphql     → invalid-argument    / wave/validation
  *   - `WaveValidationError`      → invalid-argument    / wave/validation
  *   - anything else (incl. unknown) → internal         / wave/unknown
+ *
+ * Codes the callables throw directly, outside this classifier, and which the
+ * Flutter mapper must therefore also carry:
+ *   - no connected business  → failed-precondition / wave/not-bootstrapped
+ *   - several businesses     → failed-precondition / wave/business-ambiguous
  * @param {*} err The caught error.
  * @return {{code: string, message: string}} HttpsError code and message.
  */

@@ -23,9 +23,7 @@ const String kFontSans = 'InstrumentSans';
 /// hand at a call site.
 const String kFontMono = 'IBMPlexMono';
 
-class AppColors {
-  AppColors._();
-
+abstract final class AppColors {
   static const Color surface = Color(0xFFFFFFFF);
 
   // --- Redesign vocabulary (2026-07-30). Light roles. ---
@@ -88,7 +86,7 @@ class AppColors {
   /// STORED in Firestore as the light-theme ARGB int; dark rendering
   /// resolves through [crewColorOf], never by re-storing a lifted value.
   static const List<Color> crewPalette = [
-    Color(0xFF005CC8), // blue
+    crewDefault, // blue
     Color(0xFF7A3FF2), // violet
     Color(0xFF0E9B6E), // green
     Color(0xFFE08A00), // amber
@@ -99,6 +97,82 @@ class AppColors {
     Color(0xFF8A5A2B), // brown
     Color(0xFF7A8F1F), // olive
   ];
+
+  /// The decorative hue ring on the "custom colour" swatch.
+  ///
+  /// DELIBERATELY theme-independent — it is a spectrum, not a semantic colour,
+  /// so it has no light/dark counterpart and belongs to no [ThemeExtension].
+  /// It lives here rather than as raw hex in the widget so `lib/` keeps its
+  /// "no literal colours outside `core/theme/`" property; the last stop
+  /// repeats the first so the sweep closes seamlessly.
+  static const List<Color> decorativeHueRing = [
+    Color(0xFFEF4444), // red
+    Color(0xFFF59E0B), // amber
+    Color(0xFF10B981), // emerald
+    Color(0xFF06B6D4), // cyan
+    Color(0xFF6366F1), // indigo
+    Color(0xFFEC4899), // pink
+    Color(0xFFEF4444), // back to red
+  ];
+
+  /// What an employee with no stored `colorValue` renders as. It must stay a
+  /// [crewPalette] member: a hue outside the pool is also outside the
+  /// dark-theme override map, so it takes the generic HSL lift instead of its
+  /// designed dark counterpart, and no picker would ever offer it.
+  static const Color crewDefault = blue;
+
+  /// The three calendar holiday-marker hues — the 2px rule under a day
+  /// number, one colour per `HolidaySet`. Resolved through
+  /// `holidayHueFor` (`calendar/widgets/views/calendar_day_circle.dart`),
+  /// never painted raw; `holidayRuleColorFor` layers the selected/off-month
+  /// variants over it.
+  ///
+  /// A SEPARATE family from [crewPalette] on purpose, and deliberately in the
+  /// gaps it leaves. The obvious picks were each already spoken for: blue is
+  /// the selection fill (a marker in it vanishes on the day you tap), red
+  /// means *cancelled* on the status chart, and crewPalette's ten hues blanket
+  /// most of the rest of the wheel — painted as round dots ~3px BELOW this
+  /// rule, so a shared hue would twin with the dot beneath it. Teal sits
+  /// between the crew green and cyan but deeper and more muted than either;
+  /// purple is well clear of teal and is the liturgical colour of Holy Week;
+  /// ochre is the only warm one, so the construction shutdown separates from
+  /// both cool markers at a glance.
+  static const Color holidayStatutory = Color(0xFF0F766E);
+  static const Color holidayOrthodox = Color(0xFF8E3DAE);
+  static const Color holidayConstruction = Color(0xFFB45309);
+
+  static const Color darkHolidayStatutory = Color(0xFF3FBFB0);
+  static const Color darkHolidayOrthodox = Color(0xFFC482E8);
+  // NOT `darkAmber` (#F1A83C), which this was until 2026-08-29: that constant
+  // IS the dark rendering of crew amber (`_darkCrewOverride[0xFFE08A00]`), so
+  // in dark theme the shutdown's rule and the crew dot 3px beneath it painted
+  // the identical colour — exactly the twinning the "sit in crewPalette's
+  // gaps" rule above exists to prevent. This is the same ochre pushed toward
+  // orange-red (hue ~26 deg, matching the light `#B45309`) and away from the
+  // gold of amber, which also clears dark brown `#C9985A` and olive `#B9CC45`.
+  static const Color darkHolidayConstruction = Color(0xFFEA802E);
+
+  /// The eight nav-drawer row hues, one per `AppDestination`.
+  ///
+  /// A SEPARATE palette from [crewPalette], deliberately, even though every
+  /// entry matches one of its hues exactly: that list is the pool employee
+  /// colours are ASSIGNED from, so reordering it — a normal change for staff
+  /// colours — would silently repaint the whole nav drawer. Same hues, no
+  /// coupling.
+  ///
+  /// They live here rather than as literals in `drawer_catalog.dart` because
+  /// a token beside seven raw `Color(0xFF…)` values is worse than either
+  /// extreme; this is the all-or-nothing half. Rendered through `crewColorOf`
+  /// at the call site for the dark lift, like any crew hue — never painted
+  /// raw.
+  static const Color navCalendar = Color(0xFF005CC8);
+  static const Color navDayRoute = Color(0xFFD61F3A);
+  static const Color navLiveMap = Color(0xFF00A5C4);
+  static const Color navTeam = Color(0xFF0E9B6E);
+  static const Color navClients = Color(0xFF7A3FF2);
+  static const Color navDashboard = Color(0xFFE08A00);
+  static const Color navHistory = Color(0xFFC43F8E);
+  static const Color navSettings = Color(0xFF5A6B85);
 }
 
 /// Resolves a STORED employee colour int to the colour this theme renders.
@@ -131,8 +205,7 @@ Color avatarForegroundFor(ThemeData theme, Color background) {
       .toColor();
 }
 
-class AppSpacing {
-  AppSpacing._();
+abstract final class AppSpacing {
   static const double sp4 = 4;
   static const double sp8 = 8;
   static const double sp12 = 12;
@@ -143,8 +216,13 @@ class AppSpacing {
   static const double cardPaddingY = 12;
 }
 
-class AppRadius {
-  AppRadius._();
+/// The corner-radius scale. `r8`–`r24` is a COMPLETE rung ladder on purpose:
+/// an unused rung (`r24` is currently the only one) is what makes the next
+/// design decision a lookup rather than a new hardcoded number, which is the
+/// whole reason this class exists. Don't prune one for being unreferenced.
+/// The `rCard`/`rPanel`/`rSheet`/`rDialog` values below are off-scale by
+/// design — they are the design's own named surfaces, not rungs.
+abstract final class AppRadius {
   static const double r8 = 8;
   static const double r12 = 12;
   static const double r16 = 16;
@@ -158,12 +236,10 @@ class AppRadius {
   static const double rDialog = 22;
   static const double rFab = 20;
   static const double rIcon = 12;
-  static const double rThumb = 9;
   static const double rRow = 13;
 }
 
-class AppShadow {
-  AppShadow._();
+abstract final class AppShadow {
   static const List<BoxShadow> card = [
     BoxShadow(color: Color(0x0A000000), blurRadius: 4, offset: Offset(0, 1)),
   ];
@@ -177,16 +253,13 @@ class AppShadow {
   ];
 }
 
-class AppDuration {
-  AppDuration._();
+abstract final class AppDuration {
   static const Duration fast = Duration(milliseconds: 150);
   static const Duration normal = Duration(milliseconds: 250);
   static const Duration shimmer = Duration(milliseconds: 1200);
 }
 
-class AppMotion {
-  AppMotion._();
-
+abstract final class AppMotion {
   /// Shared open/close curve for `showModalBottomSheet` across the app.
   static const AnimationStyle sheetStyle = AnimationStyle(
     duration: Duration(milliseconds: 300),
@@ -199,7 +272,6 @@ class AppMotion {
 
   static const Curve emphasized = Cubic(0.2, 0.9, 0.25, 1);
   static const Duration popIn = Duration(milliseconds: 200);
-  static const Duration drawer = Duration(milliseconds: 260);
   static const Duration riseInShort = Duration(milliseconds: 240);
 
   /// Total in-hold-out lifetime of a notice (`06-sheets-and-dialogs.md` §11).

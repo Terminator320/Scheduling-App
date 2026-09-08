@@ -7,15 +7,17 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
-import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
+import 'package:scheduling/features/calendar/widgets/views/agenda_sliver_list.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_header_block.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_month_pager.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_week_strip.dart';
+import 'package:scheduling/features/calendar/widgets/views/crew_filter_button.dart';
+import 'package:scheduling/features/calendar/widgets/views/week_agenda_sliver_list.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -28,6 +30,13 @@ const _jane = EmployeeRecord(
   id: 'e1',
   name: 'Jane Doe',
   email: 'jane@example.com',
+  status: 'active',
+);
+
+const _bob = EmployeeRecord(
+  id: 'e2',
+  name: 'Bob Roy',
+  email: 'bob@example.com',
   status: 'active',
 );
 
@@ -45,16 +54,37 @@ Widget _wrap({
   required Stream<List<AppointmentRecord>> appointments,
   required Stream<List<EmployeeRecord>> allUsers,
   required EmployeesRepository repo,
+  Stream<List<AppointmentRecord>>? myAppointments,
   bool isAdmin = true,
   double textScale = 1,
 }) {
+  // `appointmentsInRangeProvider` is a family keyed by RANGE, so anything that
+  // moves the focused month — tapping a week bar that belongs to the previous
+  // month, paging, entering week mode near a boundary — builds a second
+  // instance and listens AGAIN.
+  final replayAppointments = appointments.first
+    // The error-branch case completes this with an error, and a future nobody
+    // has listened to yet reports that as an UNHANDLED async error and fails
+    // the test.
+    ..ignore();
+  // Defaults to the same list, so an existing case cannot depend on WHICH
+  // provider the screen picked; a case that passes its own list can.
+  final replayMine = myAppointments == null
+      ? replayAppointments
+      : (myAppointments.first..ignore());
   return ProviderScope(
     overrides: [
       employeesRepositoryProvider.overrideWithValue(repo),
       currentUserNameProvider.overrideWithValue('Jane'),
       allUsersStreamProvider.overrideWith((_) => allUsers),
-      appointmentsInRangeProvider.overrideWith((_, _) => appointments),
-      myAppointmentsProvider.overrideWith((_, _) => appointments),
+      // is deliberately NOT overridden: the crew-filter sheet must fill itself
+      // from the stream this screen already watches.
+      appointmentsInRangeProvider.overrideWith(
+        (_, _) => Stream.fromFuture(replayAppointments),
+      ),
+      myAppointmentsProvider.overrideWith(
+        (_, _) => Stream.fromFuture(replayMine),
+      ),
     ],
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
@@ -76,6 +106,34 @@ Widget _wrap({
       ),
     ),
   );
+}
+
+/// The en_CA agenda day header, spelled out literally.
+String _dayHeader(DateTime day) {
+  const weekdays = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  return '${weekdays[day.weekday - 1]}, ${months[day.month - 1]} ${day.day}';
 }
 
 Key _dayKey(DateTime day) => ValueKey(
@@ -217,10 +275,7 @@ void main() {
     // followed the swipe instead of being left behind in the old month.
     final now = DateTime.now();
     final next = DateTime(now.year, now.month + 1);
-    expect(
-      find.text(DateUtilsHelper.formatDayHeader(next)),
-      findsOneWidget,
-    );
+    expect(find.text(_dayHeader(next)), findsOneWidget);
   });
 
   testWidgets('swiping the collapsed week strip pages a week', (tester) async {
@@ -252,10 +307,7 @@ void main() {
       DateTime(today.year, today.month, today.day + 7),
       weekStart: weekStart,
     ).first;
-    expect(
-      find.text(DateUtilsHelper.formatDayHeader(expected)),
-      findsOneWidget,
-    );
+    expect(find.text(_dayHeader(expected)), findsOneWidget);
   });
 
   testWidgets('tapping the header month opens the month and year picker', (
@@ -272,11 +324,19 @@ void main() {
     await tester.pumpAndSettle();
 
     final today = DateTime.now();
-    await tester.tap(find.text(DateFormat.MMMM().format(today)));
+    // EITHER label, because the header picks between them by measured width
+    // (`calendar_header_block.dart`) — and this test is date-dependent, so a
+    // month whose full name does not fit the phone viewport renders the short
+    // one.
+    final monthLabel = find.text(DateFormat.MMMM().format(today));
+    final shortLabel = find.text(DateFormat.MMM().format(today));
+    await tester.tap(
+      monthLabel.evaluate().isNotEmpty ? monthLabel : shortLabel,
+    );
     await tester.pumpAndSettle();
 
-    // Both wheels — every month and the whole year window, as before the
-    // header block replaced the app bar.
+    // Both wheels — every month and the whole year window, as before the header
+    // block replaced the app bar.
     expect(find.byType(CupertinoPicker), findsNWidgets(2));
     expect(find.text(DateFormat.y().format(today)), findsWidgets);
     expect(tester.takeException(), isNull);
@@ -299,6 +359,110 @@ void main() {
 
     expect(find.text('1 JOB'), findsOneWidget);
     expect(find.textContaining('1 JOBS'), findsNothing);
+  });
+
+  testWidgets('agenda header reports how much of the day is done', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    final today = DateTime.now();
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([
+          _appointment(1, today),
+          _appointment(2, today),
+          _appointment(3, today).copyWith(status: 'done'),
+        ]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('3 JOBS · 1 DONE'), findsOneWidget);
+  });
+
+  testWidgets('agenda header stays a bare count while nothing is closed', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    final today = DateTime.now();
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([
+          _appointment(1, today),
+          _appointment(2, today),
+        ]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 JOBS'), findsOneWidget);
+  });
+
+  testWidgets('a cancelled job is neither counted nor called done', (
+    tester,
+  ) async {
+    // It read "1 JOB · 1 DONE": wrong twice over, and at odds with the month
+    // grid, whose dots have dropped cancelled since 2026-08-17.
+    await withPhoneViewport(tester);
+    final today = DateTime.now();
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([
+          _appointment(1, today).copyWith(status: 'cancelled'),
+        ]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('0 JOBS'), findsOneWidget);
+    expect(find.textContaining('DONE'), findsNothing);
+  });
+
+  testWidgets('a cancelled job drops out of a mixed day on both sides', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    final today = DateTime.now();
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([
+          _appointment(1, today),
+          _appointment(2, today).copyWith(status: 'done'),
+          _appointment(3, today).copyWith(status: 'cancelled'),
+        ]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 JOBS · 1 DONE'), findsOneWidget);
+  });
+
+  testWidgets('a day of only cancellations draws no Done rule', (tester) async {
+    // The cards still sink to the tail; the rule would have read "Done · 0".
+    await withPhoneViewport(tester);
+    final today = DateTime.now();
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([
+          _appointment(1, today).copyWith(status: 'cancelled'),
+          _appointment(2, today).copyWith(status: 'cancelled'),
+        ]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('0 JOBS'), findsOneWidget);
+    expect(find.textContaining('Done'), findsNothing);
   });
 
   testWidgets('the header block grows with text scale instead of clipping', (
@@ -373,9 +537,7 @@ void main() {
     expect(find.byType(CalendarMonthPager), findsOneWidget);
     expect(find.byType(CalendarWeekStrip), findsNothing);
 
-    // FadeInItem staggers its first 8 rows by 30ms each. The lazy sliver builds
-    // some of them mid-scroll, so those delays are still pending here and would
-    // trip the "timer still pending after dispose" invariant at teardown.
+    // FadeInItem staggers its first 8 rows by 30ms each.
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
   });
@@ -408,8 +570,8 @@ void main() {
     tester,
   ) async {
     await withPhoneViewport(tester);
-    // Days 1–3 of the visible month: always in-month, so every cell is
-    // tappable whatever today's date is.
+    // Days 1–3 of the visible month: always in-month, so every cell is tappable
+    // whatever today's date is.
     final now = DateTime.now();
     final spanning = AppointmentRecord(
       id: 'span',
@@ -506,6 +668,89 @@ void main() {
     );
   });
 
+  testWidgets('a six-week month paints its last row above the handle', (
+    tester,
+  ) async {
+    // A real phone WITH its insets, not the roomier bare test viewport: the bug
+    // was the grid taking an even flex share of the pane, which only starves a
+    // six-week month once the pane is short enough.
+    tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+    tester.view.devicePixelRatio = 3;
+    tester.view.padding = const FakeViewPadding(top: 47 * 3, bottom: 34 * 3);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value(const []),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Page forward to the next month that actually occupies six weeks, so the
+    // assertion holds whatever day the suite runs on.
+    final weekStart = weekStartForLocale('en_CA');
+    final now = DateTime.now();
+    var month = DateTime(now.year, now.month);
+    while (monthGridRowCount(month, weekStart: weekStart) != 6) {
+      await tester.drag(find.byType(PageView), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+      month = DateTime(month.year, month.month + 1);
+    }
+
+    // Cell 35 is the first of the sixth row, and a six-week month always has a
+    // real day there.
+    final lastRow = monthGridDays(month, weekStart: weekStart)[35];
+    final cell = find.byKey(_dayKey(lastRow));
+    expect(cell, findsOneWidget);
+
+    // The handle is the top of the agenda: anything painted below it is under
+    // the grid's clip and invisible.
+    final handleTop = tester.getRect(find.byTooltip('Hide calendar')).top;
+    expect(tester.getRect(cell).bottom, lessThanOrEqualTo(handleTop));
+  });
+
+  testWidgets('a six-week month at 2x text does not overflow the pane', (
+    tester,
+  ) async {
+    // The companion to the test above, and it guards the OTHER direction.
+    tester.view.physicalSize = const Size(375 * 3, 667 * 3);
+    tester.view.devicePixelRatio = 3;
+    tester.view.padding = const FakeViewPadding(top: 20 * 3);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value(const []),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+        textScale: 2,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final weekStart = weekStartForLocale('en_CA');
+    final now = DateTime.now();
+    var month = DateTime(now.year, now.month);
+    while (monthGridRowCount(month, weekStart: weekStart) != 6) {
+      await tester.drag(find.byType(PageView), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+      month = DateTime(month.year, month.month + 1);
+    }
+
+    // An overflow paints as a framework error rather than an exception, so it
+    // has to be read off `takeException` — a bare pump would pass regardless.
+    expect(tester.takeException(), isNull);
+
+    // And the agenda must still be given real extent: an unstarved `Expanded`
+    // is what the cap exists to preserve.
+    expect(find.byTooltip('Hide calendar'), findsOneWidget);
+  });
+
   testWidgets('survives a stream error without crashing (error branch logs)', (
     tester,
   ) async {
@@ -523,5 +768,180 @@ void main() {
     expect(find.text('Calendar'), findsNothing);
     expect(find.byType(AppHeaderPair), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the crew filter button is offered to an admin only', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value(const []),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(CrewFilterButton), findsOneWidget);
+    expect(find.byTooltip('Filter by crew member'), findsOneWidget);
+
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value(const []),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+        isAdmin: false,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(CrewFilterButton), findsNothing);
+  });
+
+  testWidgets('an employee calendar reads the employee-scoped stream', (
+    tester,
+  ) async {
+    // Employees see only appointments whose `employeeIds` hold their doc id —
+    // the ternary picking `myAppointmentsProvider` is the client half of that
+    // invariant, so the two streams must carry DIFFERENT lists here.
+    await withPhoneViewport(tester);
+    final today = DateTime.now();
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([_appointment(2, today)]),
+        myAppointments: Stream.value([_appointment(1, today)]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+        isAdmin: false,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Appt 1'), findsOneWidget);
+    expect(find.text('Appt 2'), findsNothing);
+  });
+
+  testWidgets('filtering to one person hides the rest and clears back', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    final today = DateTime.now();
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([
+          _appointment(1, today).copyWith(
+            employeeIds: const ['e1'],
+            employeeNames: const ['Jane Doe'],
+          ),
+          _appointment(2, today).copyWith(
+            employeeIds: const ['e2'],
+            employeeNames: const ['Bob Roy'],
+          ),
+        ]),
+        allUsers: Stream.value(const [_jane, _bob]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Appt 1'), findsOneWidget);
+    expect(find.text('Appt 2'), findsOneWidget);
+    expect(find.text('2 JOBS'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Filter by crew member'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Jane Doe').last);
+    await tester.pumpAndSettle();
+
+    // The banner names the person, the other job is gone from the agenda AND
+    // from the header count — the filter runs before the day index.
+    expect(find.byType(CrewFilterBanner), findsOneWidget);
+    expect(find.text('Showing Jane Doe'), findsOneWidget);
+    expect(find.text('Appt 1'), findsOneWidget);
+    expect(find.text('Appt 2'), findsNothing);
+    expect(find.text('1 JOB'), findsOneWidget);
+
+    await tester.tap(find.text('Clear'));
+    await tester.pumpAndSettle();
+    expect(find.text('Showing Jane Doe'), findsNothing);
+    expect(find.text('Appt 2'), findsOneWidget);
+    expect(find.text('2 JOBS'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('week mode lists every day of the week and a bar tap returns', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    final today = DateTime.now();
+    // Sunday-first (en_CA), spelled as the index: the locale table is only
+    // loaded once the app below has pumped, and the jobs are built before it.
+    final week = weekOf(today, weekStart: 0);
+    // Another day of the SAME week, so its job is off the day agenda but on the
+    // week one.
+    final other = week.first.day == today.day ? week.last : week.first;
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([
+          _appointment(1, today),
+          _appointment(2, DateTime(other.year, other.month, other.day, 9)),
+        ]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Appt 2'), findsNothing);
+
+    // Collapse the grid so the agenda viewport can hold the whole week.
+    await tester.drag(find.byTooltip('Hide calendar'), const Offset(0, -60));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Week view'));
+    await tester.pumpAndSettle();
+
+    for (final day in week) {
+      expect(
+        find.byKey(WeekDayBar.keyFor(day)),
+        findsOneWidget,
+        reason: '$day',
+      );
+    }
+    expect(find.text('Appt 1'), findsOneWidget);
+    expect(find.text('Appt 2'), findsOneWidget);
+    expect(find.text('2 JOBS'), findsOneWidget);
+
+    await tester.tap(find.byKey(WeekDayBar.keyFor(other)));
+    await tester.pumpAndSettle();
+
+    // Back in day mode, on the day whose bar was tapped.
+    expect(find.byKey(WeekDayBar.keyFor(today)), findsNothing);
+    expect(find.text(_dayHeader(other)), findsOneWidget);
+    expect(find.text('Appt 2'), findsOneWidget);
+    expect(find.text('Appt 1'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the week toggle does not grow the agenda header at 2x text', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    Future<double> headerHeight(double scale) async {
+      await tester.pumpWidget(
+        _wrap(
+          appointments: Stream.value(const []),
+          allUsers: Stream.value(const [_jane]),
+          repo: repo,
+          textScale: scale,
+        ),
+      );
+      await tester.pumpAndSettle();
+      return tester.getSize(find.byType(AgendaHeader)).height;
+    }
+
+    // The icon-only toggle is fixed at 32px, under the title line at 1x, so the
+    // row keeps the 60px it had before the toggle (18 + 10 padding plus a
+    // titleLarge line) and the pane's pinned overflow margin is untouched.
+    final atDouble = await headerHeight(2);
+    final atNormal = await headerHeight(1);
+    expect(atDouble, greaterThan(atNormal));
+    expect(atNormal, lessThanOrEqualTo(60));
   });
 }

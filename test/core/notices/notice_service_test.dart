@@ -47,4 +47,17 @@ void main() {
     expect(received, hasLength(1));
     expect(received.single.message, 'caught');
   });
+
+  test('late emits after dispose are ignored instead of throwing', () {
+    final service = NoticeService();
+
+    expect(
+      () => service
+        ..dispose()
+        ..success('saved')
+        ..error('oops')
+        ..info('fyi'),
+      returnsNormally,
+    );
+  });
 }

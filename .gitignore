@@ -10,16 +10,41 @@
 .history
 
 *.env
+/dev/firebase.local.json
 *google-services.json
 **/GoogleService-Info.plist
+
+# Service-account private keys. Nothing here needs one committed, and the
+# consequence of one slipping through is worse than any other secret in this
+# list: an adminsdk key is NON-EXPIRING full admin on prod Firestore, Auth and
+# Storage, and the Admin SDK bypasses `firestore.rules` entirely.
+#
+# The `functions/scripts/` runbooks tell an operator to point
+# GOOGLE_APPLICATION_CREDENTIALS at exactly such a file, so one lands on a dev
+# machine every time a backfill or audit is run. Until 2026-08-30 no pattern
+# here would have caught it — `*google-services.json` above does not match the
+# `<project>-firebase-adminsdk-<hash>.json` the console downloads.
+# Keep such a key OUTSIDE the repo anyway; this is the backstop, not the plan.
+*firebase-adminsdk*.json
+*-service-account*.json
+service-account*.json
+# ...but the jest FIXTURES are fake keys and must stay tracked. The patterns
+# above match `fake-service-account.json`, and that file is only safe today
+# because it is ALREADY tracked — `.gitignore` cannot un-track anything. A NEW
+# fixture, or a fresh clone that re-added one, would be dropped silently.
+# Verified with `git check-ignore -v --no-index`, never `git status`: the
+# tracked copy reports "not ignored" from `git status`'s point of view, which
+# is exactly how this hides.
+!**/__tests__/fixtures/*service-account*.json
 
 # Node tooling (root + functions/)
 node_modules/
 
-# Local-only project instructions
-CLAUDE.md
-!ios/CLAUDE.md
-!functions/CLAUDE.md
+# CLAUDE.md files are SHARED across machines (private repo, Windows + Mac) —
+# never ignore them. A bare `CLAUDE.md` pattern matches at EVERY depth, so it
+# silently drops each new nested file. Machine-local notes go in CLAUDE.local.md.
+CLAUDE.local.md
+**/CLAUDE.local.md
 TODO.md
 skills-lock.json
 
@@ -149,9 +174,30 @@ ruvector.db
 *.stackdump
 *.skill
 .playwright-mcp/
-UsersGeorgeVogasAppDataLocalTempvibe-security-skill/
 .agents/
-.claude/
+# .claude/ is SHARED (private repo, Windows + Mac): rules, skills, agents,
+# commands, hooks and settings.json must reach both machines. Only
+# machine-local files stay ignored.
+#
+# These patterns were in .git/info/exclude, which is NOT committed — so on the
+# Mac clone none of them were ignored at all, and a worktree or an agent
+# registry created there was untracked-and-visible and one `git add .` away
+# from being committed into the shared .claude/. This repo has been bitten by
+# exactly that class of bug twice (a bare `CLAUDE.md` pattern matching at every
+# depth; a merge resurrecting android/ with a live Maps key). Machine-local
+# runtime state belongs here where both clones see the rule.
+.claude/settings.local.json
+.claude/*.local.json
+.claude/worktrees/
+.claude/checkpoints/
+.claude/mailbox/
+.claude/routines/.state/
+.claude/agent-registry.json
+.claude/agent-memory-local/
+.claude/first-run
+.claude/scheduled_tasks.lock
+.claude/scheduled_tasks.json
+.claude/assistant-daemon-state.json
 .superpowers/
 superpowers/
 docs/superpowers/
@@ -159,6 +205,5 @@ docs/superpowers/
 # macOS Finder metadata
 .DS_Store
 **/.DS_Store
-
 
 

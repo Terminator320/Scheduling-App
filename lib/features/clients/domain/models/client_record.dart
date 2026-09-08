@@ -2,6 +2,8 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/policies/client_name_policy.dart';
+import 'package:scheduling/features/maps/domain/address_parser.dart';
 
 part 'client_record.freezed.dart';
 
@@ -47,27 +49,23 @@ abstract class ClientRecord with _$ClientRecord {
     @Default('') String email,
     @Default(<ClientContact>[]) List<ClientContact> contacts,
     @Default(false) bool noFixedAddress,
-    // Hidden from the paginated list, still searchable and still bookable. The
-    // list filters on it SERVER-side, and Firestore excludes docs missing a
-    // filtered field — so every client doc has to carry it, always.
+    // Hidden from the paginated list, still searchable and still bookable.
     @Default(false) bool archived,
     @Default(ClientType.unset) ClientType type,
     @Default('') String accessNotes,
     @Default('') String onSiteManager,
     @Default('') String billingTerms,
     @Default(false) bool autoInvoice,
-    // Legacy pre-Wave-reshape field, READ-ONLY — never emitted in toMap, and
-    // no UI edits it. Carried only so search can still reach it: `name` falls
-    // back to it when blank, but a legacy doc holding BOTH a name and a
-    // different business name would otherwise be unfindable by the business.
+    // Legacy pre-Wave-reshape field, READ-ONLY — never emitted in toMap, and no
+    // UI edits it.
     @Default('') String businessName,
     // Function-owned absolute recount — never emitted in toMap, and null until
     // the trigger has written it once.
     @Default(null) int? jobCount,
     // Read-only server timestamp used for dashboard trends — never emitted in toMap.
     DateTime? createdAt,
-    // Wave projection — read-only and function-owned, so it's omitted from toMap
-    // per firestore.rules.
+    // Wave projection — read-only and function-owned, so it's omitted from
+    // toMap per firestore.rules.
     @Default(null) String? waveCustomerId,
     @Default('') String waveSyncState,
     @Default(null) String? waveSyncError,
@@ -75,13 +73,10 @@ abstract class ClientRecord with _$ClientRecord {
   const ClientRecord._();
 
   factory ClientRecord.fromMap(String id, Map<String, dynamic> data) {
-    final rawContacts = (data['contacts'] as List?) ?? const [];
+    final rawContacts = firestoreList(data['contacts']);
     final wave = (data['wave'] as Map?)?.cast<String, dynamic>();
     // Back-compat for legacy `businessName` — keeps unnamed business docs
-    // visible and searchable. Two halves: `name` falls back to it when blank
-    // (which is the documented legacy shape), and it is ALSO carried through
-    // verbatim so ClientSearchPolicy can index it — a doc holding both a name
-    // and a different business name is findable by either.
+    // visible and searchable.
     final businessName = (data['businessName'] ?? '').toString();
     final rawName = (data['name'] ?? '').toString();
     final name = rawName.trim().isNotEmpty ? rawName : businessName;
@@ -104,14 +99,18 @@ abstract class ClientRecord with _$ClientRecord {
           .whereType<Map<Object?, Object?>>()
           .map((c) => ClientContact.fromMap(Map<String, dynamic>.from(c)))
           .toList(),
-      noFixedAddress: (data['noFixedAddress'] as bool?) ?? false,
-      archived: (data['archived'] as bool?) ?? false,
+      // `== true`, not a cast: this factory maps a live snapshot stream, so one
+      // console-written `"false"` would throw for the whole page rather than
+      // for the field.
+      noFixedAddress: data['noFixedAddress'] == true,
+      archived: data['archived'] == true,
       type: ClientType.fromRaw(data['type']?.toString()),
       accessNotes: (data['accessNotes'] ?? '').toString(),
       onSiteManager: (data['onSiteManager'] ?? '').toString(),
       billingTerms: (data['billingTerms'] ?? '').toString(),
-      autoInvoice: (data['autoInvoice'] as bool?) ?? false,
-      jobCount: (data['jobCount'] as num?)?.toInt(),
+      autoInvoice: data['autoInvoice'] == true,
+      // Function-owned, so the app never writes it — but the console can.
+      jobCount: firestoreInt(data['jobCount']),
       createdAt: firestoreDateTime(data['createdAt']),
       waveCustomerId: data['waveCustomerId']?.toString(),
       waveSyncState: (wave?['syncState'] ?? '').toString(),
@@ -119,8 +118,33 @@ abstract class ClientRecord with _$ClientRecord {
     );
   }
 
-  /// User-owned fields only. `waveCustomerId`/`wave`/`jobCount` are function-owned
-  /// and get rejected by the update rule, so they're left out here.
+  /// The whole address on one line, rebuilt from the street plus the structured
+  /// locality fields — what every surface that shows an address or hands one to
+  /// a maps app wants.
+  String get fullAddress => AddressParser.composeFull(
+    address,
+    city: city,
+    province: province,
+    postalCode: postalCode,
+    country: country,
+  );
+
+  /// Just the street line, apt rendered as "#4" — for the two places that own
+  /// the locality fields separately and must not repeat them: the edit form's
+  /// address box and the exported contact card.
+  String get streetLine => AddressParser.canonicalToDisplay(
+    AddressParser.streetOnly(
+      address,
+      city: city,
+      province: province,
+      postalCode: postalCode,
+      country: country,
+    ),
+  );
+
+  /// User-owned fields only. `waveCustomerId`/`wave`/`jobCount` are
+  /// function-owned and get rejected by the update rule, so they're left out
+  /// here.
   Map<String, dynamic> toMap() => {
     'name': name.trim(),
     'firstName': firstName.trim(),
@@ -144,5 +168,16 @@ abstract class ClientRecord with _$ClientRecord {
     'autoInvoice': autoInvoice,
   };
 
-  String get displayName => name;
+  /// The clean name for every in-app surface — the stored [name] IS the
+  /// client's phone number, because that is what Wave shows as the customer, so
+  /// nothing renders it.
+  String get displayName => ClientNamePolicy.displayFor(
+    name: name,
+    phone: phone,
+    mobile: mobile,
+    firstName: firstName,
+    lastName: lastName,
+    businessName: businessName,
+    type: type,
+  );
 }

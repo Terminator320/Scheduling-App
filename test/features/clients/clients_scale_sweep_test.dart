@@ -1,14 +1,12 @@
 // Sweeps the P3 client surfaces at every text scale on a 375×667 small-phone
-// viewport, catching RenderFlex overflow before it reaches a device. The
-// fixture populates every new field so the widest rows are exercised.
+// viewport, catching RenderFlex overflow before it reaches a device.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:mocktail/mocktail.dart';
-
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -24,14 +22,11 @@ import 'package:scheduling/features/clients/widgets/views/client_detail_view.dar
 import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-
 import '../../support/tour_test_support.dart';
 
 class _MockClientsRepo extends Mock implements ClientsRepository {}
 
-/// The client detail view holds a live listener on its doc. These sweeps only
-/// care about layout, so it yields nothing and the view renders the record it
-/// was handed.
+/// The client detail view holds a live listener on its doc.
 _MockClientsRepo _quietRepo() {
   final repo = _MockClientsRepo();
   when(
@@ -60,7 +55,7 @@ const _fullClient = ClientRecord(
   city: 'Montréal',
   province: 'QC',
   postalCode: 'H2X 2S8',
-  type: ClientType.propertyManagement,
+  type: ClientType.building,
   accessNotes: 'Gate code 4821, park behind the loading dock.',
   onSiteManager: 'Jean-Philippe Tremblay',
   billingTerms: 'Net 30, deposit on booking',
@@ -135,7 +130,11 @@ void main() {
       await _pumpAt(
         tester,
         scale: scale,
-        home: const Scaffold(body: AddClientSheet()),
+        home: const Scaffold(
+          body: AddClientSheet(
+            analyticsSource: AnalyticsSources.clientsTab,
+          ),
+        ),
       );
 
       expect(tester.takeException(), isNull);

@@ -3,37 +3,13 @@ const logger = require("firebase-functions/logger");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 
-const VALID_ROLES = new Set(["admin", "employee"]);
-const VALID_BRIDGE_STATUS = new Set(["active", "disabled"]);
-
-/**
- * True when the user doc should have a bridge entry — suppressed for
- * invited users (no uid) or unknown statuses.
- * @param {object} data user document fields.
- * @return {boolean}
- */
-function shouldHaveBridge(data) {
-  if (!data) return false;
-  const uid = data.uid;
-  const status = data.status;
-  if (typeof uid !== "string" || uid === "") return false;
-  if (!VALID_BRIDGE_STATUS.has(status)) return false;
-  return true;
-}
-
-/**
- * Body to upsert into usersByUid for the given userId + after-snapshot data.
- * @param {string} userId Firestore doc id of the user.
- * @param {object} data user document fields.
- * @return {{role: string, docId: string, status: string}}
- */
-function bridgeBody(userId, data) {
-  return {
-    role: data.role,
-    docId: userId,
-    status: data.status,
-  };
-}
+// The bridge's pure rules — shared with `scripts/backfill.js`, which repairs
+// the same collection and must agree with this trigger on who gets a row.
+const {
+  VALID_ROLES,
+  shouldHaveBridge,
+  bridgeBody,
+} = require("./bridge_policy");
 
 /**
  * True when the user doc was deleted or an active account was deactivated —
@@ -120,6 +96,12 @@ async function purgeDeliveryState(db, userId) {
 // Mirrors `users` into `usersByUid/{uid}` so security rules can resolve a
 // caller's role from their auth uid alone. `retry: true` is safe here since
 // every path writes absolute values (set/delete on deterministic doc ids).
+//
+// Back on the default 60 s timeout. It was raised to 300 for one step — the
+// Storage download-token rotation, which walked up to 500 appointments' photos
+// — and that step retired with the `url` write it existed to cover. What is
+// left is a handful of deterministic writes and one small `recursiveDelete`,
+// all of which return in milliseconds.
 const syncUsersByUid = onDocumentWritten(
     {document: "users/{userId}", retry: true},
     async (event) => {
@@ -144,11 +126,42 @@ const syncUsersByUid = onDocumentWritten(
       const mirrorBridge = async () => {
         // Skip writes with an unexpected role, as a defensive check. The
         // presence purge below still runs, so PII gets cleaned up regardless.
-        if (after && after.role && !VALID_ROLES.has(after.role)) {
+        //
+        // FAILS CLOSED on a MISSING role. This tested `after.role &&` first,
+        // which let a doc carrying no role at all through to `bridgeBody` —
+        // where `role: data.role` is written unconditionally, and
+        // `initializeApp()` sets no `ignoreUndefinedProperties`, so the Admin
+        // SDK threw inside a `retry: true` trigger. The bridge was then never
+        // written and every rules gate that resolves through it failed for that
+        // person. Only a console or Admin-SDK write can produce such a doc.
+        if (after && !VALID_ROLES.has(after.role)) {
           logger.warn("syncUsersByUid: unexpected role; skipping", {
             userId,
             role: after.role,
           });
+          return;
+        }
+
+        // Nothing the bridge MIRRORS has changed, so every branch below would
+        // rewrite the identical {role, docId, status} — `docId` is the trigger
+        // path's own userId, so those three fields are the whole body. This
+        // fires on ANY users write, and the hot writer is My details'
+        // availability panel, which commits per switch with no debounce: five
+        // working days flipped meant five identical bridge writes. Same
+        // discipline as recountClientJobs, which only fires when `clientId`
+        // actually changed.
+        //
+        // Deliberately AFTER the validity checks and BEFORE any write, and
+        // deliberately not folded into shouldPurgePresence/authAccessChange —
+        // those two diff correctly on their own predicates and still run
+        // below. The one thing given up is an incidental self-heal: a bridge
+        // doc deleted out-of-band is no longer rebuilt by an unrelated users
+        // write. `retry: true` covers a failed write, and any role/status/uid
+        // edit still rebuilds it.
+        if (before && after &&
+            before.role === after.role &&
+            before.status === after.status &&
+            beforeUid === afterUid) {
           return;
         }
 
@@ -202,7 +215,8 @@ const syncUsersByUid = onDocumentWritten(
       // Purges PII presence data after the bridge mirror completes. Failures
       // rethrow so retry:true safely reconverges — mirrorBridge and delete()
       // are both idempotent.
-      if (shouldPurgePresence(before, after)) {
+      const deactivated = shouldPurgePresence(before, after);
+      if (deactivated) {
         try {
           await db.doc(`users/${userId}/presence/location`).delete();
           // Stops push/Live Activity delivery along with the account, so a
@@ -220,9 +234,8 @@ const syncUsersByUid = onDocumentWritten(
         }
       }
 
-      // Handle the Auth credential last — this is defence-in-depth beyond
-      // the rules' status gate, and running it after the bridge mirror means
-      // it never blocks that write.
+      // The Auth credential comes after the bridge mirror so it never blocks
+      // that write.
       const change = authAccessChange(before, after);
       const authUid = afterUid || beforeUid;
       if (change && authUid) {
@@ -239,6 +252,15 @@ const syncUsersByUid = onDocumentWritten(
           throw err;
         }
       }
+
+      // NOTE: deactivation used to end by rotating the Storage download token
+      // on every photo this person was assigned to, because `uploadImage`
+      // minted a permanent rules-free download URL per photo and stored it.
+      // Nothing mints or stores one now, and the prod count of legacy rows
+      // that still carried one came back ZERO (2026-08-22), so the rotation
+      // and the field went with it. A photo is fetched through the SDK
+      // against `storage.rules`, which the status gate above already answers.
+      // Do not reinstate a rotation here without a stored link to rotate.
     },
 );
 

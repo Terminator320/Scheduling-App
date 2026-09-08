@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/launchers/external_uri_launcher.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -15,6 +16,7 @@ Future<void> launchGoogleMapsRoute(
     ref,
     uri,
     tag: 'LAUNCH-MAPS',
+    analyticsAction: AnalyticsContactActions.directions,
     errorMessage: context.l10n.error_couldNotOpenMapApp,
   );
 }

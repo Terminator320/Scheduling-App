@@ -3,7 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
@@ -17,6 +17,8 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
+
+import '../../support/tour_test_support.dart';
 
 class _MockAppointmentsRepo extends Mock implements AppointmentsRepository {}
 
@@ -64,6 +66,9 @@ void main() {
   late PhotoUploadNotifier uploadNotifier;
 
   setUp(() {
+    // The details sheet carries a tour now; without this its showcase
+    // animation repeats forever and pumpAndSettle times out.
+    markFormToursSeen();
     appointments = _MockAppointmentsRepo();
     clients = _MockClientsRepo();
     employees = _MockEmployeesRepo();
@@ -73,6 +78,9 @@ void main() {
     when(
       employees.watchEmployees,
     ).thenAnswer((_) => Stream.value(const [_employeeA]));
+    when(
+      () => appointments.onLocalWrite,
+    ).thenAnswer((_) => const Stream.empty());
     when(() => appointments.updateAppointment(any())).thenAnswer((_) async {});
     // The edit flow now runs a conflict check before writing; no clash here.
     when(
@@ -114,6 +122,7 @@ void main() {
             // the admin-only Edit affordance.
             body: EventDetailsView(
               appointment: appointment ?? _appointment,
+              analyticsSource: AnalyticsSources.calendar,
               showActions: true,
               onClose: onClose,
             ),
@@ -250,16 +259,11 @@ void main() {
       appointment: spanning(DateTime(2026, 8, 1, 9), DateTime(2026, 8, 3, 17)),
     );
 
+    // The row drops the month down beneath itself rather than opening a modal
+    // picker, so the day is one tap inside the form.
     await tester.tap(find.text('Start date'));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.descendant(
-        of: find.byType(DatePickerDialog),
-        matching: find.text('5'),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('OK'));
+    await tester.tap(find.byKey(const ValueKey('inline-date-day-2026-08-05')));
     await tester.pumpAndSettle();
 
     expect(
@@ -279,11 +283,16 @@ void main() {
   ) async {
     await openEditForm(tester);
 
-    // Both date rows land on the same day, so nothing describes a run.
+    // ONE date row, not two: editing may not widen a one-day client job into a
+    // multi-day one, because only the ADD path splits a span into per-day
+    // documents — so the end-date row is withheld here for the same reason it
+    // is withheld on a run member. This asserted two rows until 2026-08-28,
+    // when offering the second one still wrote a wide document.
     expect(
       find.text(DateUtilsHelper.formatDate(DateTime(2026, 5, 10))),
-      findsNWidgets(2),
+      findsOneWidget,
     );
+    expect(find.text('End date'), findsNothing);
     expect(find.textContaining(RegExp(r'\d+ (days|nights)')), findsNothing);
     expect(find.text('Start Time'), findsOneWidget);
     expect(find.text('End Time'), findsOneWidget);

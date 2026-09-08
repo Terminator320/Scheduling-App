@@ -6,15 +6,22 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 
+import 'package:scheduling/core/app/device_deregistration.dart';
+import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/permissions/location_permission_service.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/utils/reentrant_sync.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart'
     show shouldRegisterPush;
 import 'package:scheduling/features/presence/data/presence_repository.dart';
+import 'package:scheduling/features/presence/domain/models/presence_fix.dart';
+import 'package:scheduling/features/settings/application/my_details_providers.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 final presenceRepositoryProvider = Provider<PresenceRepository>(
   (ref) => PresenceRepository(
@@ -28,6 +35,76 @@ final presenceSyncControllerProvider = Provider<PresenceSyncController>((ref) {
   ref.onDispose(controller.dispose);
   return controller;
 });
+
+final myPresenceFixProvider = StreamProvider.autoDispose<PresenceFix?>((ref) {
+  final record = ref.watch(myEmployeeRecordProvider);
+  if (record == null) return Stream.value(null);
+  return ref
+      .watch(presenceRepositoryProvider)
+      .watchLocation(userDocId: record.id);
+});
+
+/// Writes the location-sharing choice and starts or stops presence tracking.
+///
+/// The ONE owner of that pair: the Settings row and the Location sharing
+/// screen both flip the same field, and a write that skipped the presence half
+/// would leave a technician's phone uploading fixes after they turned it off.
+Future<void> applyLocationSharing(
+  WidgetRef ref,
+  EmployeeRecord record, {
+  required bool enabled,
+}) async {
+  await ref
+      .read(employeesRepositoryProvider)
+      .updateSelfDetails(record.copyWith(locationSharingEnabled: enabled));
+  final presence = ref.read(presenceSyncControllerProvider);
+  if (enabled) {
+    await presence.sync();
+  } else {
+    await presence.unregister();
+  }
+}
+
+/// [applyLocationSharing] behind the offline guard, log tag and error notice
+/// the two toggles share.
+///
+/// The Settings row and the Location sharing screen are the same operation, so
+/// the `ME-SAVE location sharing failed` tag — the only place Crashlytics can
+/// find it since notices stopped carrying support codes — lives here rather
+/// than at each site. Returns whether the write committed; the caller keeps
+/// its own busy-flag bracketing.
+Future<bool> saveLocationSharing(
+  BuildContext context,
+  WidgetRef ref,
+  EmployeeRecord record, {
+  required bool enabled,
+}) async {
+  final l10n = context.l10n;
+  final notices = ref.read(noticeServiceProvider);
+  final logger = ref.read(loggerProvider);
+  if (guardedOffline(
+    context,
+    ref,
+    intro: l10n.error_introSaveLocationSharing,
+  )) {
+    return false;
+  }
+  try {
+    await applyLocationSharing(ref, record, enabled: enabled);
+    return true;
+  } catch (error, stackTrace) {
+    logger.warn('ME-SAVE location sharing failed', error, stackTrace);
+    if (!context.mounted) return false;
+    notices.error(
+      composeErrorNoticeFor(
+        l10n,
+        intro: l10n.error_introSaveLocationSharing,
+        error: error,
+      ),
+    );
+    return false;
+  }
+}
 
 /// Movement uploads at most this often — the stream's 250 m `distanceFilter`
 /// handles granularity; this guards Firestore write volume on a highway.
@@ -45,7 +122,10 @@ bool shouldTrackPresence({
   required String role,
   required String status,
   required bool signedIn,
-}) => shouldRegisterPush(role: role, status: status, signedIn: signedIn);
+  required bool locationSharingEnabled,
+}) =>
+    locationSharingEnabled &&
+    shouldRegisterPush(role: role, status: status, signedIn: signedIn);
 
 /// Pure throttle for movement-driven fixes.
 bool shouldWritePresenceFix({
@@ -98,15 +178,20 @@ class PresenceSyncController with ReentrantSync {
   Future<void> sync() => runCoalesced(_syncGuarded);
 
   Future<void> _syncGuarded() async {
+    // Teardown runs BEFORE signOut(), so a body resuming mid-teardown still
+    // holds a valid credential: it would re-open the position stream and
+    // re-create presence/location for a user who just signed out, and keep
+    // uploading until the process dies. Every await below re-checks this.
+    final generation = syncGeneration;
     try {
-      final signedIn = _auth.currentUser != null;
-      final doc = _ref.read(currentUserDocProvider).value ?? const {};
-      final role = (doc['role'] ?? '').toString().trim();
-      final status = (doc['status'] ?? '').toString().trim();
+      final gate = readAccountGateInputs(_ref, _auth);
+      // Null is "we don't know yet" — leave presence tracking as it is.
+      if (gate == null) return;
       if (!shouldTrackPresence(
-        role: role,
-        status: status,
-        signedIn: signedIn,
+        role: gate.role,
+        status: gate.status,
+        signedIn: gate.signedIn,
+        locationSharingEnabled: gate.locationSharingEnabled,
       )) {
         _stop();
         return;
@@ -119,9 +204,11 @@ class PresenceSyncController with ReentrantSync {
       if (uid == _trackedUid && _positionSub != null) return;
 
       await _ref.read(firebaseReadyProvider.future).catchError((Object _) {});
+      if (isSyncStale(generation)) return;
       final permission = await _ref
           .read(locationPermissionServiceProvider)
           .ensureLocation();
+      if (isSyncStale(generation)) return;
       // Silent no-op on any non-grant (never nag) — the server's
       // address-fallback chain covers an untracked user. Silent to the USER,
       // not to us: the three non-grant reasons need different remedies
@@ -137,6 +224,7 @@ class PresenceSyncController with ReentrantSync {
       final match = await _ref
           .read(employeesRepositoryProvider)
           .findUserByUid(uid);
+      if (isSyncStale(generation)) return;
       final docId = match?.id;
       if (docId == null) {
         _logger.warn('PRESENCE no users doc for uid; skip tracking');
@@ -212,12 +300,23 @@ class PresenceSyncController with ReentrantSync {
   void _uploadThrottled(Position position, DateTime attemptedAt) {
     final previous = _lastUploadAt;
     _lastUploadAt = attemptedAt;
+    // Resolved here, not in the handler: the handler runs from a Timer after
+    // this controller may be disposed, and Riverpod 3 throws on `ref.read`
+    // from a disposed consumer.
+    final logger = _logger;
     unawaited(
-      _upload(position).then((result) {
-        if (result == PresenceWriteResult.ok) return;
-        if (_lastUploadAt == attemptedAt) _lastUploadAt = previous;
-        if (result == PresenceWriteResult.denied) _stop();
-      }),
+      _upload(position)
+          .then((result) {
+            if (result == PresenceWriteResult.ok) return;
+            if (_lastUploadAt == attemptedAt) _lastUploadAt = previous;
+            if (result == PresenceWriteResult.denied) _stop();
+          })
+          .catchError((Object e, StackTrace st) {
+            // Runs from a Timer callback, so a throw here has no caller left and
+            // would land in Crashlytics as a fatal from a background GPS write.
+            if (_lastUploadAt == attemptedAt) _lastUploadAt = previous;
+            logger.warn('PRESENCE upload failed', e, st);
+          }),
     );
   }
 
@@ -286,18 +385,39 @@ class PresenceSyncController with ReentrantSync {
 
   /// Best-effort teardown for sign-out or account deletion — stops the stream
   /// and deletes the presence doc. Never throws, since sign-out must not be blocked.
-  Future<void> unregister() async {
-    final docId = _docId;
+  /// Returns whether the stored fix is provably gone — see
+  /// `PresenceRepository.deleteLocation`.
+  Future<bool> unregister() async {
+    invalidateSync();
+    final knownDocId = _docId;
     _stop();
-    if (docId == null) return;
     try {
-      await _ref
+      // Resolve the docId when this session never started — `_start` needs
+      // firebaseReady AND a granted location permission AND a successful
+      // findUserByUid, and if any of those failed today the doc from a
+      // PREVIOUS launch is still live. That stale pin is visually identical to
+      // a fresh one on the admin map (`LiveMapAggregator.join` filters on the
+      // user, never on freshness), and the privacy policy promises sign-out
+      // clears it. Same fix as `LiveActivityRegistrationController.unregister`.
+      final docId = knownDocId ?? await _resolveUserDocId();
+      if (docId == null) return false;
+      return await _ref
           .read(presenceRepositoryProvider)
           .deleteLocation(userDocId: docId);
     } catch (e, st) {
       _logger.warn('PRESENCE unregister failed', e, st);
+      return false;
     }
   }
+
+  /// This device's `users` doc id, for a teardown that never got as far as
+  /// [_start]. Null when signed out or when the lookup fails.
+  Future<String?> _resolveUserDocId() => resolveUserDocId(
+    ref: _ref,
+    auth: _auth,
+    logger: _logger,
+    tag: 'PRESENCE',
+  );
 
   /// Container-teardown cleanup — cancels the stream, timers, and lifecycle
   /// listener without the network delete that [unregister] does on sign-out.

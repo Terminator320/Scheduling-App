@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/application/maps_providers.dart';
 import 'package:scheduling/features/presence/application/live_map_providers.dart';
@@ -36,7 +37,7 @@ class StaffInfoCard extends ConsumerWidget {
     final key = ReverseGeocodeQuery(
       lat: point.lat,
       lng: point.lng,
-      locale: lang == 'fr' ? 'fr' : 'en',
+      locale: serverLocaleOf(lang),
     );
     final addressAsync = ref.watch(reverseGeocodeProvider(key));
     final resolvedAddress = addressAsync.value;
@@ -91,6 +92,7 @@ class StaffInfoCard extends ConsumerWidget {
                     label: Text(context.l10n.liveMap_openInMaps),
                     onPressed: () => AddressMapLauncher.showMapChoices(
                       context,
+                      ref,
                       address: resolvedAddress?.isNotEmpty ?? false
                           ? resolvedAddress!
                           : '${point.lat},${point.lng}',

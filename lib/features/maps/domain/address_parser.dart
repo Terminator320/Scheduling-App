@@ -19,6 +19,19 @@ class AddressParser {
     caseSensitive: false,
   );
   static final _leadingHashes = RegExp('^#+');
+  // `_localityKey` runs ~6-10x per `streetOnly`, and `streetOnly` runs per row
+  // in the clients list builder AND once per client in `buildingsIn` — so a
+  // per-call constructor here cost thousands of compilations per window fetch.
+  static final _whitespaceRun = RegExp(r'\s+');
+  static final _postalCode = RegExp(
+    r'\b[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z][ -]?\d[ABCEGHJ-NPRSTV-Z]\d\b',
+    caseSensitive: false,
+  );
+  static final _province = RegExp(
+    r'\b(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)\b',
+    caseSensitive: false,
+  );
+  static final _anyDigit = RegExp(r'\d');
   static final _embeddedAptToken = RegExp(
     r'\s+(#|apt\.?|apartment|unit|suite|ste\.?)\s*[-#: ]*\s*[A-Za-z0-9 /]+',
     caseSensitive: false,
@@ -110,8 +123,125 @@ class AddressParser {
     final resolvedApt = trimmedApt.isNotEmpty
         ? trimmedApt
         : (parsed?.apt ?? '').trim();
-    return combineAptAndStreet(resolvedStreet, resolvedApt);
+    return combineAptAndStreet(
+      _withoutRepeatedApt(resolvedStreet, resolvedApt),
+      resolvedApt,
+    );
   }
+
+  /// Peels any FURTHER `<apt>-` still leading [street] after [splitApt] took
+  /// the first one off.
+  ///
+  /// `splitApt` peels exactly one, so a street that already carried the unit
+  /// came back out prefixed again — "210-210-4450 Prom. Paton", three of which
+  /// are in prod. It rendered as "210-4450 Prom. Paton #210" (the unit twice)
+  /// and, worse, re-saving in the app did NOT repair it: the extra prefix
+  /// survived every round trip, so the doc was stuck. This heals one on its
+  /// next ordinary save.
+  ///
+  /// Only an EXACT `<resolvedApt>-` repeat is taken, never a general leading
+  /// number, so a civic range keeps whatever `splitApt` left of it.
+  static String _withoutRepeatedApt(String street, String apt) {
+    if (apt.isEmpty) return street;
+    final prefix = '$apt-';
+    var value = street;
+    while (value.startsWith(prefix) && value.length > prefix.length) {
+      value = value.substring(prefix.length).trim();
+    }
+    return value;
+  }
+
+  /// The street line alone — [stored] with any trailing segments that merely
+  /// repeat the structured locality fields removed.
+  ///
+  /// Hand-mirrors `streetFromAddress` (`functions/client_address_utils.js`),
+  /// which the Wave push has always needed because `clients/{id}.address`
+  /// carries more than a street. It moved out of `wave/mappers.js` when
+  /// `client_propagation.js` and the address backfill became callers too, so
+  /// the rule now has three readers rather than one. Keep the two in step;
+  /// their tests share worked examples.
+  ///
+  /// It strips from the TAIL rather than splitting on the first comma, so a
+  /// street like "100 Main St, Building A" keeps its second segment. With no
+  /// locality fields to identify a tail (a legacy doc that predates them) it
+  /// falls back to the first segment rather than guessing, and it never strips
+  /// the last remaining one — a street that IS the city name must not reduce
+  /// to nothing.
+  ///
+  /// **Idempotent**: an already-reduced street passes through untouched, which
+  /// is what lets it run on a collection holding both shapes — the Wave import
+  /// writes a street line, the app used to write the whole picked string.
+  static String streetOnly(
+    String stored, {
+    String city = '',
+    String province = '',
+    String postalCode = '',
+    String country = '',
+  }) {
+    final segments = stored
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (segments.length <= 1) return segments.isEmpty ? '' : segments.first;
+
+    final tails = <String>{};
+    for (final part in [city, province, postalCode, country]) {
+      final key = _localityKey(part);
+      if (key.isNotEmpty) tails.add(key);
+    }
+    if (province.trim().isNotEmpty && postalCode.trim().isNotEmpty) {
+      tails.add(_localityKey('$province $postalCode'));
+    }
+    if (tails.isEmpty) return segments.first;
+
+    var end = segments.length;
+    while (end > 1 && tails.contains(_localityKey(segments[end - 1]))) {
+      end -= 1;
+    }
+    return segments.take(end).join(', ');
+  }
+
+  /// The whole address as one line, rebuilt from the street plus the structured
+  /// fields — "1234 Rue Principale #4, Montréal, QC H2X 1Y4, Canada".
+  ///
+  /// Reducing through [streetOnly] FIRST is the load-bearing half: a legacy doc
+  /// whose `address` still holds the locality would otherwise render its city
+  /// twice. That makes this safe on both stored shapes and safe to re-apply to
+  /// its own output.
+  static String composeFull(
+    String stored, {
+    String city = '',
+    String province = '',
+    String postalCode = '',
+    String country = '',
+  }) {
+    final street = canonicalToDisplay(
+      streetOnly(
+        stored,
+        city: city,
+        province: province,
+        postalCode: postalCode,
+        country: country,
+      ),
+    );
+    // Province and postal code share a segment, the way an address is written.
+    final region = [
+      province.trim(),
+      postalCode.trim(),
+    ].where((part) => part.isNotEmpty).join(' ');
+    return [
+      street,
+      city.trim(),
+      region,
+      country.trim(),
+    ].where((part) => part.isNotEmpty).join(', ');
+  }
+
+  /// Collapses inner whitespace and case so two spellings of the same locality
+  /// compare equal. Mirrors the JS `norm`.
+  static String _localityKey(String value) =>
+      value.replaceAll(_whitespaceRun, ' ').trim().toLowerCase();
 
   static String toCanonical(String text) {
     final trimmed = text.trim();
@@ -137,10 +267,7 @@ class AddressParser {
         .where((p) => p.isNotEmpty)
         .toList();
 
-    final postalMatch = RegExp(
-      r'\b[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z][ -]?\d[ABCEGHJ-NPRSTV-Z]\d\b',
-      caseSensitive: false,
-    ).firstMatch(value);
+    final postalMatch = _postalCode.firstMatch(value);
     final postalCode = postalMatch?.group(0)?.toUpperCase();
 
     String? country;
@@ -156,10 +283,7 @@ class AddressParser {
 
     String? province;
     for (final part in parts) {
-      final m = RegExp(
-        r'\b(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)\b',
-        caseSensitive: false,
-      ).firstMatch(part);
+      final m = _province.firstMatch(part);
       if (m != null) {
         province = m.group(0)!.toUpperCase();
         break;
@@ -169,10 +293,10 @@ class AddressParser {
     String? city;
     if (parts.length >= 3) {
       final candidate = parts[parts.length - 3];
-      if (!RegExp(r'\d').hasMatch(candidate)) city = candidate;
+      if (!_anyDigit.hasMatch(candidate)) city = candidate;
     } else if (parts.length >= 2) {
       final candidate = parts[parts.length - 2];
-      if (!RegExp(r'\d').hasMatch(candidate)) city = candidate;
+      if (!_anyDigit.hasMatch(candidate)) city = candidate;
     }
 
     return ParsedAddressFields(

@@ -16,9 +16,9 @@ The application is backed by Google Firebase, giving it a secure, cloud-based fo
 
 ## Setup
 
-1. **Environment file** — copy `dev/.env.example` to `dev/.env` and fill in the Firebase client values (Firebase console → *Project settings* → *General* → *Your apps*, or the output of `flutterfire configure`). `dev/.env` is gitignored and bundled as an asset at build time; the app fails fast on startup naming any missing key.
+1. **Build config** — copy `dev/firebase.local.example.json` to `dev/firebase.local.json`, fill in the Firebase and iOS Maps client values, and pass it with `--dart-define-from-file`. Required keys are `IOS_API_KEY`, `IOS_APP_ID`, `MESSAGING_SENDER_ID`, `PROJECT_ID`, `STORAGE_BUCKET`, and `IOS_MAPS_API_KEY`. The app fails fast on startup naming any missing Firebase key.
 2. **Dependencies** — run `flutter pub get`. Localizations are generated automatically (`generate: true` in `pubspec.yaml`); run `flutter gen-l10n` manually if needed.
-3. **Run** — `flutter run`.
+3. **Run** — `flutter run --dart-define-from-file=dev/firebase.local.json`, or pass the same keys individually with repeated `--dart-define=KEY=value` arguments.
 4. **Local Firebase emulators (optional)** — start them with `firebase emulators:start`, then run the app with:
 
    ```bash
@@ -26,6 +26,20 @@ The application is backed by Google Firebase, giving it a secure, cloud-based fo
    # Host defaults to 127.0.0.1, which is what the iOS Simulator needs.
    # Override it when running on a physical device on the same network:
    flutter run --dart-define=USE_FIREBASE_EMULATOR=true --dart-define=EMULATOR_HOST=192.168.x.x
+   ```
+
+5. **Analytics (optional in development)** — Firebase Analytics collection is **off in debug builds** so `flutter run` never files events against the production property. To watch events in Firebase DebugView, turn collection on *and* add the launch argument:
+
+   ```bash
+   flutter run --dart-define-from-file=dev/firebase.local.json --dart-define=ANALYTICS_DEBUG=true
+   ```
+
+   The `-FIRDebugEnabled` launch argument also has to be on the Xcode scheme — see [docs/IOS_MAC_BUILD.md](docs/IOS_MAC_BUILD.md). Release builds always collect.
+
+6. **Release builds should drop the advertising identifier** — the app sells no ads and needs no attribution, so build with `FIREBASE_ANALYTICS_WITHOUT_ADID=true` in the environment. That swaps `FirebaseAnalytics` for `FirebaseAnalyticsCore` in the plugin's SPM package, which removes IDFA collection and the App Store privacy disclosure that comes with it:
+
+   ```bash
+   FIREBASE_ANALYTICS_WITHOUT_ADID=true flutter build ios --release --dart-define-from-file=dev/firebase.local.json
    ```
 
 The app targets **iOS only** and building it requires a Mac — see [docs/IOS_MAC_BUILD.md](docs/IOS_MAC_BUILD.md).

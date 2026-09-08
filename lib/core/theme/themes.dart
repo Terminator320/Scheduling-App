@@ -49,9 +49,7 @@ ThemeData darkTheme() => _darkThemeCache ??= _buildDarkTheme();
 
 ThemeData _buildLightTheme() {
   // onPrimary, onError and surface are left to ColorScheme.light's defaults,
-  // which already equal the tokens we want. `light_scheme_defaults_test.dart`
-  // pins them, so a framework change to those defaults fails a test instead of
-  // silently repainting the app.
+  // which already equal the tokens we want.
   const cs = ColorScheme.light(
     primary: AppColors.blue,
     primaryContainer: AppColors.blueTint,
@@ -405,5 +403,86 @@ ThemeData _buildDarkTheme() {
         borderRadius: BorderRadius.circular(AppRadius.r12),
       ),
     ),
+  );
+}
+
+/// [base] with every text style one weight step heavier.
+ThemeData boldTextTheme(ThemeData base) {
+  TextStyle? bolder(TextStyle? s) {
+    if (s == null) return null;
+    final weight = s.fontWeight ?? FontWeight.w400;
+    final index = FontWeight.values.indexOf(weight);
+    // One step, capped: w900 has nowhere to go, and jumping straight to bold
+    // flattens the type scale's own weight contrast.
+    final next = index < 0 || index >= FontWeight.values.length - 1
+        ? weight
+        : FontWeight.values[index + 1];
+    return s.copyWith(fontWeight: next);
+  }
+
+  final t = base.textTheme;
+  return base.copyWith(
+    textTheme: t.copyWith(
+      displayLarge: bolder(t.displayLarge),
+      displayMedium: bolder(t.displayMedium),
+      displaySmall: bolder(t.displaySmall),
+      headlineLarge: bolder(t.headlineLarge),
+      headlineMedium: bolder(t.headlineMedium),
+      headlineSmall: bolder(t.headlineSmall),
+      titleLarge: bolder(t.titleLarge),
+      titleMedium: bolder(t.titleMedium),
+      titleSmall: bolder(t.titleSmall),
+      bodyLarge: bolder(t.bodyLarge),
+      bodyMedium: bolder(t.bodyMedium),
+      bodySmall: bolder(t.bodySmall),
+      labelLarge: bolder(t.labelLarge),
+      labelMedium: bolder(t.labelMedium),
+      labelSmall: bolder(t.labelSmall),
+    ),
+  );
+}
+
+ThemeData? _highContrastLightCache;
+
+/// The light theme with lifted foregrounds, for iOS **Increase Contrast**.
+ThemeData highContrastLightTheme() => _highContrastLightCache ??= _liftContrast(
+  lightTheme(),
+  onSurfaceVariant: AppColors.ink,
+  outline: AppColors.ink60,
+  outlineVariant: AppColors.ink60,
+);
+
+ThemeData? _highContrastDarkCache;
+
+/// The dark theme's counterpart.
+ThemeData highContrastDarkTheme() => _highContrastDarkCache ??= _liftContrast(
+  darkTheme(),
+  onSurfaceVariant: AppColors.darkTextPrimary,
+  outline: const Color(0x66FFFFFF),
+  outlineVariant: const Color(0x40FFFFFF),
+);
+
+ThemeData _liftContrast(
+  ThemeData base, {
+  required Color onSurfaceVariant,
+  required Color outline,
+  required Color outlineVariant,
+}) {
+  final scheme = base.colorScheme.copyWith(
+    onSurfaceVariant: onSurfaceVariant,
+    outline: outline,
+    outlineVariant: outlineVariant,
+  );
+  final t = base.textTheme;
+  return base.copyWith(
+    colorScheme: scheme,
+    // The type scale hard-codes a muted colour on the secondary styles, so a
+    // scheme swap alone would leave the very text this setting exists for
+    // unchanged.
+    textTheme: t.copyWith(
+      bodySmall: t.bodySmall?.copyWith(color: onSurfaceVariant),
+      labelMedium: t.labelMedium?.copyWith(color: onSurfaceVariant),
+    ),
+    dividerColor: outline,
   );
 }

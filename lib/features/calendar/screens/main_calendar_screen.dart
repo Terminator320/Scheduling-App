@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
+import 'package:scheduling/core/app/photo_upload_failure_listener.dart';
+import 'package:scheduling/core/app/role_upgrade_listener.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
-import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
-import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
+import 'package:scheduling/features/calendar/application/calendar_crew_filter_provider.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/collapse_state.dart';
@@ -26,7 +28,11 @@ import 'package:scheduling/features/calendar/widgets/views/calendar_header_block
 import 'package:scheduling/features/calendar/widgets/views/calendar_month_grid.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_month_pager.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_week_strip.dart';
+import 'package:scheduling/features/calendar/widgets/views/collapse_handle.dart';
+import 'package:scheduling/features/calendar/widgets/views/crew_filter_button.dart';
 import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
+import 'package:scheduling/features/calendar/widgets/views/today_pill.dart';
+import 'package:scheduling/features/calendar/widgets/views/week_agenda_sliver_list.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
@@ -35,7 +41,12 @@ import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart'
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
-import 'package:scheduling/shared/widgets/feedback/error_snack_bar.dart';
+
+/// Most of the portrait pane the month grid may take before it starts clipping.
+const double _kMaxGridShare = 0.7;
+
+/// What the agenda below the grid lists: the selected day, or its whole week.
+enum _AgendaMode { day, week }
 
 class MainCalendar extends ConsumerStatefulWidget {
   const MainCalendar({
@@ -58,11 +69,15 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   late AppointmentDateRange _appointmentRange;
-  PhotoUploadNotifier? _uploadNotifier;
-  bool _upgradingToAdmin = false;
+  _AgendaMode _agendaMode = _AgendaMode.day;
+
+  /// Captured so dispose can clear without touching `ref`.
+  OpenCalendarRange? _openRange;
   late DateFormat _monthLabelFormat;
   late DateFormat _monthShortLabelFormat;
   late DateFormat _yearLabelFormat;
+  late DateFormat _dayMonthLabelFormat;
+  late DateFormat _dayLabelFormat;
   String _lastLocale = '';
 
   late final _tour = TourSteps(
@@ -77,24 +92,26 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   void initState() {
     super.initState();
     _selectedDay = _focusedDay;
-    _appointmentRange = AppointmentDateRange.forCalendar(
-      focusedDay: _focusedDay,
-      selectedDay: _focusedDay,
-    );
-    _initStreams();
-  }
-
-  void _initStreams() {
-    _uploadNotifier = ref.read(photoUploadNotifierProvider);
-    _uploadNotifier?.latestFailure.addListener(_onUploadFailure);
+    _appointmentRange = _rangeFor(_focusedDay, _focusedDay);
+    if (widget.isAdmin) {
+      _openRange = ref.read(openCalendarRangeProvider.notifier);
+    }
+    // Publish after build so Riverpod accepts the provider write.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _publishRange();
+    });
   }
 
   @override
   void dispose() {
-    _uploadNotifier?.latestFailure.removeListener(_onUploadFailure);
     _agendaController.dispose();
+    // Clear only the range this screen still owns.
+    _openRange?.clearIfHolding(this);
     super.dispose();
   }
+
+  /// Publishes the open calendar range for admin child surfaces.
+  void _publishRange() => _openRange?.publish(this, _appointmentRange);
 
   void _onCollapseDrag(double dy) {
     if (_collapse.onDragDelta(dy)) setState(() {});
@@ -105,89 +122,126 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     setState(() {});
   }
 
-  void _onUploadFailure() {
-    final failure = _uploadNotifier?.latestFailure.value;
-    if (failure == null || !mounted) return;
-    final appointmentId = failure.appointmentId;
-    final scheme = Theme.of(context).colorScheme;
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      errorSnackBar(
-        context,
-        context.l10n.calendar_photoUploadFailedSnackbar,
-        action: SnackBarAction(
-          label: context.l10n.calendar_open,
-          textColor: scheme.onErrorContainer,
-          onPressed: () async {
-            final appointment = await ref
-                .read(appointmentsRepositoryProvider)
-                .getAppointmentById(appointmentId);
-            if (!mounted || appointment == null) return;
-            await showEventDetails(
-              context,
-              appointment,
-              showActions: widget.isAdmin,
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  // Show the "today" control whenever the day on screen isn't today — not just
-  // when the visible month differs, which left it hidden while the user was
-  // reading another day of the current month (owner call, 2026-07-30). [today]
-  // comes from currentDayProvider, so it re-derives across midnight.
-  //
-  // The month test is belt-and-braces: every paging path also selects the day
-  // it lands on, so the date test already covers a swipe away from today — but
-  // it keeps the pill honest for any future path that moves the grid alone.
+  // Show Today when either the selected day or focused month differs.
   bool _showTodayButton(DateTime today) =>
       !isSameDate(_selectedDay ?? _focusedDay, today) ||
       !isInMonth(today, _focusedDay);
 
+  /// One event per date move, with WHICH gesture moved it.
+  ///
+  /// `_onDaySelected` is the single funnel every path ends in, so the direction
+  /// is passed down rather than logged at each entry point — logging at both
+  /// would count a week page or a Today tap twice.
+  void _logDateChange(String direction) {
+    ref
+        .read(analyticsServiceProvider)
+        .logCalendarDateChanged(
+          viewMode: _agendaMode.name,
+          direction: direction,
+        );
+  }
+
   void _goToToday(DateTime today) {
+    _logDateChange('today');
     setState(() {
       _focusedDay = today;
       _selectedDay = today;
-      _appointmentRange = AppointmentDateRange.forCalendar(
-        focusedDay: today,
-        selectedDay: today,
-      );
+      _appointmentRange = _rangeFor(today, today);
     });
+    _publishRange();
   }
 
-  /// Paging to another month (by swipe or from the month picker) lands on that
-  /// month's first day and selects it, so the agenda below always describes the
-  /// grid above — [day] is already the 1st from both callers. Leaving the old
-  /// selection behind showed a day the grid wasn't even highlighting.
-  void _setFocusedDay(DateTime day) {
-    final newRange = AppointmentDateRange.forCalendar(
-      focusedDay: day,
-      selectedDay: day,
+  /// The fetch window for a focus/selection pair.
+  AppointmentDateRange _rangeFor(DateTime focusedDay, DateTime selectedDay) {
+    final range = AppointmentDateRange.forCalendar(
+      focusedDay: focusedDay,
+      selectedDay: selectedDay,
     );
+    if (_agendaMode != _AgendaMode.week) return range;
+    final weekStart = _weekOf(selectedDay).first;
+    return range.union(
+      AppointmentDateRange(
+        start: weekStart,
+        end: addCalendarDays(weekStart, 7),
+      ),
+    );
+  }
+
+  /// The seven days around [day], in the locale's week order.
+  List<DateTime> _weekOf(DateTime day) =>
+      weekOf(day, weekStart: CalendarMonthGrid.weekStartOf(context));
+
+  void _setAgendaMode(_AgendaMode mode) {
+    if (mode == _agendaMode) return;
+    ref
+        .read(analyticsServiceProvider)
+        .logCalendarViewChanged(viewMode: mode.name);
+    final day = _selectedDay ?? _focusedDay;
+    setState(() {
+      _agendaMode = mode;
+      final newRange = _rangeFor(_focusedDay, day);
+      if (newRange != _appointmentRange) _appointmentRange = newRange;
+    });
+    _publishRange();
+  }
+
+  /// A tap on a week bar: that day, in day mode.
+  void _onWeekDaySelected(DateTime day) {
+    setState(() => _agendaMode = _AgendaMode.day);
+    _onDaySelected(day, direction: 'week_strip');
+  }
+
+  /// Moves focus and selection to the given month/day.
+  void _setFocusedDay(DateTime day) {
+    _logDateChange('picked');
+    final newRange = _rangeFor(day, day);
     setState(() {
       _focusedDay = day;
       _selectedDay = day;
       if (newRange != _appointmentRange) _appointmentRange = newRange;
     });
+    _publishRange();
   }
 
-  /// Swiping the collapsed week strip moves one week and selects that week's
-  /// first day — the strip's analogue of paging the month grid.
+  /// Pages the collapsed week strip by one week.
   void _pageWeek(int direction) {
     final from = _selectedDay ?? _focusedDay;
     final weekStart = CalendarMonthGrid.weekStartOf(context);
     final target = DateTime(from.year, from.month, from.day + 7 * direction);
-    _onDaySelected(weekOf(target, weekStart: weekStart).first);
+    _onDaySelected(
+      weekOf(target, weekStart: weekStart).first,
+      direction: direction > 0 ? 'next' : 'previous',
+    );
   }
 
   Map<DateTime, List<AppointmentDaySlice>>? _dayIndex;
-  // Remembers which appointments list _dayIndex was last built from, so we
-  // know when it needs rebuilding.
+  // Tracks the source list used for _dayIndex.
   List<AppointmentRecord>? _indexedAppointments;
 
-  /// Rebuilds [_dayIndex] only when [source] is a different list instance than
-  /// the one last indexed — the index is otherwise recomputed every rebuild.
+  // Memo for the crew filter, keyed on source identity and the filtered id.
+  List<AppointmentRecord>? _filterSource;
+  String? _filterId;
+  List<AppointmentRecord> _filtered = const [];
+
+  /// [source] narrowed to [employeeId]'s jobs, applied BEFORE the day index so
+  /// the dots, the counts, the agenda and the job label all agree.
+  List<AppointmentRecord> _applyCrewFilter(
+    List<AppointmentRecord> source,
+    String? employeeId,
+  ) {
+    if (employeeId == null) return source;
+    if (identical(source, _filterSource) && employeeId == _filterId) {
+      return _filtered;
+    }
+    _filterSource = source;
+    _filterId = employeeId;
+    return _filtered = [
+      for (final a in source)
+        if (a.employeeIds.contains(employeeId)) a,
+    ];
+  }
+
+  /// Rebuilds [_dayIndex] only for a new source list.
   void _refreshDayIndex(List<AppointmentRecord> source) {
     if (identical(source, _indexedAppointments)) return;
     _indexedAppointments = source;
@@ -198,7 +252,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           .read(loggerProvider)
           .warn(
             'APPT-RANGE appointment ${appointment.id} spans $actualDays days, '
-            'past the $maxAppointmentSpanDays-day cap — showing the first '
+            'past the $maxAppointmentSpanDays-day cap - showing the first '
             '$maxAppointmentSpanDays',
           ),
     );
@@ -207,30 +261,30 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   List<AppointmentDaySlice> _getEventsForDay(DateTime day) =>
       _dayIndex?[day.dateOnly] ?? const <AppointmentDaySlice>[];
 
-  /// The records running on [day], for the crew dots — lazy, since the grid
-  /// asks once per cell on every rebuild.
+  /// Records running on [day], used for crew dots.
   Iterable<AppointmentRecord> _appointmentsOn(DateTime day) =>
       _getEventsForDay(day).map((slice) => slice.appointment);
 
-  void _onDaySelected(DateTime selectedDay) {
+  void _onDaySelected(DateTime selectedDay, {String direction = 'day'}) {
+    // The early return is what keeps a re-tap of the selected day from
+    // reporting a move that did not happen.
     if (isSameDate(_selectedDay ?? _focusedDay, selectedDay)) return;
-    final newRange = AppointmentDateRange.forCalendar(
-      focusedDay: selectedDay,
-      selectedDay: selectedDay,
-    );
+    _logDateChange(direction);
+    final newRange = _rangeFor(selectedDay, selectedDay);
     setState(() {
       _selectedDay = selectedDay;
       _focusedDay = selectedDay;
       if (newRange != _appointmentRange) _appointmentRange = newRange;
     });
+    _publishRange();
   }
 
-  // Only log on the data→error transition — .when would otherwise fire this on every rebuild while the stream stays errored.
+  // Report only the first data-to-error transition.
   void _onAppointmentsAsyncChange(
     AsyncValue<List<AppointmentRecord>>? previous,
     AsyncValue<List<AppointmentRecord>> next,
   ) {
-    if (next is! AsyncError || previous is AsyncError) return;
+    if (!isFirstAsyncError(previous, next)) return;
     ref
         .read(loggerProvider)
         .warn(
@@ -249,27 +303,12 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         );
   }
 
-  // If a non-admin gets upgraded to 'admin', route them to the admin calendar after this frame. The flag just guards against firing more than once.
-  void _upgradeIfAdmin(String? role) {
-    if (role != 'admin' || !mounted || _upgradingToAdmin) return;
-    _upgradingToAdmin = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      navigateToDestination(
-        context,
-        HubTab.calendar,
-        isAdmin: true,
-        employeeId: widget.employeeId,
-      );
-    });
-  }
-
   Future<void> _pickMonth() async {
     final picked = await MonthYearPicker.show(context, _focusedDay);
     if (picked != null && mounted) _setFocusedDay(picked);
   }
 
-  /// The appointments stream this screen renders — the whole business for admins, just their own jobs for employees.
+  /// Appointments stream for the current user scope.
   StreamProvider<List<AppointmentRecord>> get _appointmentsProvider =>
       widget.isAdmin
       ? appointmentsInRangeProvider(_appointmentRange)
@@ -278,7 +317,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           range: _appointmentRange,
         ));
 
-  /// Watches the relevant providers, refreshes the caches, and returns only the values [build] actually renders.
+  /// Prepares the provider values build renders.
   ({
     String userName,
     Map<String, Color> colorMap,
@@ -290,30 +329,41 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     String dayTitle,
     String jobLabel,
     DateTime today,
+    List<DateTime> weekDays,
   })
   _prepareBuild(BuildContext context) {
     final appointmentsAsync = ref.watch(_appointmentsProvider);
     final userName = ref.watch(currentUserNameProvider);
     final colorMap = ref.watch(employeeColorMapProvider);
     final nameMap = ref.watch(employeeNameMapProvider);
-    // Watched, not DateTime.now(): the appointments stream only re-emits on a
-    // write, so an app left open across midnight would keep circling yesterday.
+    // Watch currentDayProvider so midnight updates the UI.
     final today = ref.watch(currentDayProvider);
+    // A technician already streams only their own jobs; only the admin filters.
+    final crewFilter = widget.isAdmin
+        ? ref.watch(calendarCrewFilterProvider)
+        : null;
 
     // Error logging is owned by the onAsyncChange listener in build.
-    final visibleAppointments =
-        appointmentsAsync.value ?? const <AppointmentRecord>[];
+    final visibleAppointments = _applyCrewFilter(
+      appointmentsAsync.value ?? const <AppointmentRecord>[],
+      crewFilter,
+    );
 
     _refreshDayIndex(visibleAppointments);
 
     final selectedDay = _selectedDay ?? _focusedDay;
-    final selectedEvents = _getEventsForDay(selectedDay);
+    final weekDays = _weekOf(selectedDay);
+    final agendaEvents = _agendaMode == _AgendaMode.week
+        ? [for (final day in weekDays) ..._getEventsForDay(day)]
+        : _getEventsForDay(selectedDay);
 
     final locale = Localizations.localeOf(context).toString();
     if (locale != _lastLocale) {
       _monthLabelFormat = DateFormat.MMMM(locale);
       _monthShortLabelFormat = DateFormat.MMM(locale);
       _yearLabelFormat = DateFormat.y(locale);
+      _dayMonthLabelFormat = DateFormat.MMMd(locale);
+      _dayLabelFormat = DateFormat.d(locale);
       _lastLocale = locale;
     }
 
@@ -322,93 +372,123 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       colorMap: colorMap,
       nameMap: nameMap,
       isLoading: appointmentsAsync.isLoading,
-      // Both forms go to the header, which measures the row and picks — a
-      // text-scale threshold can't know how wide "September" is in this
-      // locale on this device.
+      // Header decides which month label fits.
       monthLabel: _monthLabelFormat.format(_focusedDay),
       monthLabelShort: _monthShortLabelFormat.format(_focusedDay),
       yearLabel: _yearLabelFormat.format(_focusedDay),
-      dayTitle: DateUtilsHelper.formatDayHeader(selectedDay),
-      jobLabel: context.l10n.calendar_jobsCount(selectedEvents.length),
+      dayTitle: _agendaMode == _AgendaMode.week
+          ? _weekLabel(weekDays)
+          : DateUtilsHelper.formatDayHeader(selectedDay),
+      jobLabel: _jobLabel(context, agendaEvents),
       today: today,
+      weekDays: weekDays,
     );
+  }
+
+  /// "Sep 1 – 7", or "Aug 31 – Sep 6" across a month boundary.
+  String _weekLabel(List<DateTime> days) {
+    final first = days.first;
+    final last = days.last;
+    final end = first.month == last.month
+        ? _dayLabelFormat.format(last)
+        : _dayMonthLabelFormat.format(last);
+    return '${_dayMonthLabelFormat.format(first)} – $end';
+  }
+
+  /// Agenda count label for work and done totals.
+  static String _jobLabel(
+    BuildContext context,
+    List<AppointmentDaySlice> events,
+  ) {
+    final l10n = context.l10n;
+    final jobs = events
+        .where((slice) => countsAsWork(slice.appointment))
+        .toList();
+    final total = l10n.calendar_jobsCount(jobs.length);
+    final done = jobs.where((slice) => slice.appointment.isClosed).length;
+    return done == 0 ? total : '$total · ${l10n.calendar_jobsDoneCount(done)}';
   }
 
   @override
   Widget build(BuildContext context) {
     ref.listen(_appointmentsProvider, _onAppointmentsAsyncChange);
-    if (!widget.isAdmin) {
-      ref.listen<AsyncValue<String>>(
-        userRoleProvider,
-        (_, next) => _upgradeIfAdmin(next.value),
-      );
-      _upgradeIfAdmin(ref.read(userRoleProvider).value);
-    }
 
     final data = _prepareBuild(context);
 
-    return FeatureTourHost(
-      scope: _tour.scope,
+    // Session listeners are hosted at the calendar shell.
+    return RoleUpgradeListener(
+      employeeId: widget.employeeId,
       isAdmin: widget.isAdmin,
-      ready: !data.isLoading,
-      stepKeys: _tour.keys,
-      child: Scaffold(
-        floatingActionButton: _addAppointmentFab(context),
-        endDrawer: AppNavDrawer(
+      child: PhotoUploadFailureListener(
+        showActions: widget.isAdmin,
+        child: FeatureTourHost(
+          scope: _tour.scope,
           isAdmin: widget.isAdmin,
-          employeeId: widget.employeeId,
-          userName: data.userName,
-        ),
-        body: Column(
-          children: [
-            CalendarHeaderBlock(
-              monthLabel: data.monthLabel,
-              monthLabelShort: data.monthLabelShort,
-              yearLabel: data.yearLabel,
-              onPickMonth: _pickMonth,
-              routeButton: _dayRouteButton(context),
-              weekStrip: _weekStrip(data.today, data.colorMap),
+          ready: !data.isLoading,
+          stepKeys: _tour.keys,
+          child: Scaffold(
+            floatingActionButton: _addAppointmentFab(context),
+            endDrawer: AppNavDrawer(
+              isAdmin: widget.isAdmin,
+              employeeId: widget.employeeId,
+              userName: data.userName,
             ),
-            Expanded(
-              // The header block reserves the status bar itself.
-              child: SafeArea(
-                top: false,
-                child: Stack(
-                  children: [
-                    _content(
-                      isLoading: data.isLoading,
-                      colorMap: data.colorMap,
-                      nameMap: data.nameMap,
-                      today: data.today,
-                      dayTitle: data.dayTitle,
-                      jobLabel: data.jobLabel,
-                    ),
-                    Positioned(
-                      bottom: AppSpacing.sp16,
-                      left: AppSpacing.sp16,
-                      child: _TodayPill(
-                        visible: _showTodayButton(data.today),
-                        onPressed: () => _goToToday(data.today),
-                      ),
-                    ),
-                  ],
+            body: Column(
+              children: [
+                CalendarHeaderBlock(
+                  monthLabel: data.monthLabel,
+                  monthLabelShort: data.monthLabelShort,
+                  yearLabel: data.yearLabel,
+                  onPickMonth: _pickMonth,
+                  crewFilterButton: widget.isAdmin
+                      ? _tour.stepIf(
+                          TourStepId.calendarCrewFilter,
+                          const CrewFilterButton(),
+                        )
+                      : null,
+                  routeButton: _dayRouteButton(context),
+                  weekStrip: _weekStrip(data.today, data.colorMap),
                 ),
-              ),
+                Expanded(
+                  // The header block reserves the status bar itself.
+                  child: SafeArea(
+                    top: false,
+                    child: Stack(
+                      children: [
+                        _content(
+                          isLoading: data.isLoading,
+                          colorMap: data.colorMap,
+                          nameMap: data.nameMap,
+                          today: data.today,
+                          dayTitle: data.dayTitle,
+                          jobLabel: data.jobLabel,
+                          weekDays: data.weekDays,
+                        ),
+                        Positioned(
+                          bottom: AppSpacing.sp16,
+                          left: AppSpacing.sp16,
+                          child: TodayPill(
+                            visible: _showTodayButton(data.today),
+                            onPressed: () => _goToToday(data.today),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  /// The collapsed week strip, or null while the month grid is on screen.
-  /// Collapse is portrait-only: the split layout's month pane has no room for a
-  /// rising strip and scrolls its two panes independently.
+  /// Collapsed week strip, hidden in split layout.
   Widget? _weekStrip(DateTime today, Map<String, Color> colorMap) {
     if (_splitCalendar || !_collapse.isCollapsed) return null;
     final selectedDay = _selectedDay ?? _focusedDay;
-    // Swipe the strip to page weeks, mirroring the month grid's pager. The
-    // taps inside still win — a horizontal drag recognizer doesn't claim them.
+    // Horizontal swipes page weeks.
     return GestureDetector(
       onHorizontalDragEnd: (details) {
         final velocity = details.primaryVelocity ?? 0;
@@ -429,8 +509,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     );
   }
 
-  /// The Day-route control. Kept on the screen rather than inside the header
-  /// block because it is a feature-tour target this screen owns.
+  /// Day-route control owned by this screen's tour.
   Widget _dayRouteButton(BuildContext context) {
     final theme = Theme.of(context);
     return _tour.step(
@@ -510,7 +589,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           onMonthChanged: _setFocusedDay,
           dotColorsFor: (day) =>
               dayJobDotColors(_appointmentsOn(day), colorMap),
-          countFor: (day) => _getEventsForDay(day).length,
+          // Semantics count the same jobs as the dots.
+          countFor: (day) => dottedJobsOn(_appointmentsOn(day)).length,
         ),
       );
 
@@ -521,53 +601,118 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     required DateTime today,
     required String dayTitle,
     required String jobLabel,
+    required List<DateTime> weekDays,
   }) {
-    final events = _getEventsForDay(_selectedDay ?? _focusedDay);
-    // The header, not the list, carries the tour step: a showcase target must
-    // be a box widget and the portrait agenda is a sliver.
-    final agendaHeader = _tour.step(
-      TourStepId.calendarDayList,
-      child: AgendaHeader(dayTitle: dayTitle, jobLabel: jobLabel),
+    final agendaDay = _selectedDay ?? _focusedDay;
+    final events = _getEventsForDay(agendaDay);
+    // The header is the stable tour target; the banner sits above it so the
+    // narrowed schedule is never mistaken for a quiet day.
+    final agendaHeader = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.isAdmin) const CrewFilterBanner(),
+        _tour.step(
+          TourStepId.calendarDayList,
+          child: AgendaHeader(
+            dayTitle: dayTitle,
+            jobLabel: jobLabel,
+            trailing: _tour.stepIf(
+              TourStepId.calendarWeekToggle,
+              _agendaModeToggle(context),
+            ),
+          ),
+        ),
+      ],
     );
+    // The FAB and the Today pill float over the list, so the last job needs
+    // somewhere to scroll clear of them.
+    final agenda = _agendaMode == _AgendaMode.week
+        ? weekAgendaSlivers(
+            context,
+            days: weekDays,
+            eventsFor: _getEventsForDay,
+            today: today,
+            onDaySelected: _onWeekDaySelected,
+            nameMap: nameMap,
+            colorMap: colorMap,
+            isAdmin: widget.isAdmin,
+            isLoading: isLoading,
+            bottomClearance: kAgendaFloatingControlsClearance,
+          )
+        : [
+            AgendaSliverList(
+              events: events,
+              nameMap: nameMap,
+              colorMap: colorMap,
+              isLoading: isLoading,
+              isAdmin: widget.isAdmin,
+              day: agendaDay,
+              bottomClearance: kAgendaFloatingControlsClearance,
+            ),
+          ];
 
     if (_splitCalendar) {
       return _splitContent(
-        events: events,
+        agenda: agenda,
         agendaHeader: agendaHeader,
-        isLoading: isLoading,
         colorMap: colorMap,
-        nameMap: nameMap,
         today: today,
       );
     }
 
     return _portraitContent(
-      events: events,
+      agenda: agenda,
       agendaHeader: agendaHeader,
-      isLoading: isLoading,
       colorMap: colorMap,
-      nameMap: nameMap,
       today: today,
     );
   }
 
-  /// Landscape phones and tablets: month grid | day agenda, side by side.
+  /// Icon-only day/week toggle.
+  Widget _agendaModeToggle(BuildContext context) {
+    final l10n = context.l10n;
+    return SizedBox(
+      height: 32,
+      child: SegmentedButton<_AgendaMode>(
+        segments: [
+          ButtonSegment(
+            value: _AgendaMode.day,
+            icon: const Icon(Icons.view_day_outlined, size: 18),
+            tooltip: l10n.calendar_agendaDayView,
+          ),
+          ButtonSegment(
+            value: _AgendaMode.week,
+            icon: const Icon(Icons.view_week_outlined, size: 18),
+            tooltip: l10n.calendar_agendaWeekView,
+          ),
+        ],
+        selected: {_agendaMode},
+        onSelectionChanged: (modes) => _setAgendaMode(modes.single),
+        showSelectedIcon: false,
+        style: const ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          padding: WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: AppSpacing.sp8),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Landscape phones and tablets: month grid | agenda, side by side.
   Widget _splitContent({
-    required List<AppointmentDaySlice> events,
+    required List<Widget> agenda,
     required Widget agendaHeader,
-    required bool isLoading,
     required Map<String, Color> colorMap,
-    required Map<String, String> nameMap,
     required DateTime today,
   }) {
-    // Scope each pane under its own PrimaryScrollController or they'll share the tab's controller.
+    // Give each split pane its own primary scroll controller.
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
           flex: 11,
-          // The grid derives its own height from the scaled day number, so
-          // the pane scrolls rather than clipping at large text sizes.
+          // Let the grid scroll instead of clipping at large text sizes.
           child: PrimaryScrollScope(
             child: SingleChildScrollView(
               child: _buildCalendar(colorMap, today),
@@ -582,13 +727,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
             child: Column(
               children: [
                 agendaHeader,
-                EventList(
-                  events: events,
-                  nameMap: nameMap,
-                  colorMap: colorMap,
-                  isLoading: isLoading,
-                  isAdmin: widget.isAdmin,
-                ),
+                EventList.slivers(slivers: agenda),
               ],
             ),
           ),
@@ -597,205 +736,54 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     );
   }
 
-  /// Portrait: TWO scroll areas — the grid is fixed above the agenda, so
-  /// reading down the day never moves the calendar.
+  /// Portrait layout with fixed grid and scrolling agenda.
   Widget _portraitContent({
-    required List<AppointmentDaySlice> events,
+    required List<Widget> agenda,
     required Widget agendaHeader,
-    required bool isLoading,
     required Map<String, Color> colorMap,
-    required Map<String, String> nameMap,
     required DateTime today,
   }) {
-    // Portrait: the grid is FIXED above the agenda, and the jobs get their own
-    // viewport (owner call, 2026-07-31). Collapsing is then a deliberate drag
-    // on the jobs section rather than something that happens while reading down
-    // the day — and once collapsed, scrolling the jobs never moves the grid
-    // again. The old shared-viewport version needed a derived spacer to hold
-    // the extent the grid vacated; with two viewports there is no vacated
-    // extent to hold.
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // The grid does NOT scroll (owner call, 2026-07-31) — the handle below
-        // is the only way to move it, so a stray drag on the month can't slide
-        // it under the header. `NeverScrollableScrollPhysics` keeps the
-        // viewport purely as overflow protection: `Flexible` lets the grid
-        // yield instead of running the column past the bottom on a small phone
-        // at a large text scale. At normal heights it shrink-wraps and this is
-        // inert. Don't swap the physics back in to "fix" a clipped month —
-        // that would restore the scroll the owner asked to remove.
-        if (!_collapse.isCollapsed)
-          Flexible(
-            child: SingleChildScrollView(
-              physics: const NeverScrollableScrollPhysics(),
-              child: _buildCalendar(colorMap, today),
-            ),
-          ),
-        // The line between the two sections IS the collapse control: drag it
-        // up to fold the grid into the header's week strip, down to bring it
-        // back. It stays put when collapsed so there is something to pull.
-        _tour.step(
-          TourStepId.calendarCollapse,
-          child: _CollapseHandle(
-            isCollapsed: _collapse.isCollapsed,
-            onDrag: _onCollapseDrag,
-            onDragEnd: _collapse.endDrag,
-            onToggle: _toggleCollapse,
-          ),
-        ),
-        agendaHeader,
-        Expanded(
-          child: CustomScrollView(
-            controller: _agendaController,
-            // Its own controller, not the primary one: the grid above is a
-            // second scrollable on this route, and the app-wide Scrollbar
-            // rejects two positions on one controller.
-            //
-            // Bouncing and always-scrollable so a day with one job still gives
-            // under the finger — collapse is driven by the handle, not by this
-            // list, so the bounce is feel alone.
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics(),
-            ),
-            slivers: [
-              AgendaSliverList(
-                events: events,
-                nameMap: nameMap,
-                colorMap: colorMap,
-                isLoading: isLoading,
-                isAdmin: widget.isAdmin,
+    // The agenda scrolls independently from the fixed grid, and the grid is
+    // measured against the pane rather than handed a flex share of it.
+    return LayoutBuilder(
+      builder: (context, constraints) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // The grid takes the height its month needs, capped at
+          // [_kMaxGridShare] of the pane.
+          if (!_collapse.isCollapsed)
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: constraints.maxHeight * _kMaxGridShare,
               ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// The divider between the month grid and the day's jobs, doubling as the
-/// grab handle that collapses the grid. Painted as the same hairline the rest
-/// of the screen uses, inside a 20px tall target with a short grip so it reads
-/// as draggable; it is also a button, since a 24px drag is not a gesture
-/// everyone can make.
-class _CollapseHandle extends StatelessWidget {
-  const _CollapseHandle({
-    required this.isCollapsed,
-    required this.onDrag,
-    required this.onDragEnd,
-    required this.onToggle,
-  });
-
-  final bool isCollapsed;
-  final ValueChanged<double> onDrag;
-  final VoidCallback onDragEnd;
-  final VoidCallback onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final label = isCollapsed
-        ? context.l10n.calendar_showCalendar
-        : context.l10n.calendar_hideCalendar;
-    return Semantics(
-      button: true,
-      label: label,
-      excludeSemantics: true,
-      child: Tooltip(
-        message: label,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onVerticalDragUpdate: (details) => onDrag(details.delta.dy),
-          onVerticalDragEnd: (_) => onDragEnd(),
-          onVerticalDragCancel: onDragEnd,
-          onTap: onToggle,
-          child: SizedBox(
-            height: 20,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Divider(
-                    height: 1,
-                    color: theme.colorScheme.outlineVariant,
-                  ),
-                ),
-                Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: theme.palette.textFaint,
-                    borderRadius: BorderRadius.circular(AppRadius.rFull),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The "jump to today" pill. It scales and fades out once today is already in
-/// view, staying mounted so the transition is animated both ways.
-class _TodayPill extends StatelessWidget {
-  const _TodayPill({required this.visible, required this.onPressed});
-
-  final bool visible;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final instant = MediaQuery.disableAnimationsOf(context);
-    final radius = BorderRadius.circular(AppRadius.rFull);
-    return IgnorePointer(
-      ignoring: !visible,
-      child: AnimatedScale(
-        scale: visible ? 1 : 0.85,
-        duration: instant ? Duration.zero : AppMotion.popIn,
-        curve: AppMotion.emphasized,
-        child: AnimatedOpacity(
-          opacity: visible ? 1 : 0,
-          duration: instant ? Duration.zero : AppMotion.popIn,
-          child: Tooltip(
-            message: context.l10n.calendar_today,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: radius,
-                boxShadow: theme.cardStyle.pillShadow,
-              ),
-              child: Material(
-                color: theme.colorScheme.surface,
-                borderRadius: radius,
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: onPressed,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 48),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sp16,
-                        vertical: 11,
-                      ),
-                      child: Center(
-                        child: Text(
-                          context.l10n.calendar_today,
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: theme.palette.primaryAccent,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+              child: SingleChildScrollView(
+                physics: const NeverScrollableScrollPhysics(),
+                child: _buildCalendar(colorMap, today),
               ),
             ),
+          // The section divider is also the collapse control.
+          _tour.step(
+            TourStepId.calendarCollapse,
+            child: CollapseHandle(
+              isCollapsed: _collapse.isCollapsed,
+              onDrag: _onCollapseDrag,
+              onDragEnd: _collapse.endDrag,
+              onToggle: _toggleCollapse,
+            ),
           ),
-        ),
+          agendaHeader,
+          Expanded(
+            child: CustomScrollView(
+              controller: _agendaController,
+              // Use a private controller because the grid is another
+              // scrollable.
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              slivers: agenda,
+            ),
+          ),
+        ],
       ),
     );
   }

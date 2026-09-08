@@ -2,7 +2,7 @@ name: scheduling
 description: "ES Pro — appointment, client, and employee scheduling."
 publish_to: 'none'
 
-version: 1.44.1+71
+version: 1.59.0+88
 
 environment:
   sdk: ^3.10.7
@@ -15,13 +15,15 @@ dependencies:
     sdk: flutter
 
   # Firebase
-  firebase_core: 4.11.0
-  firebase_auth: ^6.4.0
-  cloud_firestore: ^6.3.0
-  firebase_storage: ^13.3.0
-  firebase_app_check: ^0.4.3
-  firebase_crashlytics: ^5.0.0
-  cloud_functions: ^6.0.0
+  firebase_core: ^4.14.0
+  firebase_auth: ^6.6.1
+  cloud_firestore: ^6.9.0
+  firebase_storage: ^13.5.0
+  firebase_app_check: ^0.4.7
+  firebase_crashlytics: ^5.3.0
+  cloud_functions: ^6.4.0
+  firebase_messaging: ^16.6.0
+  firebase_analytics: ^12.5.0
 
   # Calendar / dates / i18n
   intl: ^0.20.2
@@ -41,7 +43,9 @@ dependencies:
 
   # Images
   image_picker: ^1.2.2
-  cached_network_image: ^3.4.1
+  # Names the on-disk photo cache's files. Promoted from transitive because
+  # AppointmentImageDiskCache imports it directly.
+  crypto: ^3.0.6
 
   # Network / external launches
   url_launcher: ^6.3.2
@@ -52,12 +56,9 @@ dependencies:
   # IDs
   uuid: ^4.5.1
 
-  # Config
-  flutter_dotenv: ^6.0.1
-
   # UI
   flutter_animate: ^4.5.0
-  flex_color_picker: ^3.8.0
+  flex_color_picker: ^4.0.0
   font_awesome_flutter: ^11.0.0
   fl_chart: ^1.2.0
 
@@ -67,11 +68,11 @@ dependencies:
 
   # Native splash (preserve/remove API used in main.dart)
   flutter_native_splash: ^2.4.7
-  flutter_secure_storage: ^10.3.1
+  flutter_secure_storage: ^11.0.0
   infinite_scroll_pagination: ^5.1.1
   flutter_slidable: ^4.0.0
-  smooth_page_indicator: ^2.0.1
-  permission_handler: ^12.0.2
+  smooth_page_indicator: ^3.0.0
+  permission_handler: ^12.0.3
   local_auth: ^3.0.1
 
   # Live background GPS presence (travel-time "leave now" reminders)
@@ -85,14 +86,17 @@ dependencies:
   # SPM-capable iOS implementation override (Maps SDK 9.x, iOS 15+) —
   # the default google_maps_flutter_ios is CocoaPods-only and would
   # reintroduce a Podfile. Keep this override while the project is SPM-only.
+  # It belongs in `dependencies`, NOT `dependency_overrides`: a DIRECT
+  # dependency on an implementation package beats the transitive default, so
+  # the swap already takes effect — verified by GeneratedPluginRegistrant.m,
+  # which registers only `google_maps_flutter_ios_sdk9`. Don't "fix" it into
+  # an overrides block.
   google_maps_flutter_ios_sdk9: ^2.18.6
 
   # Network reachability (app-wide offline banner)
   connectivity_plus: ^7.2.0
-  firebase_messaging: ^16.4.1
   home_widget: ^0.9.3
   share_plus: ^13.2.0
-  flutter_cache_manager: ^3.4.1
   saver_gallery: ^5.1.0
   showcaseview: ^5.1.0
 
@@ -106,11 +110,11 @@ dev_dependencies:
     sdk: flutter
 
   # Lint
-  very_good_analysis: ^10.2.0
+  very_good_analysis: ^11.0.0
 
   # Codegen (freezed value classes only)
-  build_runner: ^2.4.13
-  freezed: ^3.0.6
+  build_runner: ^2.16.1
+  freezed: ^4.0.1
 
   # Testing
   mocktail: ^1.0.4
@@ -119,13 +123,24 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.4
 
   fake_async: ^1.3.3
+  shared_preferences_platform_interface: ^2.4.2
+  # Same reason as the line above: the secure-storage migration test installs
+  # its own throwing platform instance, which is the only way to drive
+  # SecureStorageService._migrate's catch path (a locked keychain cannot be
+  # simulated through setMockInitialValues).
+  flutter_secure_storage_platform_interface: ^2.0.3
 flutter:
   generate: true
   uses-material-design: true
 
   assets:
-    - dev/.env
-    - assets/images/icon.png
+    # The 512px derivative, NOT the 1254px master. `BrandMark` renders at
+    # <=156 logical px and the native splash needs 468 at dpr 3, so the master
+    # was ~0.85 MB of a ~1.02 MB asset shipping in the IPA unused. The master
+    # stays on disk for `flutter_launcher_icons` / `flutter_native_splash`,
+    # which read it from the filesystem rather than the bundle — regenerate
+    # this file from it with the one-liner in `assets/images/README.md`.
+    - assets/images/brand_mark.png
 
   fonts:
     - family: InstrumentSans

@@ -10,9 +10,9 @@ import 'package:scheduling/l10n/l10n.dart';
 /// Shows the sign-in credentials after creating an employee account — an
 /// adaptive dialog that picks Cupertino or Material to match the platform.
 ///
-/// The password is the shared starting one the server just set, echoed back
-/// rather than hardcoded here so the dialog can never show something the
-/// account was not actually given.
+/// The password is the per-account starting one the server just generated,
+/// echoed back rather than derived here so the dialog can never show something
+/// the account was not actually given.
 Future<void> showNewAccountDialog(
   BuildContext context, {
   required String name,
@@ -99,7 +99,13 @@ class _NewAccountDialogState extends State<_NewAccountDialog> {
         actions: [
           CupertinoDialogAction(
             onPressed: _copied ? null : _copy,
-            child: Text(copyCredentialsLabel(context, copied: _copied)),
+            child: Text(
+              copyCredentialsLabel(
+                context,
+                copied: _copied,
+                password: widget.credentials.password,
+              ),
+            ),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
@@ -114,7 +120,11 @@ class _NewAccountDialogState extends State<_NewAccountDialog> {
       title: Text(l10n.employees_accountCreatedTitle),
       content: _buildBody(context),
       actions: [
-        CopyCredentialsButton(copied: _copied, onCopy: _copy),
+        CopyCredentialsButton(
+          copied: _copied,
+          password: widget.credentials.password,
+          onCopy: _copy,
+        ),
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: Text(l10n.common_close),

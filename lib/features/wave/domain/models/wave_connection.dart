@@ -8,6 +8,8 @@ class WaveConnection {
     required this.businessId,
     required this.businessName,
     this.importSchedule = WaveImportSchedule.off,
+    this.pendingCount,
+    this.failedCount,
   });
 
   factory WaveConnection.fromMap(Map<String, dynamic> map) {
@@ -17,6 +19,8 @@ class WaveConnection {
       importSchedule: WaveImportSchedule.fromRaw(
         map['importSchedule'] as String?,
       ),
+      pendingCount: (map['pendingCount'] as num?)?.toInt(),
+      failedCount: (map['failedCount'] as num?)?.toInt(),
     );
   }
 
@@ -24,15 +28,41 @@ class WaveConnection {
   final String businessName;
   final WaveImportSchedule importSchedule;
 
+  /// Client edits queued for Wave but not pushed yet.
+  ///
+  /// **Nullable, and null is NOT zero.** Zero means the outbox is empty, which
+  /// is the one reading an admin would act on by not pressing Sync — so a
+  /// count the server could not take (or an older backend that does not send
+  /// the field) has to be distinguishable from it. Every surface renders null
+  /// as "nothing shown", never as "nothing pending".
+  final int? pendingCount;
+
+  /// Client edits that gave up — dead-lettered, so nothing retries them on
+  /// its own. Recoverable only through "Retry failed".
+  ///
+  /// Same null-is-unknown contract as [pendingCount].
+  final int? failedCount;
+
   /// True only when a real business is linked.
   bool get isConnected => businessId.isNotEmpty;
 
-  WaveConnection copyWith({WaveImportSchedule? importSchedule}) =>
-      WaveConnection(
-        businessId: businessId,
-        businessName: businessName,
-        importSchedule: importSchedule ?? this.importSchedule,
-      );
+  /// Whether there is outbox work worth telling the admin about.
+  bool get hasPending => (pendingCount ?? 0) > 0;
+
+  /// Whether any client edit has permanently failed to reach Wave.
+  bool get hasFailed => (failedCount ?? 0) > 0;
+
+  WaveConnection copyWith({
+    WaveImportSchedule? importSchedule,
+    int? pendingCount,
+    int? failedCount,
+  }) => WaveConnection(
+    businessId: businessId,
+    businessName: businessName,
+    importSchedule: importSchedule ?? this.importSchedule,
+    pendingCount: pendingCount ?? this.pendingCount,
+    failedCount: failedCount ?? this.failedCount,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -41,10 +71,62 @@ class WaveConnection {
           runtimeType == other.runtimeType &&
           businessId == other.businessId &&
           businessName == other.businessName &&
-          importSchedule == other.importSchedule;
+          importSchedule == other.importSchedule &&
+          pendingCount == other.pendingCount &&
+          failedCount == other.failedCount;
 
   @override
-  int get hashCode => Object.hash(businessId, businessName, importSchedule);
+  int get hashCode => Object.hash(
+    businessId,
+    businessName,
+    importSchedule,
+    pendingCount,
+    failedCount,
+  );
+}
+
+/// What one "Retry failed" press recovered.
+@immutable
+class WaveRetryResult {
+  const WaveRetryResult({
+    required this.requeued,
+    required this.scanned,
+    required this.pushed,
+    required this.failed,
+  });
+
+  factory WaveRetryResult.fromMap(Map<String, dynamic> map) => WaveRetryResult(
+    requeued: (map['requeued'] as num?)?.toInt() ?? 0,
+    scanned: (map['scanned'] as num?)?.toInt() ?? 0,
+    pushed: (map['pushed'] as num?)?.toInt(),
+    failed: (map['failed'] as num?)?.toInt(),
+  );
+
+  /// Jobs returned to the queue. This is the durable part of the action.
+  final int requeued;
+
+  /// Dead jobs examined. Larger than [requeued] when one was re-enqueued by a
+  /// concurrent client edit and therefore left alone.
+  final int scanned;
+
+  /// How many actually reached Wave on the push that followed, or null when
+  /// that push failed or was skipped. Null is NOT zero: the requeue still
+  /// committed, so the jobs are queued and will drain.
+  final int? pushed;
+
+  /// How many dead-lettered AGAIN on that same push, or null when it failed or
+  /// was skipped (same null-is-unknown contract as [pushed]).
+  ///
+  /// This is what keeps the press honest. A job usually dies on something
+  /// non-retryable — Wave rejecting the customer's data — so the drain behind
+  /// the requeue kills it again inside the same call: the outbox's failed
+  /// count is unchanged, and without this the app announces a success over a
+  /// row that still reads "1 client failed to sync".
+  final int? failed;
+
+  /// Whether any requeued job died again on the push that followed. Null reads
+  /// as "not known", never as "nothing failed".
+  bool get hasFailed => (failed ?? 0) > 0;
 }
 
 /// What one "Sync with Wave" run moved, in both directions.

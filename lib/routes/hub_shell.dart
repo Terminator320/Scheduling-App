@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/adaptive/adaptive.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
+import 'package:scheduling/core/analytics/analytics_screens.dart';
 import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/navigation/hub_shell_scope.dart';
@@ -12,7 +15,7 @@ import 'package:scheduling/features/presence/screens/live_map_screen.dart';
 
 /// Post-login shell with four tab destinations, all kept alive in an
 /// IndexedStack. Android back goes to calendar, unless we're already there.
-class HubShell extends StatefulWidget {
+class HubShell extends ConsumerStatefulWidget {
   const HubShell({
     required this.isAdmin,
     required this.employeeId,
@@ -41,10 +44,11 @@ class HubShell extends StatefulWidget {
   static HubShellState? get liveState => HubShellState._live;
 
   @override
-  State<HubShell> createState() => HubShellState();
+  ConsumerState<HubShell> createState() => HubShellState();
 }
 
-class HubShellState extends State<HubShell> implements HubTabSelector {
+class HubShellState extends ConsumerState<HubShell>
+    implements HubTabSelector, AppointmentLinkHub {
   static HubShellState? _live;
 
   late bool _isAdmin = widget.isAdmin;
@@ -61,6 +65,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
 
   /// The live role, used by deep links to gate admin-only edit/cancel/delete
   /// controls.
+  @override
   bool get isAdmin => _isAdmin;
 
   /// The shell's own route — [goHome]'s pop target. Null only in a bare test
@@ -72,6 +77,20 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
     super.initState();
     _live = this;
     HubShellScope.liveSelector = this;
+    _logTabView(_current);
+  }
+
+  /// The four hub tabs are the ONE set of screens the route observer ignores.
+  ///
+  /// A tab is reached three ways — a fresh shell, `HubTabRedirectRoute` handing
+  /// off to a live one, or a plain in-shell switch — and only the middle one
+  /// pushes a named route. Letting the observer see that push would count one
+  /// path twice and the other two once, so the tabs would read busier than they
+  /// are by an amount that depends on the user's back stack.
+  /// `analyticsScreenForRoute` returns null for all four (`kShellOwnedRoutes`);
+  /// this is the other half of that decision, and the two move together.
+  void _logTabView(HubTab tab) {
+    ref.read(analyticsServiceProvider).logScreenView(analyticsScreenForTab(tab));
   }
 
   @override
@@ -99,6 +118,11 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
     String userEmail = '',
   }) {
     if (!mounted) return;
+    // `select` also runs to refresh identity on the CURRENT tab (system back,
+    // the back-swipe, a deep link re-entering the shell). Reporting those would
+    // inflate the calendar in particular, since it is every one of those paths'
+    // destination.
+    final isTabChange = tab != _current;
     setState(() {
       _isAdmin = isAdmin;
       if (employeeId.isNotEmpty) _employeeId = employeeId;
@@ -107,6 +131,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
       _current = tab;
       _built.add(tab);
     });
+    if (isTabChange) _logTabView(tab);
   }
 
   @override
@@ -151,6 +176,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
   }
 
   /// Switch to calendar, preserving identity for deep-linked appointment sheets.
+  @override
   void showCalendar() {
     select(
       HubTab.calendar,

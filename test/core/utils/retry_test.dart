@@ -1,9 +1,44 @@
 import 'package:fake_async/fake_async.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:scheduling/core/utils/retry.dart';
 
 void main() {
+  group('isAuthPropagationDenied', () {
+    test('accepts a Firestore permission-denied', () {
+      expect(
+        isAuthPropagationDenied(
+          FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'permission-denied',
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test('rejects another Firestore code', () {
+      expect(
+        isAuthPropagationDenied(
+          FirebaseException(plugin: 'cloud_firestore', code: 'unavailable'),
+        ),
+        isFalse,
+      );
+    });
+
+    test('rejects a FirebaseAuthException', () {
+      expect(
+        isAuthPropagationDenied(FirebaseAuthException(code: 'wrong-password')),
+        isFalse,
+      );
+    });
+
+    test('rejects a non-Firebase error', () {
+      expect(isAuthPropagationDenied(Exception('nope')), isFalse);
+    });
+  });
+
   group('retryAsync', () {
     test('returns first-attempt value without delay', () {
       fakeAsync((async) {
@@ -32,6 +67,7 @@ void main() {
             if (attempts < 3) throw StateError('flaky');
             return 42;
           },
+          retryWhen: (e) => e is StateError,
           delays: const [
             Duration(milliseconds: 500),
             Duration(milliseconds: 1500),
@@ -58,6 +94,7 @@ void main() {
             attempts++;
             throw StateError('attempt $attempts');
           },
+          retryWhen: (e) => e is StateError,
           delays: const [
             Duration(milliseconds: 500),
             Duration(milliseconds: 1500),
@@ -79,6 +116,7 @@ void main() {
           () async {
             throw StateError('boom');
           },
+          retryWhen: (e) => e is StateError,
           delays: const [
             Duration(milliseconds: 10),
             Duration(milliseconds: 20),
@@ -89,6 +127,49 @@ void main() {
 
         async.elapse(const Duration(seconds: 1));
         expect(retries, [(1, 'boom'), (2, 'boom')]);
+      });
+    });
+
+    test('retries a permission-denied on the default predicate', () {
+      fakeAsync((async) {
+        var attempts = 0;
+        Object? result;
+
+        retryAsync<String>(() async {
+          attempts++;
+          if (attempts < 3) {
+            throw FirebaseException(
+              plugin: 'cloud_firestore',
+              code: 'permission-denied',
+            );
+          }
+          return 'ok';
+        }).then((v) => result = v);
+
+        async.elapse(kAuthPropagationDelays.first);
+        expect(attempts, 2);
+        async.elapse(const Duration(seconds: 5));
+        expect(attempts, 3);
+        expect(result, 'ok');
+      });
+    });
+
+    test('does not retry a non-propagation Firestore error', () {
+      fakeAsync((async) {
+        var attempts = 0;
+        Object? caught;
+
+        retryAsync<void>(() async {
+          attempts++;
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'unavailable',
+          );
+        }).catchError((Object e) => caught = e);
+
+        async.elapse(const Duration(seconds: 10));
+        expect(attempts, 1);
+        expect((caught! as FirebaseException).code, 'unavailable');
       });
     });
   });
@@ -162,5 +243,32 @@ void main() {
         expect(caught, isA<StateError>());
       });
     });
+
+    test(
+      're-subscribes on a permission-denied under the default predicate',
+      () {
+        fakeAsync((async) {
+          var subscriptions = 0;
+          final emitted = <int>[];
+
+          retryStream<int>(() {
+            subscriptions++;
+            if (subscriptions < 2) {
+              return Stream<int>.error(
+                FirebaseException(
+                  plugin: 'cloud_firestore',
+                  code: 'permission-denied',
+                ),
+              );
+            }
+            return Stream<int>.fromIterable([7]);
+          }).listen(emitted.add);
+
+          async.elapse(const Duration(seconds: 5));
+          expect(subscriptions, 2);
+          expect(emitted, [7]);
+        });
+      },
+    );
   });
 }

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/permissions/media_permission_service.dart';
@@ -20,7 +22,7 @@ Future<List<File>> pickAppointmentImages(
 
   final picker = ref.read(imagePickerProvider);
   if (source == ImageSource.gallery) {
-    return picker.pickMultiImages();
+    return await picker.pickMultiImages();
   }
 
   final result = await ref.read(mediaPermissionServiceProvider).ensureCamera();
@@ -39,6 +41,49 @@ Future<List<File>> pickAppointmentImages(
 
   final file = await picker.pickImage(ImageSource.camera);
   return file == null ? const [] : [file];
+}
+
+/// Picks photos and hands them to [addImages], saying so when the per-job cap
+/// dropped any.
+///
+/// The pick is the longest await in the app — an OS action sheet and then the
+/// camera or Photos picker — so the form can be gone by the time it returns.
+/// Both form hosts spelled this out, and had already drifted on which
+/// `mounted` they checked.
+Future<void> pickAndAddAppointmentImages(
+  BuildContext context,
+  WidgetRef ref, {
+  required int Function(List<File>) addImages,
+  required int Function() remainingSlots,
+}) async {
+  final notices = ref.read(noticeServiceProvider);
+  // Read before the pick — the OS picker is the longest await in the app, and
+  // `ref.read` on an unmounted consumer throws.
+  final analytics = ref.read(analyticsServiceProvider);
+  final l10n = context.l10n;
+  final picked = await pickAppointmentImages(context, ref);
+  if (!context.mounted || picked.isEmpty) return;
+  // Read AFTER the pick, and it is the room LEFT, never the total cap: the
+  // notice only fires when the job is at or near its limit, which is exactly
+  // when "only 10 more can be added" is the wrong sentence.
+  final room = remainingSlots();
+  final dropped = addImages(picked);
+  // Counts what the form ACCEPTED, so a pick trimmed by the per-job cap is not
+  // reported as photos the job received.
+  final added = picked.length - dropped;
+  if (added > 0) {
+    analytics.logPhotoAdded(
+      surface: AnalyticsSurfaces.appointmentForm,
+      count: added,
+    );
+  }
+  if (dropped > 0) {
+    notices.info(
+      room == 0
+          ? l10n.calendar_photosLimitFull
+          : l10n.calendar_photosLimitReached(room),
+    );
+  }
 }
 
 Future<ImageSource?> _showSourceSheet(BuildContext context) {

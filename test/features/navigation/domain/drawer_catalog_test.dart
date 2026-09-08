@@ -12,6 +12,7 @@ void main() {
 
   test('an employee sees only TODAY and ACCOUNT', () {
     final groups = drawerGroups(isAdmin: false);
+    expect(groups, hasLength(2));
     final rows = groups.expand((g) => g.rows).toList();
     expect(rows, contains(HubTab.calendar));
     expect(rows, contains(PushedDestination.dayRoute));
@@ -21,6 +22,19 @@ void main() {
     expect(rows, isNot(contains(HubTab.liveMap)));
     expect(rows, isNot(contains(PushedDestination.dashboard)));
     expect(rows, isNot(contains(PushedDestination.history)));
+  });
+
+  test('an employee never reaches History', () {
+    // Owner call 2026-09-06: History is an admin surface. A technician reaches
+    // a finished job through the calendar, where closed jobs sink to the
+    // bottom of the day's agenda.
+    final rows = drawerGroups(isAdmin: false).expand((g) => g.rows).toList();
+    expect(rows, isNot(contains(PushedDestination.history)));
+  });
+
+  test('an admin still reaches History from the BUSINESS group', () {
+    final business = drawerGroups(isAdmin: true)[2].rows;
+    expect(business, contains(PushedDestination.history));
   });
 
   test('no destination appears in more than one group', () {
@@ -51,8 +65,8 @@ void main() {
   });
 
   test('no two destinations share an icon', () {
-    // Colour is never the sole indicator of a row, so the icon has to carry
-    // the row's identity on its own.
+    // Colour is never the sole indicator of a row, so the icon has to carry the
+    // row's identity on its own.
     final icons = [for (final d in allDestinations) drawerRowIcon(d)];
     expect(icons.toSet().length, icons.length);
   });

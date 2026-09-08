@@ -7,12 +7,12 @@ import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-/// A non-zero status count paired with its bar/legend color, shared between
-/// the bar and legend widgets.
+/// A non-zero status count paired with its bar/legend color, shared between the
+/// bar and legend widgets.
 typedef _Segment = (AppointmentStatus status, Color color, int count);
 
-/// Hero summary showing the total, the date, a status bar, and an
-/// unassigned warning.
+/// Hero summary showing the total, the date, a status bar, and an unassigned
+/// warning.
 class DashboardHero extends StatelessWidget {
   const DashboardHero({required this.ops, required this.now, super.key});
 
@@ -32,8 +32,8 @@ class DashboardHero extends StatelessWidget {
       (AppointmentStatus.done, statusColors.success),
       (AppointmentStatus.cancelled, scheme.error),
     ];
-    // Resolve the counts once here and keep only the non-zero ones, so the
-    // bar and legend stay in sync.
+    // Resolve the counts once here and keep only the non-zero ones, so the bar
+    // and legend stay in sync.
     final visible = <_Segment>[
       for (final (status, color) in segments)
         if ((ops.statusCounts[DashboardAggregator.statusCountKey(status)] ??
@@ -56,6 +56,9 @@ class DashboardHero extends StatelessWidget {
         AppSpacing.sp16,
       ),
       decoration: BoxDecoration(
+        // Raw `Colors.black` below is not a missing token: it composes a SHADE
+        // OF the theme's own primary through `alphaBlend`, so it tracks
+        // whatever `scheme.primary` is in either theme.
         gradient: LinearGradient(
           colors: [
             scheme.primary,
@@ -76,7 +79,7 @@ class DashboardHero extends StatelessWidget {
               text: '$total ',
               style: theme.textTheme.headlineLarge?.copyWith(
                 color: scheme.onPrimary,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
               ),
               children: [
                 TextSpan(
@@ -109,8 +112,7 @@ class DashboardHero extends StatelessWidget {
   }
 }
 
-/// A single-row bar sized proportionally to the counts. On an empty day it
-/// just shows a faint track instead.
+/// A single-row bar sized proportionally to the counts.
 class _StatusBar extends StatelessWidget {
   const _StatusBar({required this.visible, required this.total});
 
@@ -141,8 +143,8 @@ class _StatusBar extends StatelessWidget {
   }
 }
 
-/// A wrapped row of dot, count, and label for each non-zero status,
-/// mirroring [_StatusBar].
+/// A wrapped row of dot, count, and label for each non-zero status, mirroring
+/// [_StatusBar].
 class _StatusLegend extends StatelessWidget {
   const _StatusLegend({required this.visible});
 

@@ -12,6 +12,7 @@ import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 import 'package:scheduling/features/employees/widgets/sheets/invite_person_sheet.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 
 import '../../../../support/tour_test_support.dart';
 
@@ -32,7 +33,6 @@ void main() {
         phone: any(named: 'phone'),
         colorValue: any(named: 'colorValue'),
         jobTitle: any(named: 'jobTitle'),
-        isAdmin: any(named: 'isAdmin'),
       ),
     ).thenAnswer(
       (_) async => const NewAccountCredentials(
@@ -91,8 +91,6 @@ void main() {
     await fillRequired(tester);
     await tester.tap(find.text('Technician'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('adminAccess')));
-    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Send Invite'));
     // Fixed-duration pump: the dialog's SelectableText cursor never settles.
@@ -108,20 +106,29 @@ void main() {
         phone: '',
         colorValue: any(named: 'colorValue'),
         jobTitle: 'technician',
-        isAdmin: true,
       ),
     ).called(1);
   });
 
-  testWidgets('admin access is off by default', (tester) async {
+  testWidgets('offers no admin toggle — new accounts are always employees', (
+    tester,
+  ) async {
+    // Tall viewport: the lazy sheet body must actually build past where the
+    // access section used to sit, or `findsNothing` proves nothing.
     useTallViewport(tester);
     await tester.pumpWidget(wrap());
     await tester.pumpAndSettle();
 
-    final adminSwitch = tester.widget<SwitchListTile>(
-      find.byKey(const Key('adminAccess')),
-    );
-    expect(adminSwitch.value, isFalse);
+    // Positive anchor: the invited note is the LAST widget in the body, at
+    // the tail of the colour section — exactly where the deleted access
+    // section used to begin. Finding it proves the form built past that
+    // point, so the `findsNothing` below is a real absence and not an
+    // unbuilt row. (`FormSheetFrame`'s ListView carries
+    // kTourScrollCacheExtent = 3000px, which with this viewport builds the
+    // whole form anyway — but the anchor is the half that survives someone
+    // shrinking either number.)
+    expect(find.byType(WarningNote), findsOneWidget);
+    expect(find.byKey(const Key('adminAccess')), findsNothing);
   });
 
   testWidgets('shows the credentials dialog on success', (tester) async {
@@ -152,7 +159,6 @@ void main() {
         phone: any(named: 'phone'),
         colorValue: any(named: 'colorValue'),
         jobTitle: any(named: 'jobTitle'),
-        isAdmin: any(named: 'isAdmin'),
       ),
     ).thenThrow(const EmployeesFailureEmailAlreadyExists());
 
@@ -192,7 +198,6 @@ void main() {
         phone: any(named: 'phone'),
         colorValue: captureAny(named: 'colorValue'),
         jobTitle: any(named: 'jobTitle'),
-        isAdmin: any(named: 'isAdmin'),
       ),
     ).captured.single;
     expect(captured, isNot('${0xFF005CC8}'));

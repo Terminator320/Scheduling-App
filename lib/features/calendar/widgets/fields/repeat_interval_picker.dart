@@ -41,7 +41,8 @@ class RepeatIntervalPicker extends StatelessWidget {
           ),
       ],
     );
-    if (picked != null) onChanged(picked);
+    if (picked == null || !context.mounted) return;
+    onChanged(picked);
   }
 
   @override

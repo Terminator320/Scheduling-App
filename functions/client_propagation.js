@@ -7,10 +7,34 @@
  *
  * Semantics (mirrors the app's own rules):
  *   - `clientName` / `clientPhone` are always overwritten with the client's
- *     current values.
+ *     current values. `clientName` is the DISPLAY name — the stored
+ *     `clients/{id}.name` carries the phone number on the end for Wave's
+ *     benefit, and `clientDisplayName` (`client_name_utils.js`) takes it back
+ *     off. Without that strip a client edit would fan "Marc Tremblay
+ *     (514) 555-1234" onto every future appointment card, disagreeing with
+ *     the clean name the app itself writes at booking time.
  *   - `address` follows the client only when the appointment's stored address
  *     still equals the client's previous (non-empty) address — a differing
  *     or empty address is treated as custom/none and left untouched.
+ *     Both sides are the COMPOSED address (`composeFullAddress`), never the
+ *     stored `clients/{id}.address`, and that is load-bearing twice over.
+ *     An appointment carries ONE address string and no city/province/postal
+ *     of its own, so fanning the stored street line onto it would strip the
+ *     locality off a live job with nothing left to rebuild it from — and
+ *     normalizing the client field (street-only) has to stay a NO-OP here,
+ *     which it is, because both shapes compose to the same string. It also
+ *     fixes a matching bug that predates the split, in BOTH its halves: a city
+ *     or postal edit never touched `address` and so reached no appointment at
+ *     all; and an apt-bearing client never matched `from`, because the app
+ *     books the DISPLAY spelling ("1234 Rue X #4, …") while this side composed
+ *     the canonical one ("4-1234 Rue X, …").
+ *     The apt half needed `composeFullAddress` to re-spell the apt the way the
+ *     app does — it does now, via `canonicalToDisplay`, and that is required
+ *     rather than cosmetic BECAUSE the comparison below is verbatim. Composing
+ *     on both sides was necessary but not sufficient; the two composers also
+ *     have to agree character for character. Their tests share worked examples
+ *     for exactly this reason — each side used to assert its own composer
+ *     against itself, which is how the divergence survived a release.
  *   - Only appointments with WORK LEFT are rewritten — history records what
  *     was true at the time of the visit. That is `endTime >= now`, NOT
  *     `startTime >= now`: under the daily-window model a run started up to
@@ -31,36 +55,17 @@
  */
 
 const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
+const {adminFirestore} = require("./admin_firestore");
+const {appointmentHistoryScopes} = require("./search_tokens");
 const {MAX_APPOINTMENT_SPAN_MS, hasWorkLeft} = require("./time_utils");
+const {clientDisplayName} = require("./client_name_utils");
+const {composeFullAddress} = require("./client_address_utils");
 
 /** Firestore WriteBatch hard limit. */
 const BATCH_LIMIT = 500;
 
 /** Page size for the future-appointments query (one batch per page). */
 const PAGE_SIZE = BATCH_LIMIT;
-
-/**
- * Lazily resolves firebase-admin/firestore so unit tests that inject deps
- * never touch it.
- * @return {{getFirestore: !Function, FieldValue: !Object}}
- */
-function adminFirestore() {
-  // eslint-disable-next-line global-require
-  return require("firebase-admin/firestore");
-}
-
-/**
- * Display name for a client doc, mirroring the Flutter model's fallback:
- * `name` when non-blank, else the legacy `businessName`.
- * @param {!Object} data Client document fields.
- * @return {string}
- */
-function clientDisplayName(data) {
-  const d = data || {};
-  const name = typeof d.name === "string" ? d.name.trim() : "";
-  if (name) return name;
-  return typeof d.businessName === "string" ? d.businessName.trim() : "";
-}
 
 /**
  * Computes what (if anything) a client edit must propagate to appointments.
@@ -94,8 +99,9 @@ function relevantClientChange(before, after) {
     any = true;
   }
 
-  const addrBefore = typeof b.address === "string" ? b.address.trim() : "";
-  const addrAfter = typeof a.address === "string" ? a.address.trim() : "";
+  // Composed, never the raw stored field — see the address note in the header.
+  const addrBefore = composeFullAddress(b);
+  const addrAfter = composeFullAddress(a);
   // Only propagate when the OLD address was non-empty — appointments with
   // an empty address are custom/none, and matching against "" would clobber
   // them.
@@ -139,7 +145,15 @@ function buildAppointmentPatch(change, apptData) {
     }
   }
 
-  return Object.keys(patch).length > 0 ? patch : null;
+  if (Object.keys(patch).length === 0) return null;
+  // The history search index is built from `clientName`/`clientPhone`, so a
+  // patch that changes either and leaves the tokens alone means the job stays
+  // findable under the OLD name and vanishes under the corrected one — and
+  // nothing rewrites it again before the job closes.
+  if (patch.clientName !== undefined || patch.clientPhone !== undefined) {
+    patch.historySearchScopes = appointmentHistoryScopes({...d, ...patch});
+  }
+  return patch;
 }
 
 /**
@@ -165,8 +179,21 @@ async function propagateClientChange(clientId, before, after, deps = {}) {
   const nowMs = now.getTime();
   const queryFloor = new Date(nowMs - MAX_APPOINTMENT_SPAN_MS);
 
+  // This loop runs to EXHAUSTION on purpose and must NOT gain a total cap: a
+  // repeat series pre-books up to 120 occurrences out to a five-year horizon,
+  // and truncating would leave stale denormalized `clientName`/`clientPhone`
+  // on the future visits this trigger exists to keep correct. What it does
+  // instead is overlap and report — see `pages` in the log line below, which
+  // is what makes a pathological client visible.
   let updated = 0;
+  let pages = 0;
   let cursor = null;
+  // The previous page's commit, deliberately left in flight while the next
+  // page is fetched. The two touch different documents, so there is nothing
+  // to serialise for, and at most one commit is ever outstanding. It is
+  // settled through the same `Promise.all` that awaits the fetch, so a
+  // rejection always has a handler attached in the tick it was created in.
+  let inFlight = null;
   for (;;) {
     let query = db.collection("appointments")
         .where("clientId", "==", clientId)
@@ -174,9 +201,11 @@ async function propagateClientChange(clientId, before, after, deps = {}) {
         .orderBy("startTime")
         .limit(PAGE_SIZE);
     if (cursor) query = query.startAfter(cursor);
-    const snap = await query.get();
+    const [snap] = await Promise.all([query.get(), inFlight]);
+    inFlight = null;
     const docs = snap && Array.isArray(snap.docs) ? snap.docs : [];
     if (docs.length === 0) break;
+    pages += 1;
 
     const batch = db.batch();
     let ops = 0;
@@ -189,17 +218,24 @@ async function propagateClientChange(clientId, before, after, deps = {}) {
       batch.update(doc.ref, patch);
       ops += 1;
     }
-    if (ops > 0) await batch.commit();
-    updated += ops;
+    if (ops > 0) {
+      inFlight = batch.commit();
+      updated += ops;
+    }
 
     if (docs.length < PAGE_SIZE) break;
     cursor = docs[docs.length - 1];
   }
+  await inFlight;
 
   if (updated > 0) {
     logger.info("propagateClientEdits: appointments updated", {
       clientId,
       updated,
+      // One edit on a client carrying several live series reads hundreds to
+      // low-thousands of documents. Uncapped by design, so the page count is
+      // the only signal that says so.
+      pages,
       fields: Object.keys(change).filter((k) =>
         change[k] !== null && change[k] !== undefined),
     });

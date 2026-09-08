@@ -9,6 +9,8 @@ AppointmentRecord _record({
   bool isAllDay = false,
   String id = 'a1',
   String status = 'pending',
+  bool isPersonal = false,
+  bool isDayOff = false,
 }) => AppointmentRecord(
   id: id,
   title: 'Repipe',
@@ -16,9 +18,51 @@ AppointmentRecord _record({
   endTime: end,
   isAllDay: isAllDay,
   status: status,
+  isPersonal: isPersonal,
+  isDayOff: isDayOff,
 );
 
 void main() {
+  group('countsAsWork', () {
+    AppointmentRecord at({
+      String status = 'pending',
+      bool isPersonal = false,
+      bool isDayOff = false,
+    }) => _record(
+      start: DateTime(2026, 8, 1, 9),
+      end: DateTime(2026, 8, 1, 17),
+      status: status,
+      isPersonal: isPersonal,
+      isDayOff: isDayOff,
+    );
+
+    test('an open job is work', () {
+      expect(countsAsWork(at()), isTrue);
+    });
+
+    test('a FINISHED job is still work — that work happened', () {
+      expect(countsAsWork(at(status: 'done')), isTrue);
+      expect(countsAsWork(at(status: 'completed')), isTrue);
+    });
+
+    test('a cancelled job is NOT work — it is not happening', () {
+      expect(countsAsWork(at(status: 'cancelled')), isFalse);
+    });
+
+    test('time off is not work', () {
+      expect(countsAsWork(at(isPersonal: true, isDayOff: true)), isFalse);
+    });
+
+    test('a stray isDayOff on a client visit does not erase it', () {
+      // `isTimeOff` is `isPersonal && isDayOff`, never the stored flag alone.
+      expect(countsAsWork(at(isDayOff: true)), isTrue);
+    });
+
+    test('an ordinary personal block is still work', () {
+      expect(countsAsWork(at(isPersonal: true)), isTrue);
+    });
+  });
+
   group('sliceFor', () {
     test('a single-day job is day 1 of 1', () {
       final a = _record(
@@ -431,9 +475,9 @@ void main() {
   });
 
   group('the maxAppointmentSpanDays clamp', () {
-    // The cap is client-side only — firestore.rules constrains neither
-    // instant — so a doc written by the console, the Admin SDK or another
-    // build can exceed it. When these owners disagree the drawer badge reads
+    // firestore.rules bounds client writes to the cap, but the console and the
+    // Admin SDK bypass rules — so a doc that exceeds it is still reachable and
+    // this clamp still has to hold. When these owners disagree the drawer reads
     // "1 job today" every day for a year and a card reads "Day 400 of 900".
     final corrupt = _record(
       start: DateTime(2026, 8, 2, 9),
@@ -476,6 +520,217 @@ void main() {
         end: DateTime(2026, 8, 6, 17),
       );
       expect(sliceFor(normal, DateTime(2026, 8, 2))!.dayCount, 5);
+    });
+  });
+
+  group('stored run label', () {
+    AppointmentRecord dayThreeOfFive() => AppointmentRecord(
+      id: 'd3',
+      startTime: DateTime(2026, 8, 5, 9),
+      endTime: DateTime(2026, 8, 5, 17),
+      seriesId: 'd1',
+      dayIndex: 3,
+      dayCount: 5,
+    );
+
+    test('a split day reports its stored position', () {
+      final slice = sliceFor(dayThreeOfFive(), DateTime(2026, 8, 5));
+      expect(slice, isNotNull);
+      expect(slice!.dayIndex, 3);
+      expect(slice.dayCount, 5);
+      expect(slice.isMultiDay, isTrue);
+    });
+
+    test('the stored pair does NOT widen which days it runs on', () {
+      // The regression this guard exists for: reading dayCount 5 into the
+      // range test would smear one document across five days, and runsOn is
+      // the mandated re-scoping call on the drawer badge, the roster count and
+      // the dashboard.
+      final record = dayThreeOfFive();
+      expect(runsOn(record, DateTime(2026, 8, 5)), isTrue);
+      expect(runsOn(record, DateTime(2026, 8, 6)), isFalse);
+      expect(runsOn(record, DateTime(2026, 8, 9)), isFalse);
+      expect(sliceFor(record, DateTime(2026, 8, 6)), isNull);
+    });
+
+    test('the window stays this day only', () {
+      final slice = sliceFor(dayThreeOfFive(), DateTime(2026, 8, 5))!;
+      expect(slice.windowStart, DateTime(2026, 8, 5, 9));
+      expect(slice.windowEnd, DateTime(2026, 8, 5, 17));
+    });
+
+    test('a legacy wide document still derives its pair', () {
+      final wide = AppointmentRecord(
+        id: 'w1',
+        startTime: DateTime(2026, 8, 3, 9),
+        endTime: DateTime(2026, 8, 7, 17),
+      );
+      final slice = sliceFor(wide, DateTime(2026, 8, 5))!;
+      expect(slice.dayIndex, 3);
+      expect(slice.dayCount, 5);
+    });
+
+    test('an incoherent stored pair falls back to the derived one', () {
+      final broken = AppointmentRecord(
+        id: 'b1',
+        startTime: DateTime(2026, 8, 5, 9),
+        endTime: DateTime(2026, 8, 5, 17),
+        dayIndex: 9,
+        dayCount: 5,
+      );
+      final slice = sliceFor(broken, DateTime(2026, 8, 5))!;
+      expect(slice.dayIndex, 1);
+      expect(slice.dayCount, 1);
+    });
+
+    test('expandToDays substitutes the stored label too', () {
+      // The main calendar's agenda builds its slices through expandToDays, not
+      // sliceFor. Without the substitution a split run day renders with
+      // dayCount 1, so a 5-day run showed five unlabelled identical cards
+      // while the day route, dashboard, widget and Siri all said "Day 3 of 5".
+      final byDay = expandToDays(
+        [dayThreeOfFive()],
+        AppointmentDateRange(
+          start: DateTime(2026, 8),
+          end: DateTime(2026, 8, 10),
+        ),
+      );
+      final slices = byDay[DateTime(2026, 8, 5)]!;
+      expect(slices, hasLength(1));
+      expect(slices.single.dayIndex, 3);
+      expect(slices.single.dayCount, 5);
+      expect(slices.single.isMultiDay, isTrue);
+    });
+
+    test('expandToDays still emits the stored day ONLY', () {
+      // Same guard as sliceFor: the stored pair labels, it never widens.
+      final byDay = expandToDays(
+        [dayThreeOfFive()],
+        AppointmentDateRange(
+          start: DateTime(2026, 8),
+          end: DateTime(2026, 8, 10),
+        ),
+      );
+      expect(byDay.keys, [DateTime(2026, 8, 5)]);
+    });
+
+    test('expandToDays ignores an incoherent stored pair', () {
+      final broken = AppointmentRecord(
+        id: 'b2',
+        startTime: DateTime(2026, 8, 5, 9),
+        endTime: DateTime(2026, 8, 5, 17),
+        dayIndex: 9,
+        dayCount: 5,
+      );
+      final byDay = expandToDays(
+        [broken],
+        AppointmentDateRange(
+          start: DateTime(2026, 8),
+          end: DateTime(2026, 8, 10),
+        ),
+      );
+      final slice = byDay[DateTime(2026, 8, 5)]!.single;
+      expect(slice.dayIndex, 1);
+      expect(slice.dayCount, 1);
+    });
+
+    test('expandToDays keeps deriving the pair for a legacy WIDE record', () {
+      final wide = AppointmentRecord(
+        id: 'w3',
+        startTime: DateTime(2026, 8, 3, 9),
+        endTime: DateTime(2026, 8, 7, 17),
+      );
+      final byDay = expandToDays(
+        [wide],
+        AppointmentDateRange(
+          start: DateTime(2026, 8),
+          end: DateTime(2026, 8, 10),
+        ),
+      );
+      expect(byDay[DateTime(2026, 8, 3)]!.single.dayIndex, 1);
+      expect(byDay[DateTime(2026, 8, 5)]!.single.dayIndex, 3);
+      expect(byDay[DateTime(2026, 8, 7)]!.single.dayCount, 5);
+    });
+
+    test('a stored pair on a WIDE document is ignored', () {
+      // Only a console write can produce this. Honouring it would print the
+      // same "Day 3 of 5" on all five days of the span.
+      final wide = AppointmentRecord(
+        id: 'w2',
+        startTime: DateTime(2026, 8, 3, 9),
+        endTime: DateTime(2026, 8, 7, 17),
+        dayIndex: 3,
+        dayCount: 5,
+      );
+      expect(sliceFor(wide, DateTime(2026, 8, 3))!.dayIndex, 1);
+      expect(sliceFor(wide, DateTime(2026, 8, 5))!.dayIndex, 3);
+    });
+  });
+
+  group('expandRunWindows', () {
+    test('a one-day window yields one pair unchanged', () {
+      final windows = expandRunWindows(
+        DateTime(2026, 8, 3, 9),
+        DateTime(2026, 8, 3, 17),
+      );
+      expect(windows, hasLength(1));
+      expect(windows.single.start, DateTime(2026, 8, 3, 9));
+      expect(windows.single.end, DateTime(2026, 8, 3, 17));
+    });
+
+    test('a 5-day 9-to-5 window yields five one-day windows', () {
+      final windows = expandRunWindows(
+        DateTime(2026, 8, 3, 9),
+        DateTime(2026, 8, 7, 17),
+      );
+      expect(windows, hasLength(5));
+      expect(windows.first.start, DateTime(2026, 8, 3, 9));
+      expect(windows.first.end, DateTime(2026, 8, 3, 17));
+      expect(windows.last.start, DateTime(2026, 8, 7, 9));
+      expect(windows.last.end, DateTime(2026, 8, 7, 17));
+    });
+
+    test('a night shift yields one window per NIGHT, ending the morning after', () {
+      // 22:00 Aug 3 -> 06:00 Aug 5 is two nights: the end date names the last
+      // day the crew STARTS work, so the run is Aug 3 and Aug 4.
+      final windows = expandRunWindows(
+        DateTime(2026, 8, 3, 22),
+        DateTime(2026, 8, 5, 6),
+      );
+      expect(windows, hasLength(2));
+      expect(windows.first.start, DateTime(2026, 8, 3, 22));
+      expect(windows.first.end, DateTime(2026, 8, 4, 6));
+      expect(windows.last.start, DateTime(2026, 8, 4, 22));
+      expect(windows.last.end, DateTime(2026, 8, 5, 6));
+    });
+
+    test('an all-day multi-day block yields a midnight-to-23:59 window a day', () {
+      final windows = expandRunWindows(
+        DateTime(2026, 8, 3),
+        DateTime(2026, 8, 4, 23, 59),
+      );
+      expect(windows, hasLength(2));
+      expect(windows.first.start, DateTime(2026, 8, 3));
+      expect(windows.first.end, DateTime(2026, 8, 3, 23, 59));
+      expect(windows.last.start, DateTime(2026, 8, 4));
+      expect(windows.last.end, DateTime(2026, 8, 4, 23, 59));
+    });
+
+    test('a span past the cap clamps to maxAppointmentSpanDays', () {
+      final windows = expandRunWindows(
+        DateTime(2026, 8, 3, 9),
+        DateTime(2027, 3, 12, 17),
+      );
+      expect(windows, hasLength(maxAppointmentSpanDays));
+    });
+
+    test('a corrupt pair whose end precedes its start yields one window', () {
+      final windows = expandRunWindows(
+        DateTime(2026, 8, 7, 9),
+        DateTime(2026, 8, 3, 17),
+      );
+      expect(windows, hasLength(1));
+      expect(windows.single.start, DateTime(2026, 8, 7, 9));
     });
   });
 }

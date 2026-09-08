@@ -13,13 +13,16 @@ typedef ActiveUserIdentity = ({String role, String docId});
 /// and Siri snapshot.
 final activeUserIdentityProvider =
     FutureProvider.autoDispose<ActiveUserIdentity?>((ref) async {
-      final doc = ref.watch(currentUserDocProvider).value ?? const {};
+      // Await the settled value rather than branching on the AsyncValue: a
+      // loading build that resolved the future itself then rebuilt on the
+      // emission, so every sign-in paid for the uid lookup below twice.
+      final doc = await ref.watch(currentUserDocProvider.future);
       final role = (doc['role'] ?? '').toString().trim();
       final status = (doc['status'] ?? '').toString().trim();
       if (status != 'active' || (role != 'employee' && role != 'admin')) {
         return null;
       }
-      final uid = ref.watch(authUidProvider).value;
+      final uid = await ref.watch(authUidProvider.future);
       if (uid == null) return null;
       final repo = ref.watch(employeesRepositoryProvider);
       // We only got here because currentUserDocProvider emitted a populated
@@ -31,13 +34,7 @@ final activeUserIdentityProvider =
 
       // Retry this read right after sign-in — if we don't, ID-token/role
       // bridge lag can wipe the mirrors.
-      final match = await retryAsync(
-        () => repo.findUserByUid(uid),
-        delays: const [
-          Duration(milliseconds: 500),
-          Duration(milliseconds: 1500),
-        ],
-      );
+      final match = await retryAsync(() => repo.findUserByUid(uid));
       final docId = match?.id;
       if (docId == null) return null;
       return (role: role, docId: docId);

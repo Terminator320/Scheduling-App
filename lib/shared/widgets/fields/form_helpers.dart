@@ -53,10 +53,10 @@ Widget formRemoveButton(BuildContext context, {required VoidCallback onTap}) {
     child: GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      // 32px tap target meets Material minimum.
+      // 48x48, which is Material's minimum and clears iOS's 44pt.
       child: SizedBox(
-        width: 32,
-        height: 32,
+        width: 48,
+        height: 48,
         child: Center(
           child: Container(
             padding: const EdgeInsets.all(2),

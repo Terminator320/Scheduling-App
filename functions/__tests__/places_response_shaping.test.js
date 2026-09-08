@@ -1,20 +1,30 @@
 "use strict";
 
 /**
- * Tests the response shaping for placesAutocomplete and placesGetDetails —
- * the defensive `Array.isArray(...) ? ... : []` / string guards that keep a
- * malformed upstream body from reaching the Flutter client. Reverse-geocode
- * shaping is covered separately in places_reverse_geocode.test.js.
+ * Tests the response shaping for placesAutocomplete and placesGetDetails — the
+ * defensive `Array.isArray(...) ?
  */
 jest.mock("../security", () => {
   const actual = jest.requireActual("../security");
-  return {
+  const mock = {
     ...actual,
     assertAdmin: jest.fn().mockResolvedValue(undefined),
     enforceDurableRateLimit: jest.fn().mockResolvedValue({
       refund: jest.fn().mockResolvedValue(undefined),
     }),
   };
+  // The callables open with `assertAdminCall`, which COMPOSES the auth check,
+  // `assertAdmin` and `assertPayloadShape`.
+  mock.assertAdminCall = jest.fn(async (req, allowedKeys) => {
+    if (!req.auth || !req.auth.uid) {
+      throw new (require("firebase-functions/v2/https").HttpsError)(
+          "unauthenticated", "auth-required");
+    }
+    await mock.assertAdmin(req.auth.uid);
+    actual.assertPayloadShape(req.data, allowedKeys);
+    return req.auth.uid;
+  });
+  return mock;
 });
 
 const {placesAutocomplete, placesGetDetails} = require("../places");

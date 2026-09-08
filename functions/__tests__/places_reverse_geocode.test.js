@@ -1,15 +1,26 @@
-// placesReverseGeocode is safe to require directly since it has no eager
-// bucket resolution. We mock assertAdmin/enforceDurableRateLimit because they
-// need live Firestore, but leave the real validation helpers in place.
+// placesReverseGeocode is safe to require directly since it has no eager bucket
+// resolution.
 jest.mock("../security", () => {
   const actual = jest.requireActual("../security");
-  return {
+  const mock = {
     ...actual,
     assertAdmin: jest.fn().mockResolvedValue(undefined),
     enforceDurableRateLimit: jest.fn().mockResolvedValue({
       refund: jest.fn().mockResolvedValue(undefined),
     }),
   };
+  // The callables open with `assertAdminCall`, which COMPOSES the auth check,
+  // `assertAdmin` and `assertPayloadShape`.
+  mock.assertAdminCall = jest.fn(async (req, allowedKeys) => {
+    if (!req.auth || !req.auth.uid) {
+      throw new (require("firebase-functions/v2/https").HttpsError)(
+          "unauthenticated", "auth-required");
+    }
+    await mock.assertAdmin(req.auth.uid);
+    actual.assertPayloadShape(req.data, allowedKeys);
+    return req.auth.uid;
+  });
+  return mock;
 });
 
 const {placesReverseGeocode} = require("../places");

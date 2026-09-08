@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/notices/app_notice.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
@@ -16,14 +19,15 @@ import 'package:scheduling/features/employees/domain/models/employee_record.dart
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
 import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 import 'package:scheduling/features/employees/widgets/cards/pending_invite_tile.dart';
+import 'package:scheduling/features/employees/widgets/fields/credential_line.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 class _MockRepo extends Mock implements EmployeesRepository {}
 
 const _invited = EmployeeRecord(
   id: 'inv1',
-  name: 'Zoé Roy',
-  firstName: 'Zoé',
+  name: 'Zoe Roy',
+  firstName: 'Zoe',
   lastName: 'Roy',
   email: 'zoe@example.com',
   phone: '(514) 555-1234',
@@ -50,12 +54,11 @@ void main() {
         phone: any(named: 'phone'),
         colorValue: any(named: 'colorValue'),
         jobTitle: any(named: 'jobTitle'),
-        isAdmin: any(named: 'isAdmin'),
       ),
     ).thenAnswer(
       (_) async => const NewAccountCredentials(
         email: 'zoe@example.com',
-        password: 'Reset456!',
+        password: 'Pw23456789x',
       ),
     );
     when(() => repo.deleteEmployeeAccount(any())).thenAnswer((_) async {});
@@ -109,7 +112,7 @@ void main() {
   /// The credentials render in SelectableTexts whose cursors never settle, so
   /// pump a fixed span rather than settling.
   Future<void> expand(WidgetTester tester) async {
-    await tester.tap(find.text('Zoé Roy'));
+    await tester.tap(find.text('Zoe Roy'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
   }
@@ -124,66 +127,12 @@ void main() {
         phone: any(named: 'phone'),
         colorValue: any(named: 'colorValue'),
         jobTitle: any(named: 'jobTitle'),
-        isAdmin: any(named: 'isAdmin'),
       ),
     );
   }
 
-  testWidgets('collapsed row shows the person and the Invited chip only', (
-    tester,
-  ) async {
-    useTallViewport(tester);
-    await tester.pumpWidget(wrap(_invited));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Zoé Roy'), findsOneWidget);
-    expect(find.text('Invited'), findsOneWidget);
-    expect(find.text('SIGN-IN DETAILS'), findsNothing);
-    // The collapsed body must leave the tree entirely — a cross-fade would
-    // keep the password findable, and readable by a screen reader, on a row
-    // that looks closed.
-    expect(find.text('Welcome123!'), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('expanding shows the credentials and calls nothing', (
-    tester,
-  ) async {
-    useTallViewport(tester);
-    await tester.pumpWidget(wrap(_invited));
-    await tester.pumpAndSettle();
-
-    await expand(tester);
-
-    expect(find.text('SIGN-IN DETAILS'), findsOneWidget);
-    // Twice on purpose: the collapsed header already identifies the person by
-    // email, and the credentials block repeats it as the thing they sign in
-    // with — copying the password without it loses which account it opens.
-    expect(find.text('zoe@example.com'), findsNWidgets(2));
-    expect(find.text('Welcome123!'), findsOneWidget);
-    // The whole point of retiring the code flow: the starting password is a
-    // fixed shared value, so opening a row costs no round-trip and rotates
-    // nothing. The old flow re-minted a code on every expand.
-    verifyNeverCreated();
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('expanding does not claim the password was just re-issued', (
-    tester,
-  ) async {
-    useTallViewport(tester);
-    await tester.pumpWidget(wrap(_invited));
-    await tester.pumpAndSettle();
-
-    await expand(tester);
-
-    expect(find.textContaining('no longer works'), findsNothing);
-  });
-
-  testWidgets('Copy puts BOTH halves on the clipboard and relabels', (
-    tester,
-  ) async {
-    useTallViewport(tester);
+  /// Captures whatever the tile puts on the clipboard.
+  List<String?> mockClipboard(WidgetTester tester) {
     final copied = <String?>[];
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       SystemChannels.platform,
@@ -200,17 +149,153 @@ void main() {
         null,
       ),
     );
+    return copied;
+  }
+
+  testWidgets('masks the password when the app holds none', (tester) async {
+    useTallViewport(tester);
+    await tester.pumpWidget(wrap(_invited));
+    await tester.pumpAndSettle();
+    await expand(tester);
+
+    // No stored plaintext credential exists to show, and the constant it used
+    // to fall back to is gone.
+    expect(find.text(kMaskedCredential), findsOneWidget);
+    expect(find.text('Reset password to issue a new one'), findsOneWidget);
+    expect(find.text('Copy email'), findsOneWidget);
+    expect(find.text('Copy both'), findsNothing);
+  });
+
+  testWidgets('collapsed row shows the person and the Invited chip only', (
+    tester,
+  ) async {
+    useTallViewport(tester);
+    await tester.pumpWidget(wrap(_invited));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Zoe Roy'), findsOneWidget);
+    expect(find.text('Invited'), findsOneWidget);
+    expect(find.text('SIGN-IN DETAILS'), findsNothing);
+    // The collapsed body must leave the tree entirely — a cross-fade would
+    // keep the credentials block findable, and readable by a screen reader, on
+    // a row that looks closed.
+    expect(find.text(kMaskedCredential), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'collapsed row falls back to first and last name when name is blank',
+    (tester) async {
+      useTallViewport(tester);
+      await tester.pumpWidget(
+        wrap(
+          const EmployeeRecord(
+            id: 'inv2',
+            firstName: 'Amy',
+            lastName: 'Adams',
+            email: 'amy@example.com',
+            status: 'invited',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Amy Adams'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'collapsed row does not repeat the email when it is already the display name',
+    (tester) async {
+      useTallViewport(tester);
+      await tester.pumpWidget(
+        wrap(
+          const EmployeeRecord(
+            id: 'inv3',
+            email: 'amy@example.com',
+            status: 'invited',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('amy@example.com'), findsOneWidget);
+    },
+  );
+
+  testWidgets('expanding shows the credentials and calls nothing', (
+    tester,
+  ) async {
+    useTallViewport(tester);
+    await tester.pumpWidget(wrap(_invited));
+    await tester.pumpAndSettle();
+
+    await expand(tester);
+
+    expect(find.text('SIGN-IN DETAILS'), findsOneWidget);
+    // Twice on purpose: the collapsed header already identifies the person by
+    // email, and the credentials block repeats it as the thing they sign in
+    // with — copying the password without it loses which account it opens.
+    expect(find.text('zoe@example.com'), findsNWidgets(2));
+    // The whole point of retiring the code flow: opening a row costs no
+    // round-trip and rotates nothing. The old flow re-minted a code on every
+    // expand.
+    verifyNeverCreated();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('expanding does not claim the password was just re-issued', (
+    tester,
+  ) async {
+    useTallViewport(tester);
+    await tester.pumpWidget(wrap(_invited));
+    await tester.pumpAndSettle();
+
+    await expand(tester);
+
+    expect(find.textContaining('no longer works'), findsNothing);
+  });
+
+  testWidgets('Copy takes the email alone when no password is held', (
+    tester,
+  ) async {
+    useTallViewport(tester);
+    final copied = mockClipboard(tester);
 
     await tester.pumpWidget(wrap(_invited));
     await tester.pumpAndSettle();
     await expand(tester);
+
+    await tester.tap(find.text('Copy email'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // The mask is a display literal — it must never reach the clipboard.
+    expect(copied, ['zoe@example.com']);
+    expect(find.text('Copied'), findsOneWidget);
+    expect(find.text('Copy email'), findsNothing);
+  });
+
+  testWidgets('Copy puts BOTH halves on the clipboard after a reset', (
+    tester,
+  ) async {
+    useTallViewport(tester);
+    final copied = mockClipboard(tester);
+
+    await tester.pumpWidget(wrap(_invited));
+    await tester.pumpAndSettle();
+    await expand(tester);
+
+    await tester.tap(find.text('Reset password'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
 
     await tester.tap(find.text('Copy both'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
     // Copying only the password loses which account it opens.
-    expect(copied, ['zoe@example.com\nWelcome123!']);
+    expect(copied, ['zoe@example.com\nPw23456789x']);
     expect(find.text('Copied'), findsOneWidget);
     expect(find.text('Copy both'), findsNothing);
   });
@@ -232,21 +317,19 @@ void main() {
     // dropped one would silently blank it.
     verify(
       () => repo.createEmployeeAccount(
-        name: 'Zoé Roy',
-        firstName: 'Zoé',
+        name: 'Zoe Roy',
+        firstName: 'Zoe',
         lastName: 'Roy',
         email: 'zoe@example.com',
         phone: '(514) 555-1234',
-        colorValue: '4280391411',
+        // `_invited` picked no colour, so this is the record's default.
+        colorValue: '${AppColors.crewDefault.toARGB32()}',
         jobTitle: 'technician',
-        isAdmin: false,
       ),
     ).called(1);
   });
 
-  testWidgets('Reset password shows the NEW password the server set', (
-    tester,
-  ) async {
+  testWidgets('shows the real pair after a reset', (tester) async {
     useTallViewport(tester);
     await tester.pumpWidget(wrap(_invited));
     await tester.pumpAndSettle();
@@ -256,12 +339,82 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    // Echoed from the server, never assumed from the client constant.
-    expect(find.text('Reset456!'), findsOneWidget);
-    expect(find.text('Welcome123!'), findsNothing);
+    // Echoed from the server, never assumed from a client constant — and the
+    // mask gives way the moment the app actually holds a credential.
+    expect(find.text('Pw23456789x'), findsOneWidget);
+    expect(find.text(kMaskedCredential), findsNothing);
+    expect(find.text('Reset password to issue a new one'), findsNothing);
     expect(find.textContaining('no longer works'), findsOneWidget);
     expect(find.text('Password reset'), findsOneWidget);
   });
+
+  testWidgets('Remove disables Reset password while deletion is in flight', (
+    tester,
+  ) async {
+    useTallViewport(tester);
+    final deleteCompleter = Completer<void>();
+    when(
+      () => repo.deleteEmployeeAccount('inv1'),
+    ).thenAnswer((_) => deleteCompleter.future);
+
+    await tester.pumpWidget(wrap(_invited));
+    await tester.pumpAndSettle();
+    await expand(tester);
+
+    await tester.tap(find.text('Remove account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove account').last);
+    await tester.pump();
+
+    final resetButton = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Reset password'),
+    );
+    expect(resetButton.onPressed, isNull);
+
+    deleteCompleter.complete();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets(
+    'Reset password disables Remove account while reset is in flight',
+    (
+      tester,
+    ) async {
+      useTallViewport(tester);
+      final createCompleter = Completer<NewAccountCredentials>();
+      when(
+        () => repo.createEmployeeAccount(
+          name: any(named: 'name'),
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
+          email: any(named: 'email'),
+          phone: any(named: 'phone'),
+          colorValue: any(named: 'colorValue'),
+          jobTitle: any(named: 'jobTitle'),
+        ),
+      ).thenAnswer((_) => createCompleter.future);
+
+      await tester.pumpWidget(wrap(_invited));
+      await tester.pumpAndSettle();
+      await expand(tester);
+
+      await tester.tap(find.text('Reset password'));
+      await tester.pump();
+
+      final removeButton = tester.widget<OutlinedButton>(
+        find.widgetWithText(OutlinedButton, 'Remove account'),
+      );
+      expect(removeButton.onPressed, isNull);
+
+      createCompleter.complete(
+        const NewAccountCredentials(
+          email: 'zoe@example.com',
+          password: 'Pw23456789x',
+        ),
+      );
+      await tester.pumpAndSettle();
+    },
+  );
 
   testWidgets('offline Reset notices instead of hanging on the call', (
     tester,
@@ -344,7 +497,8 @@ void main() {
     await tester.pumpAndSettle();
     await expand(tester);
 
-    expect(find.text('Welcome123!'), findsOneWidget);
+    expect(find.text(kMaskedCredential), findsOneWidget);
+    expect(find.text('Reset password to issue a new one'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

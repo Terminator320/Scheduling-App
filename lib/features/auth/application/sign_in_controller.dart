@@ -1,11 +1,12 @@
 import 'dart:async';
 
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/storage/secure_storage_service.dart';
+import 'package:scheduling/core/utils/retry.dart';
+import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
@@ -96,6 +97,18 @@ class SignInController extends Notifier<SignInState> {
   @override
   SignInState build() => const SignInState();
 
+  Future<void> _bestEffortSignOut(
+    AuthService auth,
+    AppLogger logger, {
+    required String label,
+  }) async {
+    try {
+      await auth.signOut();
+    } catch (error, stackTrace) {
+      logger.warn(label, error, stackTrace);
+    }
+  }
+
   /// Runs a full credential sign-in — on success it stays in-progress, and on
   /// any failure it resets itself so the form re-enables.
   Future<SignInOutcome> signIn({
@@ -121,13 +134,17 @@ class SignInController extends Notifier<SignInState> {
 
       // Every account has a doc keyed by uid from the moment the admin
       // creates it — including one that has never been set up.
-      final userDoc = await _retryOnAuthPropagation(
+      final userDoc = await retryAsync(
         () => employees.findUserByUid(user.uid),
       );
 
       if (userDoc == null) {
         // Signed in, but no profile doc — not a provisioned account.
-        await auth.signOut();
+        await _bestEffortSignOut(
+          auth,
+          logger,
+          label: 'AUTH-SIGNIN no-profile signOut failed',
+        );
         _settle();
         return const SignInNoProfile();
       }
@@ -148,7 +165,11 @@ class SignInController extends Notifier<SignInState> {
       }
 
       if (!employee.isActive) {
-        await auth.signOut();
+        await _bestEffortSignOut(
+          auth,
+          logger,
+          label: 'AUTH-SIGNIN inactive signOut failed',
+        );
         _settle();
         return const SignInAccountDisabled();
       }
@@ -158,24 +179,26 @@ class SignInController extends Notifier<SignInState> {
       // just log if they fail.
       unawaited(
         authCache.save(employee).catchError((Object e, StackTrace st) {
-          logger.warn('login.auth_cache_save', e, st);
+          logger.warn('AUTH-SIGNIN identity cache save failed', e, st);
         }),
       );
       unawaited(
         storage
-            .write(
-              SecureStorageKeys.rememberedEmail,
-              email.trim().toLowerCase(),
-            )
+            .write(SecureStorageKeys.rememberedEmail, normalizeEmail(email))
             .catchError((Object e, StackTrace st) {
-              logger.warn('login.remember_email', e, st);
+              logger.warn('AUTH-SIGNIN remember email failed', e, st);
             }),
       );
 
       return SignInSuccess(employee);
     } catch (error, stackTrace) {
       final failure = AuthErrorMapper.map(error);
-      logger.authFailure('login.sign_in', failure, error, stackTrace);
+      logger.authFailure(
+        'AUTH-SIGNIN sign-in failed',
+        failure,
+        error,
+        stackTrace,
+      );
       _settle();
       return SignInError(failure);
     }
@@ -187,11 +210,12 @@ class SignInController extends Notifier<SignInState> {
   Future<SignInOutcome> resumeAfterSignUp() async {
     final auth = ref.read(authServiceProvider);
     final employees = ref.read(employeesRepositoryProvider);
+    final authCache = ref.read(authCacheProvider);
     final logger = ref.read(loggerProvider);
     final user = auth.currentUser;
     if (user == null) return const SignInNoSession();
     try {
-      final userDoc = await _retryOnAuthPropagation(
+      final userDoc = await retryAsync(
         () => employees.findUserByUid(user.uid),
       );
       if (userDoc == null) return const SignInProfilePending();
@@ -202,30 +226,22 @@ class SignInController extends Notifier<SignInState> {
       // still-`invited` person into the hub, where every rules gate denies them
       // and nothing routes them back to setup.
       if (!employee.isActive) return const SignInProfilePending();
+      unawaited(
+        authCache.save(employee).catchError((Object e, StackTrace st) {
+          logger.warn('AUTH-SETUP resume identity cache save failed', e, st);
+        }),
+      );
       return SignInSuccess(employee);
     } catch (error, stackTrace) {
       // The account is already created and active server-side, so we just
       // report "pending" here — the user can recover by signing in normally.
-      logger.warn('login.resume_after_sign_up', error, stackTrace);
+      logger.warn('AUTH-SETUP resume after setup failed', error, stackTrace);
       return const SignInProfilePending();
     }
   }
 
   void _settle() {
     if (ref.mounted) state = const SignInState();
-  }
-}
-
-/// Retries a read once after a short delay if it comes back permission-denied,
-/// since the freshly minted ID token can lag Firestore's request channel
-/// right after sign-in.
-Future<T> _retryOnAuthPropagation<T>(Future<T> Function() read) async {
-  try {
-    return await read();
-  } on FirebaseException catch (e) {
-    if (e.code != 'permission-denied') rethrow;
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    return read();
   }
 }
 

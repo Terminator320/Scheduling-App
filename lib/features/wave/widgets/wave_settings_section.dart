@@ -42,13 +42,25 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
   bool _connectBusy = false;
   bool _syncBusy = false;
   bool _scheduleBusy = false;
+  bool _retryBusy = false;
 
-  /// True while either Wave round trip is in flight. The cadence picker adds
-  /// [_scheduleBusy] on top; the two buttons swap places, so neither needs it.
-  bool get _busy => _connectBusy || _syncBusy;
+  /// True while any Wave round trip is in flight. The cadence picker adds
+  /// [_scheduleBusy] on top; the Connect/Sync buttons swap places, so neither
+  /// needs it. [_retryBusy] IS in here — Retry drains the same queue Sync
+  /// does, so running both at once would have the two presses fighting over
+  /// the same jobs and reporting each other's work.
+  bool get _busy => _connectBusy || _syncBusy || _retryBusy;
 
   /// Fail-fast offline guard so the long-running Wave callables don't hang.
   /// Surfaces the network notice and returns true, so the caller can abort.
+  ///
+  /// Deliberately NOT `guardedOffline` (`core/errors/error_cause.dart`), which
+  /// is otherwise the one owner of this shape: it hardcodes
+  /// `composeErrorNotice`, and every other notice this section emits is a
+  /// [WaveFailure]'s own localized message via [_runWaveAction]. Routing this
+  /// one through the composer would make the offline notice the only one here
+  /// speaking a different vocabulary, against the typed-Failure-branch-first
+  /// rule. This is the second carve-out from that docstring's rule.
   bool _blockedOffline() {
     if (!ref.read(isOfflineProvider)) return false;
     ref
@@ -65,13 +77,31 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
     required void Function({required bool busy}) setBusy,
     required Future<void> Function() action,
   }) async {
+    // Captured before the await so the log genuinely happens BEFORE the
+    // mounted guard, as the docstring promises. It used to sit after it, so a
+    // failure on an unmounted section reached Crashlytics never — and moving
+    // it back above the guard without hoisting the read would instead throw
+    // there, since `ref.read` is unsafe on an unmounted consumer in Riverpod 3.
+    final logger = ref.read(loggerProvider);
+    final notices = ref.read(noticeServiceProvider);
     setBusy(busy: true);
     try {
       await action();
     } on WaveFailure catch (e, st) {
+      logger.warn('WAVE-$tag failed', e, st);
       if (!mounted) return;
-      ref.read(loggerProvider).warn('WAVE-$tag failed', e, st);
-      ref.read(noticeServiceProvider).error(e.toLocalizedMessage(context));
+      notices.error(e.toLocalizedMessage(context));
+    } on Object catch (e, st) {
+      // `WaveService` maps its own throws, but the `action:` closures also run
+      // notices, `ref.invalidate` and `setState` — so a non-`WaveFailure` is
+      // reachable, and it used to escape to the zone handler with NO notice
+      // shown: the admin taps Sync and nothing visibly happens. Reuses the
+      // existing generic string rather than minting an `error_intro*` key for
+      // a path that should never fire; this section is already the documented
+      // carve-out from `composeErrorNotice`.
+      logger.warn('WAVE-$tag failed (unexpected)', e, st);
+      if (!mounted) return;
+      notices.error(context.l10n.error_somethingWentWrongPleaseTryAgain);
     } finally {
       if (mounted) setBusy(busy: false);
     }
@@ -112,9 +142,46 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
       action: () async {
         final summary = await ref.read(waveServiceProvider).syncCustomers();
         if (!mounted) return;
+        // Re-read the outbox counts: this sync drained the queue, so the
+        // pending and failed rows above the button are now describing a state
+        // that no longer exists.
+        setState(() => _connection = null);
+        ref.invalidate(waveConnectionProvider);
         ref
             .read(noticeServiceProvider)
             .success(waveSyncNotice(context.l10n, summary));
+      },
+    );
+  }
+
+  /// Returns dead-lettered client edits to the queue and pushes them.
+  ///
+  /// The counter this acts on is the only trace a dead-lettered job leaves
+  /// outside one client's detail screen, so the notice has to distinguish
+  /// every outcome — including the one that made this press look broken: a job
+  /// dies on something Wave will reject again, so the push behind the requeue
+  /// dead-letters it inside the same call and the failed row does not move.
+  /// `waveRetryNotice` owns that wording; the tone is picked here, because a
+  /// notice claiming success over an unchanged failure row is the whole bug.
+  Future<void> _retryFailed() async {
+    if (_blockedOffline()) return;
+    await _runWaveAction(
+      tag: 'RETRY',
+      setBusy: ({required busy}) => setState(() => _retryBusy = busy),
+      action: () async {
+        final result = await ref.read(waveServiceProvider).retryFailedJobs();
+        if (!mounted) return;
+        // Re-read the counts rather than guessing them: the push may have
+        // moved `pending` too, and a concurrent edit may have added to it.
+        setState(() => _connection = null);
+        ref.invalidate(waveConnectionProvider);
+        final message = waveRetryNotice(context.l10n, result);
+        final notices = ref.read(noticeServiceProvider);
+        if (result.hasFailed) {
+          notices.error(message);
+        } else {
+          notices.success(message);
+        }
       },
     );
   }
@@ -180,6 +247,8 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
             onTapSchedule: _busy || _scheduleBusy
                 ? null
                 : () => _pickSchedule(connection.importSchedule),
+            retryBusy: _retryBusy,
+            onRetryFailed: _busy || _scheduleBusy ? null : _retryFailed,
           ),
         // Connect is first-time setup only — the status row replaces it once connected.
         if (!connected)
@@ -209,11 +278,15 @@ class _ConnectedStatus extends StatelessWidget {
     required this.connection,
     required this.scheduleBusy,
     required this.onTapSchedule,
+    required this.retryBusy,
+    required this.onRetryFailed,
   });
 
   final WaveConnection connection;
   final bool scheduleBusy;
   final VoidCallback? onTapSchedule;
+  final bool retryBusy;
+  final VoidCallback? onRetryFailed;
 
   @override
   Widget build(BuildContext context) {
@@ -271,7 +344,75 @@ class _ConnectedStatus extends StatelessWidget {
                 ),
           onTap: onTapSchedule,
         ),
+        // The outbox, which had nowhere to be shown. Both rows are omitted at
+        // zero AND at null — null means the count could not be taken (or an
+        // older backend did not send it), and "nothing shown" is the honest
+        // rendering of both. Never render null as 0: that reads as "the queue
+        // is empty", which is the one thing an admin would act on.
+        if (connection.hasPending)
+          _OutboxRow(
+            icon: Icons.schedule_rounded,
+            label: context.l10n.wave_outboxPending(connection.pendingCount!),
+            tone: scheme.onSurfaceVariant,
+          ),
+        if (connection.hasFailed)
+          _OutboxRow(
+            icon: Icons.error_outline_rounded,
+            label: context.l10n.wave_outboxFailed(connection.failedCount!),
+            tone: scheme.error,
+            action: retryBusy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: AdaptiveProgressIndicator(),
+                  )
+                : TextButton(
+                    onPressed: onRetryFailed,
+                    child: Text(context.l10n.wave_retryFailedButton),
+                  ),
+          ),
       ],
+    );
+  }
+}
+
+/// One outbox line: an icon, a count sentence, and an optional trailing
+/// action. Kept as its own widget so the pending and failed rows cannot drift
+/// in padding or type scale.
+class _OutboxRow extends StatelessWidget {
+  const _OutboxRow({
+    required this.icon,
+    required this.label,
+    required this.tone,
+    this.action,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color tone;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(
+        left: AppSpacing.sp4,
+        top: AppSpacing.sp8,
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: tone),
+          const SizedBox(width: AppSpacing.sp8),
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(color: tone),
+            ),
+          ),
+          ?action,
+        ],
+      ),
     );
   }
 }

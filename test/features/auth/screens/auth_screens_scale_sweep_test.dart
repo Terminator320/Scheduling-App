@@ -2,6 +2,7 @@
 // viewport, catching RenderFlex overflow ("render problem at Extra Large")
 // before it reaches a device.
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
@@ -21,6 +22,14 @@ import 'package:scheduling/l10n/l10n.dart';
 class _MockAuthService extends Mock implements AuthService {}
 
 class _MockRepo extends Mock implements EmployeesRepository {}
+
+class _MockUser extends Mock implements User {}
+
+// Long enough to wrap. LockedEmailPanel renders the address as a Text
+// rather than a disabled field precisely so it wraps instead of truncating
+// at large scale — which only gets exercised if the panel is built at all,
+// and it is built only when currentUser has an email.
+const _longEmail = 'genevieve.beauchamp-tremblay@plomberie-eau-secours.example.com';
 
 // In-app text scales from text_size_screen.dart (Small / Medium / Large /
 // XL) plus Android system-level 2.0× to catch the worst case.
@@ -77,9 +86,9 @@ void main() {
   setUp(() {
     auth = _MockAuthService();
     repo = _MockRepo();
-    // Unverified, so the setup screen's verification panel is part of every
-    // sweep — its two buttons are the widest row on that screen.
-    when(() => auth.isEmailVerified).thenReturn(false);
+    final user = _MockUser();
+    when(() => user.email).thenReturn(_longEmail);
+    when(() => auth.currentUser).thenReturn(user);
   });
 
   for (final scale in _scales) {

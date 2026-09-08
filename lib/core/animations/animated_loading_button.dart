@@ -63,7 +63,6 @@ class AnimatedLoadingButton extends StatelessWidget {
             ),
     );
 
-    // minHeight (not fixed height) lets the label grow with text scale instead of being silently clipped.
     return TapScale(
       enabled: effectiveOnPressed != null,
       child: ConstrainedBox(

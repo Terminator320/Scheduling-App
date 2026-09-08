@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/features/clients/application/client_form_controller.dart';
@@ -9,49 +9,46 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 
 /// Archive / delete handlers shared by the clients list and the client detail.
-///
-/// Both surfaces must agree on the notices, the CLI-ARCH / CLI-DEL log tags and
-/// the confirm copy, so the flow lives here once rather than being copied into
-/// each host — two copies of a rule whose answers must match is exactly the
-/// drift this codebase keeps paying for.
 mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
-  /// Called after a successful archive / un-archive. Deliberately separate
-  /// from [onClientDeleted]: the list just refreshes for both, but the detail
-  /// view must STAY OPEN here (so it can offer Unarchive) and dismiss there.
-  /// One shared hook could not express that difference.
+  /// Called after a successful archive / un-archive.
   void onClientArchived(ClientRecord client, {required bool archived});
 
   /// Called after a successful delete, once the record is gone.
   void onClientDeleted(ClientRecord client);
 
   /// Toggles [client]'s archived state.
-  Future<void> archiveClient(ClientRecord client) async {
+  Future<bool> archiveClient(ClientRecord client) async {
     final next = !client.archived;
     if (guardedOffline(
       context,
       ref,
       intro: context.l10n.error_introArchiveClient,
     )) {
-      return;
+      return false;
     }
 
     final notices = ref.read(noticeServiceProvider);
     final outcome = await ref
         .read(clientFormControllerProvider.notifier)
         .setArchived(client.id, archived: next);
-    if (!mounted) return;
+    if (!mounted) return false;
     switch (outcome) {
       // A write the reentrancy guard skipped: nothing committed and nothing
       // failed, so this surfaces nothing at all.
       case ClientArchiveBusy():
-        return;
+        return false;
       case ClientArchived(:final archived):
+        // One toggle, one event — the direction is a parameter.
+        ref
+            .read(analyticsServiceProvider)
+            .logClientArchived(action: archived ? 'archive' : 'unarchive');
         notices.success(
           archived
               ? context.l10n.clients_archivedNotice(client.displayName)
               : context.l10n.clients_unarchivedNotice(client.displayName),
         );
         onClientArchived(client, archived: archived);
+        return true;
       case ClientArchiveFailed(:final error):
         notices.error(
           composeErrorNotice(
@@ -60,11 +57,11 @@ mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
             error: error,
           ),
         );
+        return false;
     }
   }
 
-  /// Confirms, then deletes [client]. The server refuses a client that still
-  /// has appointments; [ClientsFailureHasHistory] is what says so usefully.
+  /// Confirms, then deletes [client].
   Future<void> confirmDeleteClient(ClientRecord client) async {
     final confirmed = await showConfirmDialog(
       context,
@@ -91,6 +88,7 @@ mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
       case ClientDeleteBusy():
         return;
       case ClientDeleted():
+        ref.read(analyticsServiceProvider).logClientDeleted();
         notices.success(context.l10n.clients_deletedNotice(client.displayName));
         onClientDeleted(client);
       case ClientDeleteFailed(:final error):

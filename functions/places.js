@@ -2,74 +2,114 @@ const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 
 const {
-  assertPayloadShape,
   requireString,
   requireNumberInRange,
   readSessionToken,
   enforceDurableRateLimit,
-  assertAdmin,
+  assertAdminCall,
+  shortHash,
 } = require("./security");
 const {GOOGLE_MAP_API_KEY} = require("./params");
 
-// Both callables proxy the Places API v1 so the billing-sensitive key (kept
-// in Secret Manager) never ships in the Flutter binary. Clients must be
-// authenticated and pass App Check.
+// Both callables proxy the Places API v1 so the billing-sensitive key (kept in
+// Secret Manager) never ships in the Flutter binary.
 
 const PLACE_ID_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const INPUT_MAX_LEN = 200;
 
-// Per-uid sliding-window rate limit, in-memory per function instance — a
-// cheap, latency-free guard for the high-volume autocomplete path. Set a GCP
-// billing alert too — other routes use the durable Firestore limiter instead.
+// Per-uid durable sliding-window limit for the high-volume autocomplete path.
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const rateBuckets = new Map();
 
-// placesGetDetails is low-volume, so it uses the durable Firestore cap rather
-// than the in-memory limiter, with a limit generous enough for an admin
-// entering many appointments at once.
+// placesGetDetails is low-volume and gets a more generous durable cap for an
+// admin entering many appointments at once.
+const UPSTREAM_TIMEOUT_MS = 8_000;
+
 const PLACES_DETAILS_RATE_MAX = 40;
 const PLACES_DETAILS_RATE_WINDOW_MS = 15 * 60 * 1000;
 
 // Reverse geocoding backs the live staff-location map (tap-driven, not
-// keystroke-driven). A generous hourly cap via the durable Firestore limiter
-// covers normal admin usage while bounding cost.
+// keystroke-driven).
 const REVERSE_GEOCODE_RATE_MAX = 120;
 const REVERSE_GEOCODE_RATE_WINDOW_MS = 60 * 60 * 1000;
 const REVERSE_GEOCODE_LOCALES = new Set(["en", "fr"]);
 
 /**
+ * The upstream error CODE carried by a non-200 body, or `""` when there is none
+ * to read.
+ * @param {string} bodyText Raw response body.
+ * @return {string} An enum-shaped code, or "".
+ */
+function upstreamErrorCode(bodyText) {
+  let parsed;
+  try {
+    parsed = JSON.parse(bodyText);
+  } catch (err) {
+    return "";
+  }
+  const error = (parsed && parsed.error) || {};
+  const raw = error.status || error.code || (parsed && parsed.status) || "";
+  const code = String(raw);
+  return /^[A-Z0-9_]{1,40}$/.test(code) ? code : "";
+}
+
+/**
  * Handles the three things every Places/Geocoding proxy needs to check —
- * transport errors, non-200 responses, and JSON parse failures. Request
- * construction stays at each call site, since it differs per callable.
+ * transport errors, non-200 responses, and JSON parse failures.
  * @param {string} url Fully-built request URL.
  * @param {?object} options fetch() options (method, headers, body).
- * @param {{label: string, uid: string, logResponsePreview: boolean}} opts
- *   label: log-message prefix matching the callable name. uid: caller uid,
- *   logged only on transport error. logResponsePreview: when true, logs a
- *   200-char body preview on non-200 (placesReverseGeocode passes false to
- *   keep coordinate/address PII out of its logs).
+ * @param {{label: string, uid: string}} opts label: log-message prefix
+ * matching the callable name. uid: caller uid, logged only on transport
+ * error.
  * @return {Promise<object>} parsed JSON body.
  */
-async function fetchPlacesJson(url, options, {label, uid, logResponsePreview}) {
+async function fetchPlacesJson(url, options, {label, uid}) {
+  // `fetch()` has no default timeout in Node, so a slow upstream held the
+  // function open indefinitely.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+  try {
+    return await _fetchPlacesJson(url, options, {label, uid}, controller);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * [fetchPlacesJson]'s body, under an already-armed abort [controller].
+ * @param {string} url Fully-built request URL.
+ * @param {?object} options fetch() options (method, headers, body).
+ * @param {{label: string, uid: string}} opts See [fetchPlacesJson].
+ * @param {!AbortController} controller Armed by the caller's timeout.
+ * @return {Promise<object>} parsed JSON body.
+ */
+async function _fetchPlacesJson(url, options, {label, uid}, controller) {
   let response;
   try {
-    response = await fetch(url, options);
+    response = await fetch(url, {...options, signal: controller.signal});
   } catch (err) {
-    logger.error(`${label}: transport error`, {uid, err: err.message});
+    // `timedOut` is what separates "the upstream is slow" from "the network
+    // broke" in Cloud Logging; both surface as a transport error otherwise.
+    logger.error(`${label}: transport error`, {
+      uidHash: shortHash(uid),
+      err: err.message,
+      timedOut: controller.signal.aborted,
+    });
     throw new HttpsError("internal", "places-transport");
   }
 
   if (!response.ok) {
-    if (logResponsePreview) {
-      const preview = (await response.text()).slice(0, 200);
-      logger.warn(`${label}: upstream non-200`, {
-        status: response.status,
-        body: preview,
-      });
-    } else {
-      logger.warn(`${label}: upstream non-200`, {status: response.status});
+    // The structured code only, NEVER the body — see [upstreamErrorCode].
+    let body = "";
+    try {
+      body = await response.text();
+    } catch (err) {
+      body = "";
     }
+    logger.warn(`${label}: upstream non-200`, {
+      status: response.status,
+      code: upstreamErrorCode(body),
+    });
     throw new HttpsError("internal", "places-upstream");
   }
 
@@ -84,53 +124,27 @@ async function fetchPlacesJson(url, options, {label, uid, logResponsePreview}) {
   }
 }
 
-/**
- * Throws HttpsError("resource-exhausted") when the caller's uid exceeds
- * RATE_LIMIT_MAX requests within RATE_LIMIT_WINDOW_MS. Mutates the bucket.
- * @param {string} uid Firebase Auth uid of the caller.
- */
-function enforceRateLimit(uid) {
-  const now = Date.now();
-  // Evict expired entries when the map grows beyond the expected user count.
-  if (rateBuckets.size > 200) {
-    for (const [key, val] of rateBuckets) {
-      if (now - val.windowStart >= RATE_LIMIT_WINDOW_MS) {
-        rateBuckets.delete(key);
-      }
-    }
-  }
-  const bucket = rateBuckets.get(uid);
-  if (!bucket || now - bucket.windowStart >= RATE_LIMIT_WINDOW_MS) {
-    rateBuckets.set(uid, {count: 1, windowStart: now});
-    return;
-  }
-  bucket.count += 1;
-  if (bucket.count > RATE_LIMIT_MAX) {
-    throw new HttpsError(
-        "resource-exhausted",
-        "too-many-places-requests",
-    );
-  }
-}
-
 const placesAutocomplete = onCall(
     {
       enforceAppCheck: true,
       secrets: [GOOGLE_MAP_API_KEY],
     },
     async (req) => {
-      if (!req.auth || !req.auth.uid) {
-        throw new HttpsError("unauthenticated", "auth-required");
-      }
       // This is admin-only — address autocomplete is only surfaced on admin
-      // appointment forms. The in-memory limiter below is a cost guard, not
-      // a hard cap.
-      await assertAdmin(req.auth.uid);
-      assertPayloadShape(req.data, new Set(["input", "sessionToken"]));
+      // appointment forms.
+      const uid = await assertAdminCall(
+          req,
+          new Set(["input", "sessionToken"]),
+      );
       const input = requireString(req.data, "input", INPUT_MAX_LEN);
       const sessionToken = readSessionToken(req.data);
 
-      enforceRateLimit(req.auth.uid);
+      await enforceDurableRateLimit(
+          "placesAutocomplete",
+          uid,
+          RATE_LIMIT_MAX,
+          RATE_LIMIT_WINDOW_MS,
+      );
 
       const body = {
         input,
@@ -159,8 +173,7 @@ const placesAutocomplete = onCall(
           },
           {
             label: "placesAutocomplete",
-            uid: req.auth.uid,
-            logResponsePreview: true,
+            uid,
           },
       );
       return {suggestions: Array.isArray(data.suggestions) ?
@@ -174,13 +187,8 @@ const placesGetDetails = onCall(
       secrets: [GOOGLE_MAP_API_KEY],
     },
     async (req) => {
-      if (!req.auth || !req.auth.uid) {
-        throw new HttpsError("unauthenticated", "auth-required");
-      }
-      // Place details is admin-only for the same reason as autocomplete. It
-      // also keeps the durable Firestore rate cap below.
-      await assertAdmin(req.auth.uid);
-      assertPayloadShape(req.data, new Set(["placeId", "sessionToken"]));
+      // Place details is admin-only for the same reason as autocomplete.
+      await assertAdminCall(req, new Set(["placeId", "sessionToken"]));
       const placeId = requireString(req.data, "placeId", 256);
       if (!PLACE_ID_PATTERN.test(placeId)) {
         throw new HttpsError("invalid-argument", "invalid-placeId");
@@ -213,7 +221,6 @@ const placesGetDetails = onCall(
           {
             label: "placesGetDetails",
             uid: req.auth.uid,
-            logResponsePreview: true,
           },
       );
       return {
@@ -226,21 +233,16 @@ const placesGetDetails = onCall(
 );
 
 // Reverse-geocodes a lat/lng into a human-readable address for the live
-// staff-location map. Uses the classic Geocoding API, since that's the
-// endpoint that offers reverse-geocode mode.
+// staff-location map.
 const placesReverseGeocode = onCall(
     {
       enforceAppCheck: true,
       secrets: [GOOGLE_MAP_API_KEY],
     },
     async (req) => {
-      if (!req.auth || !req.auth.uid) {
-        throw new HttpsError("unauthenticated", "auth-required");
-      }
       // Only the admin-only live-location map calls this — same reasoning as
       // the other Places proxies.
-      await assertAdmin(req.auth.uid);
-      assertPayloadShape(req.data, new Set(["lat", "lng", "locale"]));
+      await assertAdminCall(req, new Set(["lat", "lng", "locale"]));
       const lat = requireNumberInRange(req.data && req.data.lat, "lat",
           -90, 90);
       const lng = requireNumberInRange(req.data && req.data.lng, "lng",
@@ -276,7 +278,6 @@ const placesReverseGeocode = onCall(
           {
             label: "placesReverseGeocode",
             uid: req.auth.uid,
-            logResponsePreview: false,
           },
       );
 
@@ -298,4 +299,14 @@ const placesReverseGeocode = onCall(
     },
 );
 
-module.exports = {placesAutocomplete, placesGetDetails, placesReverseGeocode};
+module.exports = {
+  placesAutocomplete,
+  placesGetDetails,
+  placesReverseGeocode,
+  // Exported for jest — it is the one thing standing between a rejected address
+  // lookup and the typed street address landing in Cloud Logging.
+  upstreamErrorCode,
+  // Exported for jest — the test asserts it stays under the client's own
+  // callable timeout, which is the whole point of the budget.
+  UPSTREAM_TIMEOUT_MS,
+};

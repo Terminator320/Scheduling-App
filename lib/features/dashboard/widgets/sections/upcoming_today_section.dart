@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
@@ -46,17 +46,19 @@ class UpcomingTodaySection extends StatelessWidget {
           for (var i = 0; i < ops.upcoming.length; i++) ...[
             if (i > 0) const SizedBox(height: AppSpacing.sp8),
             AppointmentCard(
-              appointment: ops.upcoming[i],
+              appointment: ops.upcoming[i].appointment,
               crew: crewFor(
-                ops.upcoming[i],
+                ops.upcoming[i].appointment,
                 colorMap: colorMap,
                 nameMap: nameMap,
               ),
+              slice: ops.upcoming[i],
               emphasizeToday: true,
               onTap: () => showEventDetails(
                 context,
-                ops.upcoming[i],
+                ops.upcoming[i].appointment,
                 showActions: isAdmin,
+                analyticsSource: AnalyticsSources.dashboard,
               ),
             ),
           ],

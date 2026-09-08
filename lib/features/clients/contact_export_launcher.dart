@@ -5,7 +5,7 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/features/clients/data/contact_link_store.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
-import 'package:scheduling/features/maps/domain/address_parser.dart';
+import 'package:scheduling/features/clients/domain/policies/client_name_policy.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 /// The contact properties the client sync owns. Updating only these keeps everything
@@ -34,6 +34,9 @@ Future<void> saveClientToPhoneContacts(
 ) async {
   final notices = ref.read(noticeServiceProvider);
   final linkStore = ref.read(contactLinkStoreProvider);
+  // Hoisted beside them: the plugin call can outlive the surface that started
+  // it, and `ref.read` on an unmounted consumer throws under Riverpod 3.
+  final logger = ref.read(loggerProvider);
   try {
     if (await _requestContactsPermission()) {
       final insertedId = await FlutterContacts.create(clientToContact(client));
@@ -52,9 +55,7 @@ Future<void> saveClientToPhoneContacts(
   } catch (e, st) {
     // Log this so a contacts-plugin failure still reaches Crashlytics, same as
     // updateLinkedPhoneContact below.
-    ref
-        .read(loggerProvider)
-        .warn('CLI-CONTACT-SAVE saveClientToPhoneContacts failed', e, st);
+    logger.warn('CLI-CONTACT-SAVE saveClientToPhoneContacts failed', e, st);
     if (context.mounted) {
       notices.error(context.l10n.error_couldNotOpenContacts);
     }
@@ -105,7 +106,15 @@ Future<void> updateLinkedPhoneContact({
 /// Maps a ClientRecord to a flutter_contacts Contact. The display name goes on the
 /// organization field, while first/last name gets its own structured field.
 Contact clientToContact(ClientRecord client) {
-  final displayName = client.name.trim();
+  // The STORED name carries the client's phone number on the end for Wave's
+  // benefit, so it is stripped before it becomes a contact's organization or
+  // name — a contacts entry carries the number in its own phone field, and
+  // "Vogas Plumbing (514) 555-1234" is not a company.
+  final displayName = ClientNamePolicy.stripPhone(
+    client.name,
+    phone: client.phone,
+    mobile: client.mobile,
+  );
   final first = client.firstName.trim();
   final last = client.lastName.trim();
   final phone = client.phone.trim();
@@ -125,14 +134,10 @@ Contact clientToContact(ClientRecord client) {
 
   Address? address;
   if (!client.noFixedAddress && client.address.trim().isNotEmpty) {
-    final street = AddressParser.canonicalToDisplay(client.address);
-    final formatted = [
-      street,
-      client.city.trim(),
-      client.province.trim(),
-      client.postalCode.trim(),
-      client.country.trim(),
-    ].where((part) => part.isNotEmpty).join(', ');
+    // `street` must NOT carry the locality — the fields below repeat it, and
+    // a stored full address put every part in the card twice.
+    final street = client.streetLine;
+    final formatted = client.fullAddress;
 
     address = Address(
       formatted: formatted,

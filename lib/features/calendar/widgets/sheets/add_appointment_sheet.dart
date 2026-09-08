@@ -1,20 +1,30 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive_pickers.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
+import 'package:scheduling/core/analytics/analytics_screens.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_prefill.dart';
 import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
-import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
+import 'package:scheduling/features/calendar/utils/assignee_availability_scope.dart';
+import 'package:scheduling/features/calendar/utils/client_booking_context_scope.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
+import 'package:scheduling/features/calendar/widgets/dialogs/personal_block_clash_dialog.dart';
+import 'package:scheduling/features/calendar/widgets/fields/employee_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/inline_add_client_host.dart';
-import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
@@ -22,16 +32,17 @@ import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/feedback/offline_form_notice.dart';
 import 'package:scheduling/shared/widgets/sheets/form_sheet_frame.dart';
 
 class AddEventSheet extends ConsumerStatefulWidget {
-  const AddEventSheet({super.key, this.initialDate, this.initialClient});
+  const AddEventSheet({super.key, this.initialDate, this.prefill});
 
   final DateTime? initialDate;
 
-  /// Pre-seeds the client, for "Add and book a job" and the client detail's
-  /// Book job tile.
-  final ClientRecord? initialClient;
+  /// Pre-seeds the draft: a client for the book-job flows, a whole job for
+  /// "book again".
+  final AppointmentPrefill? prefill;
 
   @override
   ConsumerState<AddEventSheet> createState() => _AddEventSheetState();
@@ -50,11 +61,10 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     notes: TextEditingController(),
     materials: TextEditingController(),
   );
-  final _clientSearchDebounce = Debouncer(const Duration(milliseconds: 300));
+  late final Debouncer _clientSearchDebounce;
   late final _provider = addEventControllerProvider(widget.initialDate);
 
-  // Admin-only surface: this sheet is only reachable from the calendar FAB
-  // and the client detail's Book job, both admin-gated.
+  // This sheet is only reachable from admin-gated surfaces.
   final _tour = TourSteps(
     const FormTour(TourForm.addAppointment),
     isAdmin: true,
@@ -65,21 +75,44 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
   @override
   void initState() {
     super.initState();
+    _clientSearchDebounce = Debouncer.tagged(
+      kSearchDebounce,
+      logger: ref.read(loggerProvider),
+      tag: 'CLI-SEARCH debounced client search failed',
+    );
     final initialDate = widget.initialDate;
     if (initialDate != null) {
       _controllers.date.text = DateUtilsHelper.formatDate(initialDate);
       _controllers.endDate.text = _controllers.date.text;
     }
-    final client = widget.initialClient;
-    if (client != null) {
-      _controllers.clientSearch.text = client.displayName;
-      // Deferred: the controller is a family provider that must be built before
-      // the first read, and selectClient also settles the address field.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _notifier.selectClient(client);
-      });
-    }
+    final prefill = widget.prefill;
+    if (prefill != null) _seedFrom(prefill);
+    // A sheet route carries no name, so the observer skips it — the form
+    // reports itself here. Without this the create funnel has no entry step and
+    // only its successful completions are visible.
+    ref
+        .read(analyticsServiceProvider)
+        .logScreenView(AnalyticsScreens.addAppointment);
+  }
+
+  /// Text lives in the controllers; the rest is state, applied once the family
+  /// provider exists.
+  void _seedFrom(AppointmentPrefill prefill) {
+    final client = prefill.client;
+    _controllers.title.text = prefill.title;
+    _controllers.notes.text = prefill.notes;
+    _controllers.materials.text = prefill.materialsNeeded;
+    _controllers.clientSearch.text = client?.displayName ?? '';
+    // Submit reads this field even under the client-address pill, so it has to
+    // hold the pill's address too, the way picking a client fills it.
+    _controllers.address.text = prefill.address.isNotEmpty
+        ? AddressParser.canonicalToDisplay(prefill.address)
+        : client?.fullAddress ?? '';
+    // Defer until the family provider is built.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_notifier.applyPrefill(prefill));
+    });
   }
 
   @override
@@ -98,38 +131,31 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     _clientSearchDebounce.run(() => _notifier.searchClients(query));
   }
 
-  Future<void> _pickDate() async {
-    final state = ref.read(_provider);
-    final picked = await showAdaptiveDatePicker(
-      context,
-      initialDate: state.selectedDate ?? DateTime.now(),
-      firstDate: AppointmentDraftDefaults.datePickerFirstDate,
-      lastDate: AppointmentDraftDefaults.datePickerLastDate,
-    );
-    if (picked == null || !mounted) return;
+  void _onClientQueryModeChanged(ClientQueryMode mode) {
+    // Swapping keyboardType on a focused field does not reliably swap the
+    // software keyboard, so drop focus and let the rebuilt field take it back.
+    FocusScope.of(context).unfocus();
+    _clientSearchDebounce.cancel();
+    _controllers.clientSearch.clear();
+    _notifier.setClientQueryMode(mode);
+  }
+
+  void _onRetryClientSearch() =>
+      unawaited(_notifier.searchClients(_controllers.clientSearch.text));
+
+  /// Handles already-picked inline calendar dates.
+  void _onStartDateSelected(DateTime picked) {
+    // selectDate emits the rebuild after controller updates.
     _controllers.date.text = DateUtilsHelper.formatDate(picked);
     _notifier.selectDate(picked);
-    // selectDate mirrors or shifts the end date, and the end row renders the
-    // controller text — so it has to follow, or it goes stale.
+    // Keep the end-date controller synced after selectDate.
     final shifted = ref.read(_provider).endDate;
     if (shifted != null) {
       _controllers.endDate.text = DateUtilsHelper.formatDate(shifted);
     }
   }
 
-  Future<void> _pickEndDate() async {
-    final state = ref.read(_provider);
-    final picked = await showAdaptiveDatePicker(
-      context,
-      initialDate: state.endDate ?? state.selectedDate ?? DateTime.now(),
-      // Never offer a date before the start: an end date that precedes it is
-      // unbookable, so it shouldn't be reachable in the picker either.
-      firstDate:
-          state.selectedDate?.dateOnly ??
-          AppointmentDraftDefaults.datePickerFirstDate,
-      lastDate: AppointmentDraftDefaults.datePickerLastDate,
-    );
-    if (picked == null || !mounted) return;
+  void _onEndDateSelected(DateTime picked) {
     _controllers.endDate.text = DateUtilsHelper.formatDate(picked);
     _notifier.selectEndDate(picked);
   }
@@ -142,11 +168,14 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     );
     if (picked == null || !mounted) return;
     _controllers.startTime.text = picked.format(context);
-    if (!stateBefore.endTimeWasPickedManually) {
-      final autoEnd = AppointmentDraftDefaults.defaultEndTime(picked);
-      _controllers.endTime.text = autoEnd.format(context);
-    }
     _notifier.selectStartTime(picked);
+    // The auto end is the controller's call (plain default or seeded length).
+    _syncEndTimeText();
+  }
+
+  void _syncEndTimeText() {
+    final end = ref.read(_provider).selectedEndTime;
+    if (end != null) _controllers.endTime.text = end.format(context);
   }
 
   Future<void> _pickEndTime() async {
@@ -160,18 +189,11 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     _notifier.selectEndTime(picked);
   }
 
-  // Quick-fills the title from the job type, and the end time from the template's duration if a start time has already been picked.
+  // Applies the template title and duration.
   void _applyTemplate(JobTemplate template) {
     _controllers.title.text = jobTemplateLabel(context.l10n, template);
-    final start = ref.read(_provider).selectedStartTime;
-    if (start != null) {
-      final endMinutes = template.endMinutesOfDay(
-        start.hour * 60 + start.minute,
-      );
-      final end = TimeOfDay(hour: endMinutes ~/ 60, minute: endMinutes % 60);
-      _controllers.endTime.text = end.format(context);
-      _notifier.selectEndTime(end);
-    }
+    _notifier.setDurationMinutes(template.defaultDurationMinutes);
+    _syncEndTimeText();
   }
 
   int _spanLength(AddEventState state) =>
@@ -184,19 +206,15 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     return isOvernightWindow(start, end);
   }
 
-  Future<void> _pickImages() async {
-    final picked = await pickAppointmentImages(context, ref);
-    // The longest await in the app — an OS action sheet and then the
-    // camera/Photos picker. The notifier is autoDispose.family, so calling it
-    // after the sheet was torn down under the picker throws a StateError out
-    // of an unawaited callback, which is filed as FATAL.
-    if (!mounted) return;
-    if (picked.isNotEmpty) _notifier.addImages(picked);
-  }
+  Future<void> _pickImages() => pickAndAddAppointmentImages(
+    context,
+    ref,
+    addImages: _notifier.addImages,
+    remainingSlots: () => _notifier.remainingImageSlots,
+  );
 
   Future<void> _submit() async {
-    // An unnamed personal block saves as "Personal" — the stored title is what
-    // the card, the widget, Siri and the push text all read.
+    // Blank personal titles save as "Personal".
     final title = _controllers.title.text.trim().isEmpty
         ? (ref.read(_provider).isPersonal ? context.l10n.calendar_personal : '')
         : _controllers.title.text;
@@ -210,30 +228,53 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
           forceBusy: forceBusy,
         );
 
-    var outcome = await attempt();
-    if (!mounted) return;
-    if (outcome is AddEventBusyEmployees) {
-      final confirmed = await showBusyConflictDialog(
-        context,
-        busyEmployees: outcome.busyEmployees,
-        start: outcome.start,
-        end: outcome.end,
-      );
-      if (!confirmed || !mounted) return;
-      outcome = await attempt(forceBusy: true);
-      if (!mounted) return;
-    }
+    final outcome = await retryPastBusyConflict(
+      context,
+      attempt: attempt,
+      busyOf: (o) => o is AddEventBusyEmployees
+          ? (busyEmployees: o.busyEmployees, start: o.start, end: o.end)
+          : null,
+    );
+    // The helper already returned null if unmounted; repeated so the
+    // analyzer can still see the guard across the await.
+    if (outcome == null || !mounted) return;
     switch (outcome) {
-      case AddEventSubmitted(:final appointment, :final futureBookings):
+      case AddEventSubmitted(
+        :final appointment,
+        :final futureBookings,
+        :final runDays,
+      ):
+        // Fires on the SUBMITTED branch only. `AddEventBusy` is the reentrancy
+        // guard's no-op and `AddEventBusyEmployees` returns to the sheet for a
+        // force-through choice — counting either as a creation would report
+        // jobs that were never written.
         ref
-            .read(noticeServiceProvider)
-            .success(
-              futureBookings > 0
-                  ? context.l10n.calendar_appointmentCreatedWithRepeats(
-                      futureBookings,
-                    )
-                  : context.l10n.common_appointmentCreated,
+            .read(analyticsServiceProvider)
+            .logAppointmentCreated(
+              source: AnalyticsSources.calendar,
+              repeat: appointment.repeat.name,
+              assigneeCount: appointment.employeeIds.length,
+              hasPhotos: appointment.pictureCount > 0,
+              isPersonal: appointment.isPersonal,
+              isAllDay: appointment.isAllDay,
+              isDayOff: appointment.isDayOff,
+              isMultiDay: runDays > 1,
             );
+        // A run and a repeat series are different things and must not share a
+        // sentence: a 5-day job is ONE job over 5 days, not 4 future visits.
+        ref.read(noticeServiceProvider).success(switch ((
+          runDays,
+          futureBookings,
+        )) {
+          (final days, _) when days > 1 =>
+            context.l10n.calendar_appointmentCreatedRunDays(days),
+          (_, final repeats) when repeats > 0 =>
+            context.l10n.calendar_appointmentCreatedWithRepeats(repeats),
+          _ => context.l10n.common_appointmentCreated,
+        });
+        // Show clashes before closing this sheet.
+        await showPersonalBlockClashesIfAny(context, ref, block: appointment);
+        if (!mounted) return;
         Navigator.pop(context, appointment);
       case AddEventFailed(:final error):
         ref
@@ -245,7 +286,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
                 error: error,
               ),
             );
-      case AddEventInvalid() || AddEventBusyEmployees():
+      // These outcomes already surfaced or intentionally stay silent.
+      case AddEventInvalid() || AddEventBusyEmployees() || AddEventBusy():
         break;
     }
   }
@@ -253,12 +295,17 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(_provider);
-    final allEmployees =
-        ref.watch(employeesStreamProvider).asData?.value ?? const [];
-    // One length feeds both the flag and the label, so they can't disagree:
-    // the run-length string is a plain interpolation, and a multi-day flag
-    // paired with a length of 1 would render "1 days".
+    // Crew only; dispatchers are not assignable.
+    final roster = ref.watch(assignableEmployeesProvider);
+    // An assignee is REQUIRED to save, so "still loading" and "the read failed"
+    // must not both render as "this business has no staff".
+    final allEmployees = roster.asData?.value ?? const [];
+    // One span length feeds both the flag and label.
     final spanLength = _spanLength(state);
+    final bookingContext = watchClientBookingContext(
+      ref,
+      client: state.selectedClient,
+    );
 
     return FeatureTourHost(
       scope: _tour.scope,
@@ -275,40 +322,69 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
         headerTourWrap: (child) => _tour.stepIf(TourStepId.apptSave, child),
         scrollCacheExtent: kTourScrollCacheExtent,
         children: [
+          // First, so the person is told BEFORE filling the form in — the
+          // submit controller already fails fast, and the app's global offline
+          // banner is drawn under the page, behind this sheet.
+          const OfflineFormNotice(),
           AppointmentFormFields(
             controllers: _controllers,
             tourWrap: _tour.stepIf,
             allEmployees: allEmployees,
+            rosterStatus: rosterStatusOf(roster),
+            onRetryRoster: () => ref.invalidate(assignableEmployeesProvider),
+            // Nothing is stored yet, so the live selection is the whole of
+            // "already on this job".
+            assigneeAvailability: watchAssigneeAvailability(
+              ref,
+              date: state.selectedDate,
+              endDate: state.endDate,
+              isAllDay: state.isAllDay,
+              isPersonal: state.isPersonal,
+              startTime: state.selectedStartTime,
+              endTime: state.selectedEndTime,
+              alreadyAssignedIds: const {},
+            ),
             selectedClient: state.selectedClient,
             clientResults: state.clientResults,
             isSearchingClient: state.isSearchingClient,
+            clientSearchStatus: state.clientSearchStatus,
+            previousAddresses: bookingContext.previousAddresses,
+            lastVisitLabel: bookingContext.lastVisitLabel,
             selectedEmployees: state.selectedEmployees,
             repeat: state.repeat,
             useCustomAddress: state.useCustomAddress,
+            selectedDate: state.selectedDate,
+            endDate: state.endDate,
             isPersonal: state.isPersonal,
+            isDayOff: state.isDayOff,
             onPersonalChanged: (value) => _notifier.setPersonal(value: value),
             isAllDay: state.isAllDay,
-            onAllDayChanged: (value) => _notifier.setAllDay(value: value),
             errors: state.errors,
             employeeLabel: context.l10n.calendar_assignEmployee,
             employeeRequired: true,
             materialsHint: context.l10n.calendar_typeTheMaterialsHere,
             onApplyTemplate: _applyTemplate,
-            onSearchClients: _onClientSearchChanged,
-            onSelectClient: _notifier.selectClient,
-            onClearClient: _notifier.clearClient,
             onRequestAddClient: requestAddClient,
-            onToggleEmployee: _notifier.toggleEmployee,
-            onPickDate: _pickDate,
-            onPickEndDate: _pickEndDate,
             isMultiDay: spanLength > 1,
             isOvernight: _isOvernight(state),
             spanLength: spanLength,
-            onPickStartTime: _pickStartTime,
-            onPickEndTime: _pickEndTime,
-            onSelectRepeat: _notifier.selectRepeat,
-            onUseCustomAddress: (value) =>
-                _notifier.setUseCustomAddress(value: value),
+            callbacks: AppointmentFormCallbacks(
+              onSearchClients: _onClientSearchChanged,
+              onClientQueryModeChanged: _onClientQueryModeChanged,
+              onRetryClientSearch: _onRetryClientSearch,
+              onSelectClient: _notifier.selectClient,
+              onClearClient: _notifier.clearClient,
+              onToggleEmployee: _notifier.toggleEmployee,
+              onSelectStartDate: _onStartDateSelected,
+              onSelectEndDate: _onEndDateSelected,
+              onPickStartTime: _pickStartTime,
+              onPickEndTime: _pickEndTime,
+              onSelectRepeat: _notifier.selectRepeat,
+              onUseCustomAddress: (value) =>
+                  _notifier.setUseCustomAddress(value: value),
+              onDayOffChanged: (value) => _notifier.setDayOff(value: value),
+              onAllDayChanged: (value) => _notifier.setAllDay(value: value),
+            ),
             photosSection: PhotoPickerSection(
               existingImages: const [],
               newImages: state.selectedImages,

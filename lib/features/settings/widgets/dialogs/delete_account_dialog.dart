@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/adaptive/adaptive.dart';
+import 'package:scheduling/core/security/credential_input.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -41,6 +42,12 @@ class DeleteAccountReauthDialog extends StatefulWidget {
 class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
   final _controller = TextEditingController();
   bool _obscure = true;
+  bool get _hasPassword => _controller.text.trim().isNotEmpty;
+
+  void _submit() {
+    if (!_hasPassword) return;
+    Navigator.of(context).pop(_controller.text);
+  }
 
   @override
   void dispose() {
@@ -67,13 +74,11 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
           CupertinoTextField(
             controller: _controller,
             obscureText: _obscure,
-            // The eye toggle can clear obscureText, and only obscureText
-            // implies this — so a revealed password would otherwise be fair
-            // game for a third-party keyboard to retain.
-            enableIMEPersonalizedLearning: false,
+            enableIMEPersonalizedLearning: kCredentialImePersonalizedLearning,
             autofocus: true,
             placeholder: context.l10n.common_password,
-            onSubmitted: (value) => Navigator.of(context).pop(value),
+            onChanged: (_) => setState(() {}),
+            onSubmitted: (_) => _submit(),
             suffix: Semantics(
               button: true,
               label: _obscure
@@ -104,7 +109,7 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
         ),
         CupertinoDialogAction(
           isDestructiveAction: true,
-          onPressed: () => Navigator.of(context).pop(_controller.text),
+          onPressed: _hasPassword ? _submit : null,
           child: Text(context.l10n.settings_deletePermanently),
         ),
       ],
@@ -124,8 +129,9 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
           TextField(
             controller: _controller,
             obscureText: _obscure,
-            enableIMEPersonalizedLearning: false,
+            enableIMEPersonalizedLearning: kCredentialImePersonalizedLearning,
             autofocus: true,
+            onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               labelText: context.l10n.common_password,
               border: const OutlineInputBorder(),
@@ -141,7 +147,7 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
                 onPressed: () => setState(() => _obscure = !_obscure),
               ),
             ),
-            onSubmitted: (value) => Navigator.of(context).pop(value),
+            onSubmitted: (_) => _submit(),
           ),
         ],
       ),
@@ -158,7 +164,7 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
             backgroundColor: theme.palette.dangerFill,
             foregroundColor: theme.palette.onDangerFill,
           ),
-          onPressed: () => Navigator.of(context).pop(_controller.text),
+          onPressed: _hasPassword ? _submit : null,
           child: Text(context.l10n.settings_deletePermanently),
         ),
       ],

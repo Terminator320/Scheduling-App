@@ -1,9 +1,11 @@
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
+import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/month_grid.dart';
+import 'package:scheduling/features/dashboard/domain/dashboard_period.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 /// Pure reducer functions over the dashboard's appointment range, keyed on
 /// `now` so tests can control the clock.
@@ -31,7 +33,7 @@ class DashboardAggregator {
   ///
   /// **This is the half that gets a live listener.** The other seven weeks are
   /// closed history — [historyRangeAround] reads them once. Splitting drops the
-  /// live document set by roughly 85% and takes the 1000-doc stream cap off the
+  /// live document set by roughly 85% and takes the 3000-doc stream cap off the
   /// trend charts, which above ~14 jobs/day were being computed over a prefix
   /// of the window with nothing on screen saying so.
   static AppointmentDateRange liveRangeAround(DateTime now) {
@@ -107,19 +109,25 @@ class DashboardAggregator {
     final dayStart = now.dateOnly;
     final counts = <String, int>{};
     var unassigned = 0;
-    final upcoming = <AppointmentRecord>[];
+    final upcoming = <AppointmentDaySlice>[];
     for (final a in appointments) {
       // Re-scoped through the slice owner: the range stream is a superset,
       // and testing `startTime` alone hid days 2+ of a multi-day run.
-      if (!runsOn(a, dayStart)) continue;
+      final slice = sliceFor(a, dayStart);
+      if (slice == null) continue;
       final display = statusCountKey(
         AppointmentStatus.fromRaw(displayStatusAt(a, now)),
       );
       counts[display] = (counts[display] ?? 0) + 1;
       if (a.employeeIds.isEmpty && !_isCancelled(a)) unassigned++;
-      if (a.startTime.isAfter(now) && !_isTerminal(a)) upcoming.add(a);
+      // THIS day's window, not the run's first morning — day 3 of a 14:00
+      // job is still ahead of a 09:00 reader, and sorting on the stored
+      // instant would float it above jobs that genuinely start earlier today.
+      if (slice.windowStart.isAfter(now) && !_isTerminal(a)) {
+        upcoming.add(slice);
+      }
     }
-    upcoming.sort((x, y) => x.startTime.compareTo(y.startTime));
+    upcoming.sort((x, y) => x.windowStart.compareTo(y.windowStart));
     return TodayOps(
       statusCounts: counts,
       unassignedCount: unassigned,
@@ -129,8 +137,8 @@ class DashboardAggregator {
 
   /// Counts jobs per employee for today and for this ISO week. Cancelled
   /// visits are excluded, and a multi-assignee visit counts once for each
-  /// assignee. [employees] should be the active-only list from
-  /// `employeesStreamProvider`.
+  /// assignee. [employees] should be the active, crew-only list from
+  /// `assignableEmployeesProvider`.
   static List<EmployeeWorkload> computeWorkload(
     List<AppointmentRecord> appointments,
     List<EmployeeRecord> employees,
@@ -208,6 +216,108 @@ class DashboardAggregator {
     ];
   }
 
+  /// Jobs booked on each day of the current ISO week, against the roster's
+  /// capacity for that day.
+  ///
+  /// **Monday–Sunday of this week, not the next 7 days**, and that is a data
+  /// constraint rather than a preference: `liveRangeAround` runs from this
+  /// week's Monday to next Monday, so a rolling 7-day window would run off the
+  /// end of the fetched range on most weekdays and paint the missing days as
+  /// zero — the same silent under-count a whole-month period would have had.
+  ///
+  /// Counted through [runsOn], so a multi-day run is booked on every day it
+  /// works. Cancelled visits are excluded from both sides.
+  static List<DayLoad> computeDailyLoad(
+    List<AppointmentRecord> appointments,
+    List<EmployeeRecord> employees,
+    DateTime now,
+  ) {
+    final monday = mondayOf(now);
+    // ONE bucketing pass through the day-scoping owner, not seven scans. This
+    // asked `runsOn` per (job, day), and `runsOn` builds an `AppointmentDaySlice`
+    // only to discard it as a bool — so a week's worth of probes allocated ~7×
+    // the list length and threw ~6/7 of it away, on every live snapshot AND
+    // every employees-stream emission. `expandToDays` does the same clamped
+    // day-scoping in one pass and keys by the same normalized day.
+    final byDay = expandToDays(
+      [
+        for (final a in appointments)
+          if (!_isCancelled(a)) a,
+      ],
+      AppointmentDateRange(
+        start: monday,
+        end: addCalendarDays(monday, DateTime.daysPerWeek),
+      ),
+    );
+    return [
+      for (var i = 0; i < DateTime.daysPerWeek; i++)
+        _dayLoadOn(addCalendarDays(monday, i), byDay, employees),
+    ];
+  }
+
+  static DayLoad _dayLoadOn(
+    DateTime day,
+    Map<DateTime, List<AppointmentDaySlice>> slicesByDay,
+    List<EmployeeRecord> employees,
+  ) {
+    final count = slicesByDay[day]?.length ?? 0;
+    final weekdayIndex = sundayIndexOf(day);
+    var capacity = 0;
+    for (final e in employees) {
+      if (weekdayIndex < e.workingDays.length && e.workingDays[weekdayIndex]) {
+        capacity += e.maxJobsPerDay;
+      }
+    }
+    return DayLoad(day: day, count: count, capacity: capacity);
+  }
+
+  /// The summary numbers for the selected period.
+  ///
+  /// Takes a resolved [DashboardWindow], never a `DashboardPeriod` — the
+  /// window rule has one owner (`DashboardPeriod.windowFor`) and switching on
+  /// the period in here would be a second.
+  ///
+  /// Scoped through [runsInRange], not `startTime`: the merged list reaches
+  /// back to each query's `fetchStart`, so a raw instant test would read a
+  /// fortnight of past work as in-window, and would drop a run that began
+  /// before the period but is still being worked inside it.
+  ///
+  /// **"Completed in this period" means a job that RUNS in the period and is
+  /// stored `done`** — there is no completion timestamp on the record, so this
+  /// is the honest available reading, not an approximation of one.
+  static PeriodSummary computePeriodSummary({
+    required List<AppointmentRecord> appointments,
+    required List<DateTime> clientCreatedDates,
+    required DashboardWindow window,
+  }) {
+    var booked = 0;
+    var completed = 0;
+    var cancelled = 0;
+    for (final a in appointments) {
+      if (!runsInRange(a, window.start, window.end)) continue;
+      final status = AppointmentStatus.fromRaw(a.status);
+      if (status.isCancelled) {
+        cancelled++;
+        continue;
+      }
+      // Cancelled work was never booked business — it is counted on its own.
+      booked++;
+      if (status.isDone) completed++;
+    }
+    var newClients = 0;
+    for (final date in clientCreatedDates) {
+      if (!date.isBefore(window.start) && date.isBefore(window.end)) {
+        newClients++;
+      }
+    }
+    return PeriodSummary(
+      booked: booked,
+      completed: completed,
+      cancelled: cancelled,
+      newClients: newClients,
+    );
+  }
+
   /// Finds the busiest weekday over the window, excluding cancelled visits.
   /// Ties go to the earliest weekday, and this returns null when nothing
   /// counts.
@@ -275,16 +385,17 @@ class DashboardAggregator {
   }) => DashboardStats(
     todayOps: computeTodayOps(appointments, now),
     workload: computeWorkload(appointments, employees, now),
+    dailyLoad: computeDailyLoad(appointments, employees, now),
     weekBuckets: computeWeekBuckets(appointments, clientCreatedDates, now),
     busiestWeekday: computeBusiestWeekday(appointments, now),
     flags: computeAttentionFlags(appointments, now),
   );
 
   static bool _isCancelled(AppointmentRecord a) =>
-      AppointmentStatus.fromRaw(a.status).isCancelled;
+      isCancelledStatusRaw(a.status);
 
   static bool _isTerminal(AppointmentRecord a) =>
-      AppointmentStatus.fromRaw(a.status).isTerminal;
+      isTerminalStatusRaw(a.status);
 
   static DateTime _weekAfter(DateTime weekStart) =>
       DateTime(weekStart.year, weekStart.month, weekStart.day + 7);

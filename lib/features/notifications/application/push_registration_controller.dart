@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/app/device_deregistration.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notifications/push_notification_service.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
@@ -66,53 +67,72 @@ class PushRegistrationController with ReentrantSync {
 
   AppLogger get _logger => _ref.read(loggerProvider);
 
-  static String _currentLocale() =>
-      AppLanguageController.instance.value == 'fr' ? 'fr' : 'en';
+  static String _currentLocale() => currentServerLocale;
 
   /// Idempotent and safe to call on every account-doc emission or language
   /// change. Concurrent calls coalesce, so whichever finishes last wins.
   Future<void> sync() => runCoalesced(_syncGuarded);
 
   Future<void> _syncGuarded() async {
-    final signedIn = _auth.currentUser != null;
-    final doc = _ref.read(currentUserDocProvider).value ?? const {};
-    final role = (doc['role'] ?? '').toString().trim();
-    final status = (doc['status'] ?? '').toString().trim();
-    if (!shouldRegisterPush(role: role, status: status, signedIn: signedIn)) {
-      await _refreshSub?.cancel();
-      _refreshSub = null;
-      return;
-    }
-
-    final uid = _auth.currentUser?.uid;
-    final locale = _currentLocale();
-    // Fast path — already registered for this uid+locale with a live refresh
-    // subscription, so skip the query and upsert.
-    if (uid != null &&
-        uid == _registeredUid &&
-        locale == _registeredLocale &&
-        _refreshSub != null) {
-      return;
-    }
-
+    // Teardown runs BEFORE signOut(), so a body resuming mid-teardown still
+    // holds a valid credential. Worse here than elsewhere: if it lands after
+    // `deleteToken()`, FCM mints a FRESH token and this upserts it, leaving a
+    // signed-out device registered and still receiving that account's pushes —
+    // and the write succeeds, so nothing logs an error.
+    final generation = syncGeneration;
+    // The guard opens HERE, not after the gate: `readAccountGateInputs` reads
+    // a provider and `_refreshSub.cancel()` is awaited, so both can throw —
+    // and `sync()` is called unawaited from four sites, which is exactly what
+    // the catch below exists to contain. `PresenceSyncController._syncGuarded`
+    // already puts the identical gate read inside its try.
     try {
+      final gate = readAccountGateInputs(_ref, _auth);
+      // Null is "we don't know yet" — leave the registration as it is.
+      if (gate == null) return;
+      if (!shouldRegisterPush(
+        role: gate.role,
+        status: gate.status,
+        signedIn: gate.signedIn,
+      )) {
+        await _refreshSub?.cancel();
+        _refreshSub = null;
+        return;
+      }
+
+      final uid = _auth.currentUser?.uid;
+      final locale = _currentLocale();
+      // Fast path — already registered for this uid+locale with a live
+      // refresh subscription, so skip the query and upsert.
+      if (uid != null &&
+          uid == _registeredUid &&
+          locale == _registeredLocale &&
+          _refreshSub != null) {
+        return;
+      }
+
       await _ref.read(firebaseReadyProvider.future).catchError((Object _) {});
+      if (isSyncStale(generation)) return;
       final service = _ref.read(pushNotificationServiceProvider);
-      final granted = await service.requestPermission();
-      if (!granted) return;
+      final status = await service.authorizationStatus();
+      if (!PushNotificationService.isGranted(status) ||
+          isSyncStale(generation)) {
+        return;
+      }
       await service.configureForegroundPresentation();
+      if (isSyncStale(generation)) return;
 
       if (uid == null) return;
       final match = await _ref
           .read(employeesRepositoryProvider)
           .findUserByUid(uid);
+      if (isSyncStale(generation)) return;
       final docId = match?.id;
       if (docId == null) {
         _logger.warn('PUSH no users doc for uid; skip token upsert');
         return;
       }
       final token = await service.currentToken();
-      if (token == null) return;
+      if (token == null || isSyncStale(generation)) return;
 
       await _upsert(docId, token, uid, locale);
       _registeredDocId = docId;
@@ -126,6 +146,15 @@ class PushRegistrationController with ReentrantSync {
       _logger.warn('PUSH sync failed', e, st);
     }
   }
+
+  /// This device's `users` doc id, for a teardown that never completed a
+  /// registration. Null when signed out or when the lookup fails.
+  Future<String?> _resolveUserDocId() => resolveUserDocId(
+    ref: _ref,
+    auth: _auth,
+    logger: _logger,
+    tag: 'PUSH',
+  );
 
   Future<void> _upsert(String docId, String token, String uid, String locale) {
     return _ref
@@ -157,15 +186,24 @@ class PushRegistrationController with ReentrantSync {
   /// Best-effort de-registration for sign-out — deletes the token doc and
   /// invalidates the FCM token; never throws, so sign-out is never blocked.
   Future<void> unregisterCurrentDevice() async {
+    invalidateSync();
     try {
-      final docId = _registeredDocId;
-      final token = _registeredToken;
+      final service = _ref.read(pushNotificationServiceProvider);
+      // Resolve BOTH from the device when this session never completed a
+      // registration — the two fields are set only on a fully-successful sync,
+      // so an incomplete session left a stale `fcmTokens` row that the server
+      // keeps trying to push to (`syncUsersByUid` purges these on DISABLE, not
+      // on sign-out), one per device per incomplete session. The token is what
+      // identifies THIS device, so it has to come from FCM rather than from a
+      // kind/platform sweep, which would de-register the user's other phones.
+      final token = _registeredToken ?? await service.currentToken();
+      final docId = _registeredDocId ?? await _resolveUserDocId();
       if (docId != null && token != null) {
         await _ref
             .read(fcmTokenRepositoryProvider)
             .deleteToken(userDocId: docId, token: token);
       }
-      await _ref.read(pushNotificationServiceProvider).deleteToken();
+      await service.deleteToken();
     } catch (e, st) {
       _logger.warn('PUSH unregister failed', e, st);
     } finally {

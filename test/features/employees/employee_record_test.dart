@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
@@ -57,7 +58,6 @@ void main() {
       const original = EmployeeRecord(
         id: 'e1',
         name: 'Jane Doe',
-        email: 'jane@example.com',
         phone: '+1-514-555-0101',
         color: Color(0xFFEC4899),
         role: 'admin',
@@ -85,6 +85,19 @@ void main() {
       expect(map.containsKey('status'), isFalse);
     });
 
+    test('toMap does not emit email — it is a sign-in identity', () {
+      const record = EmployeeRecord(
+        id: 'e1',
+        name: 'Jane Doe',
+        email: 'jane@example.com',
+      );
+
+      // The address moves through `changeEmployeeEmail`, which owns Auth and
+      // Firestore together. A whole-record write carrying it would rewrite the
+      // doc while Auth kept the old address.
+      expect(record.toMap().containsKey('email'), isFalse);
+    });
+
     test('fromMap defaults missing fields to sensible empties', () {
       final r = EmployeeRecord.fromMap('e1', const {});
       expect(r.id, 'e1');
@@ -92,8 +105,9 @@ void main() {
       expect(r.role, 'employee');
       expect(r.status, '');
       expect(r.uid, '');
-      // Default color is blue when colorValue is missing/unparseable.
-      expect(r.color, isNotNull);
+      // A missing/unparseable colorValue must land on a crewPalette member —
+      // an off-palette hue misses the dark-theme override map entirely.
+      expect(AppColors.crewPalette, contains(r.color));
     });
 
     test('fromMap parses colorValue as decimal int string', () {
@@ -136,6 +150,66 @@ void main() {
       expect(record.workEndMinutes, kDefaultWorkEndMinutes);
       expect(record.maxJobsPerDay, 0);
       expect(record.onCall, isFalse);
+    });
+
+    test('an absent travelAlertsEnabled reads as ON', () {
+      // Every doc written before the field existed has no value. Reading it as
+      // off would silence departure alerts fleet-wide, and the symptom is a
+      // push that does not arrive — which nobody reports. Mirrors
+      // `wantsTravelAlerts` in functions/travel_utils.js.
+      final record = EmployeeRecord.fromMap('e1', {'name': 'Old User'});
+
+      expect(record.travelAlertsEnabled, isTrue);
+    });
+
+    test('only an explicit false opts out of travel alerts', () {
+      expect(
+        EmployeeRecord.fromMap('e1', {
+          'travelAlertsEnabled': false,
+        }).travelAlertsEnabled,
+        isFalse,
+      );
+      expect(
+        EmployeeRecord.fromMap('e1', {
+          'travelAlertsEnabled': true,
+        }).travelAlertsEnabled,
+        isTrue,
+      );
+      // A doc written by the console bypasses the rules' type check.
+      expect(
+        EmployeeRecord.fromMap('e1', {
+          'travelAlertsEnabled': 'false',
+        }).travelAlertsEnabled,
+        isTrue,
+      );
+    });
+
+    test('location sharing is off until explicitly enabled', () {
+      expect(
+        EmployeeRecord.fromMap('e1', const {}).locationSharingEnabled,
+        isFalse,
+      );
+      expect(
+        EmployeeRecord.fromMap('e1', {
+          'locationSharingEnabled': true,
+        }).locationSharingEnabled,
+        isTrue,
+      );
+      expect(
+        EmployeeRecord.fromMap('e1', {
+          'locationSharingEnabled': 'true',
+        }).locationSharingEnabled,
+        isFalse,
+      );
+    });
+
+    test('toMap never emits travelAlertsEnabled', () {
+      // It is the person's own notification preference, written only by
+      // updateSelfDetails — an admin save must leave it exactly as it was.
+      const record = EmployeeRecord(id: 'e1', travelAlertsEnabled: false);
+
+      expect(record.toMap().containsKey('travelAlertsEnabled'), isFalse);
+      expect(record.toMap().containsKey('locationSharingEnabled'), isFalse);
     });
 
     test('an unknown stored jobTitle falls back to unset', () {

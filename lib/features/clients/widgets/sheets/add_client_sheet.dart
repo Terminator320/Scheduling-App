@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:scheduling/core/analytics/analytics_providers.dart';
+import 'package:scheduling/core/analytics/analytics_screens.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -11,8 +12,10 @@ import 'package:scheduling/features/clients/application/client_form_controller.d
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/policies/client_form_validator.dart';
+import 'package:scheduling/features/clients/domain/policies/client_name_policy.dart';
 import 'package:scheduling/features/clients/widgets/client_form_state.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_address_section.dart';
+import 'package:scheduling/features/clients/widgets/fields/client_name_phone_lift.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_type_chips.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
@@ -20,6 +23,7 @@ import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/feedback/offline_form_notice.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/primitives/mono_section_label.dart';
 import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
@@ -33,10 +37,13 @@ enum AddClientNext { none, bookJob }
 /// action.
 typedef AddClientResult = ({ClientRecord client, AddClientNext next});
 
-/// Opens the add-client sheet. Resolves to the created client and the follow-up
-/// action, or null if the sheet was dismissed.
+/// Opens the add-client sheet.
+/// [analyticsSource] is required: this sheet serves the Clients tab and the
+/// booking form's inline add, and telling those apart is what says whether
+/// clients are created deliberately or mid-booking.
 Future<AddClientResult?> showAddClientSheet(
   BuildContext context, {
+  required String analyticsSource,
   String? initialName,
   bool settleFocus = false,
 }) async {
@@ -46,19 +53,28 @@ Future<AddClientResult?> showAddClientSheet(
   }
   final created = await showAppBottomSheet<AddClientResult>(
     context,
-    builder: (_) => AddClientSheet(initialName: initialName),
+    builder: (_) => AddClientSheet(
+      initialName: initialName,
+      analyticsSource: analyticsSource,
+    ),
   );
   if (settleFocus && context.mounted) await SheetFocus.unfocusAfterSheet();
-  // Guard against the widget unmounting while the sheet is open — we shouldn't hand
-  // the client back to a form that's already been disposed.
+  // Guard against the widget unmounting while the sheet is open — we shouldn't
+  // hand the client back to a form that's already been disposed.
   return context.mounted ? created : null;
 }
 
 class AddClientSheet extends ConsumerStatefulWidget {
-  const AddClientSheet({super.key, this.initialName});
+  const AddClientSheet({
+    required this.analyticsSource,
+    super.key,
+    this.initialName,
+  });
 
-  /// Prefills the name field (e.g. the text typed into the appointment client
-  /// search before choosing to add a new client).
+  /// Which surface opened this sheet (see `AnalyticsSources`).
+  final String analyticsSource;
+
+  /// Prefills the name field (e.g.
   final String? initialName;
 
   @override
@@ -66,8 +82,7 @@ class AddClientSheet extends ConsumerStatefulWidget {
 }
 
 // ClientFormState supplies `noFixedAddress`, `setNoFixedAddress`, `errors` and
-// `clearError`. Additional contacts are deliberately NOT offered here — New
-// stays one fast screen and extra contacts are added on the next edit.
+// `clearError`.
 class _AddClientSheetState extends ConsumerState<AddClientSheet>
     with ClientFormState<AddClientSheet> {
   final _nameController = TextEditingController();
@@ -85,14 +100,19 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
 
   ClientType _type = ClientType.unset;
 
-  // Admin-only surface: reached from the Clients FAB and the appointment
-  // form's inline add-client, both admin-gated.
+  // Admin-only surface: reached from the Clients FAB and the appointment form's
+  // inline add-client, both admin-gated.
   final _tour = TourSteps(const FormTour(TourForm.addClient), isAdmin: true);
 
   @override
   void initState() {
     super.initState();
     _nameController.text = widget.initialName ?? '';
+    // The seed is a programmatic write, which never fires the name field's
+    // `onChanged` — so the lift below has to be run by hand here.
+    liftPhoneFromNameField(name: _nameController, phone: _phoneController);
+    // A sheet route has no name, so the observer skips it.
+    ref.read(analyticsServiceProvider).logScreenView(AnalyticsScreens.addClient);
   }
 
   @override
@@ -113,6 +133,11 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
     ]) {
       controller.dispose();
     }
+    // A no-op today — this sheet deliberately offers no additional contacts
+    // (see the note above the class) — but the mixin owns those controllers, so
+    // the day someone adds the field for parity there is no compile-time signal
+    // that this line is missing.
+    disposeAdditionalContacts();
     super.dispose();
   }
 
@@ -121,28 +146,38 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
     apt: _aptController.text,
   );
 
-  ClientRecord _draft() => ClientRecord(
-    id: '',
-    name: _nameController.text.trim(),
-    firstName: _firstNameController.text.trim(),
-    lastName: _lastNameController.text.trim(),
-    phone: _phoneController.text.trim(),
-    email: _emailController.text.trim(),
-    address: noFixedAddress ? '' : _buildFullAddress(),
-    apt: noFixedAddress ? '' : _aptController.text.trim(),
-    city: noFixedAddress ? '' : _cityController.text.trim(),
-    province: noFixedAddress ? '' : _provinceController.text.trim(),
-    postalCode: noFixedAddress ? '' : _postalCodeController.text.trim(),
-    country: noFixedAddress ? '' : _countryController.text.trim(),
-    noFixedAddress: noFixedAddress,
-    accessNotes: _accessNotesController.text.trim(),
-    type: _type,
-  );
+  ClientRecord _draft() {
+    // The STORED name is the Wave CUSTOMER name: the phone number for a person,
+    // the typed name for a business.
+    final composed = ClientNamePolicy.composeSave(
+      baseName: _nameController.text,
+      phone: _phoneController.text,
+      firstName: _firstNameController.text,
+      lastName: _lastNameController.text,
+      type: _type,
+    );
+    return ClientRecord(
+      id: '',
+      name: composed.name,
+      firstName: composed.firstName,
+      lastName: composed.lastName,
+      phone: _phoneController.text.trim(),
+      email: _emailController.text.trim(),
+      address: noFixedAddress ? '' : _buildFullAddress(),
+      apt: noFixedAddress ? '' : _aptController.text.trim(),
+      city: noFixedAddress ? '' : _cityController.text.trim(),
+      province: noFixedAddress ? '' : _provinceController.text.trim(),
+      postalCode: noFixedAddress ? '' : _postalCodeController.text.trim(),
+      country: noFixedAddress ? '' : _countryController.text.trim(),
+      noFixedAddress: noFixedAddress,
+      accessNotes: _accessNotesController.text.trim(),
+      type: _type,
+    );
+  }
 
   Future<void> _save({required AddClientNext next}) async {
     // The EXISTING validator, not a fast-capture variant: address is required
     // unless noFixedAddress is on, which is what makes that toggle meaningful.
-    // Fields this sheet doesn't render are passed empty and validate clean.
     final nextErrors = ClientFormValidator.validate(
       l10n: context.l10n,
       name: _nameController.text.trim(),
@@ -172,6 +207,9 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
       case ClientSaveBusy():
         break;
       case ClientSaved(:final client):
+        ref
+            .read(analyticsServiceProvider)
+            .logClientCreated(source: widget.analyticsSource);
         ref
             .read(noticeServiceProvider)
             .success(context.l10n.common_clientAdded);
@@ -209,6 +247,10 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
         headerTourWrap: (child) => _tour.stepIf(TourStepId.clientSave, child),
         scrollCacheExtent: kTourScrollCacheExtent,
         children: [
+          // First, so the person is told BEFORE filling the form in — the
+          // submit controller already fails fast, and the app's global offline
+          // banner is drawn under the page, behind this sheet.
+          const OfflineFormNotice(),
           ..._whoSection(theme, l10n),
           ..._reachThemSection(theme, l10n),
           ..._siteSection(theme, l10n, isSaving: isSaving),
@@ -217,10 +259,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
     );
   }
 
-  /// Label + tour-wrapped body. The body is one Column so the walkthrough has
-  /// a single target per section — each step describes the whole section, and
-  /// highlighting only its first field would misdescribe it. Stretch-aligned
-  /// like its parent, so the layout is unchanged.
+  /// Label + tour-wrapped body.
   List<Widget> _section(TourStepId id, String label, List<Widget> body) => [
     MonoSectionLabel(label),
     const SizedBox(height: AppSpacing.sp8),
@@ -247,12 +286,21 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
           // LabeledTextField has no `onCleared` — its built-in ClearTextButton
           // routes through onChanged(''), so clearing the error here covers
           // both typing and the clear "x".
-          onChanged: (_) => clearError('name'),
+          onChanged: (_) {
+            clearError('name');
+            // Pulls a phone number out of what was just typed or pasted — quiet
+            // unless the phone field is still empty.
+            if (liftPhoneFromNameField(
+              name: _nameController,
+              phone: _phoneController,
+            )) {
+              setState(() => clearError('phone'));
+            }
+          },
         ),
       ),
       const SizedBox(height: AppSpacing.sp16),
-      // Owner change 6: always rendered, both optional. The type chips never
-      // swap these in or out.
+      // Owner change 6: always rendered, both optional.
       SheetFocusScroll(
         child: LabeledTextField(
           label: l10n.clients_firstName,
@@ -296,6 +344,8 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
             inputFormatters: const [PhoneInputFormatter()],
             textInputAction: TextInputAction.next,
             maxLength: TextLimits.phone,
+            errorText: errors['phone'],
+            onChanged: (_) => clearError('phone'),
           ),
         ),
         const SizedBox(height: AppSpacing.sp16),

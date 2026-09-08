@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
+import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/screens/day_route_screen.dart';
@@ -50,12 +51,19 @@ AppointmentRecord _job({
 
 Widget _wrap({
   required List<AppointmentRecord> jobs,
+  List<AppointmentRecord>? businessWide,
   List<EmployeeRecord> employees = const [_jane],
   double textScale = 1,
 }) {
   return ProviderScope(
     overrides: [
       myAppointmentsProvider.overrideWith((_, _) => Stream.value(jobs)),
+      // Left unoverridden by default; a case that passes its own list is what
+      // tells the two streams apart.
+      if (businessWide != null)
+        appointmentsInRangeProvider.overrideWith(
+          (_, _) => Stream.value(businessWide),
+        ),
       employeeColorMapProvider.overrideWithValue({
         for (final e in employees) e.id: e.color,
       }),
@@ -90,6 +98,13 @@ Widget _adminScreen({
   double textScale = 1,
 }) => ProviderScope(
   overrides: [
+    currentUserDocProvider.overrideWith(
+      (_) => Stream.value(const {'role': 'admin', 'status': 'active'}),
+    ),
+    // Covers the one-frame window before the role doc above settles, when
+    // isActiveAdminProvider still reads closed and the screen would
+    // otherwise build the real (unmocked) employee-scoped stream.
+    myAppointmentsProvider.overrideWith((_, _) => Stream.value(dayJobs)),
     appointmentsInRangeProvider.overrideWith((_, _) => Stream.value(dayJobs)),
     employeeNameMapProvider.overrideWithValue(names),
     employeeColorMapProvider.overrideWithValue({
@@ -156,6 +171,26 @@ void main() {
     expect(y1, lessThan(y2));
     expect(y2, lessThan(y3));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an employee day route reads the employee-scoped stream', (
+    tester,
+  ) async {
+    // Employees see only appointments whose `employeeIds` hold their doc id,
+    // and the role ternary is the client half of that invariant — so the two
+    // streams carry DIFFERENT lists here.
+    await _pump(
+      tester,
+      _wrap(
+        jobs: [_job(id: 1, hour: 9, status: 'pending', address: '1 A St')],
+        businessWide: [
+          _job(id: 2, hour: 11, status: 'pending', address: '2 B St'),
+        ],
+      ),
+    );
+
+    expect(find.text('Appt 1'), findsOneWidget);
+    expect(find.text('Appt 2'), findsNothing);
   });
 
   testWidgets('a job from a previous day is not a stop today', (tester) async {
@@ -375,5 +410,77 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
+  });
+
+  Widget wrapWithRole({
+    required List<AppointmentRecord> jobs,
+    required Map<String, dynamic> userDoc,
+  }) => ProviderScope(
+    overrides: [
+      currentUserDocProvider.overrideWith((_) => Stream.value(userDoc)),
+      myAppointmentsProvider.overrideWith((_, _) => Stream.value(jobs)),
+      appointmentsInRangeProvider.overrideWith((_, _) => Stream.value(jobs)),
+      employeeColorMapProvider.overrideWithValue({_jane.id: _jane.color}),
+      employeeNameMapProvider.overrideWithValue({
+        'e1': 'Jane Doe',
+        'e2': 'Bob',
+      }),
+    ],
+    child: ThemeNotifier(
+      themeMode: ThemeMode.light,
+      toggleTheme: () {},
+      textScale: 1,
+      setTextScale: (_) {},
+      setLanguage: (_) {},
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: lightTheme(),
+        // The forged argument: this caller claims admin.
+        home: const DayRouteScreen(isAdmin: true, employeeId: 'e1'),
+      ),
+    ),
+  );
+
+  testWidgets('a non-admin gets NO crew picker even with isAdmin: true', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      wrapWithRole(
+        jobs: [
+          _job(
+            id: 1,
+            hour: 9,
+            status: 'pending',
+            employeeIds: const ['e1', 'e2'],
+            employeeNames: const ['Jane Doe', 'Bob'],
+          ),
+        ],
+        userDoc: const {'role': 'employee', 'status': 'active'},
+      ),
+    );
+    await tester.pumpAndSettle();
+    // The picker's own label. Two assignees means the admin build WOULD
+    // render it, so its absence is the gate and not an empty-data accident.
+    expect(find.text('Jane Doe'), findsNothing);
+  });
+
+  testWidgets('a real admin still gets the crew picker', (tester) async {
+    await tester.pumpWidget(
+      wrapWithRole(
+        jobs: [
+          _job(
+            id: 1,
+            hour: 9,
+            status: 'pending',
+            employeeIds: const ['e1', 'e2'],
+            employeeNames: const ['Jane Doe', 'Bob'],
+          ),
+        ],
+        userDoc: const {'role': 'admin', 'status': 'active'},
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Jane Doe'), findsWidgets);
   });
 }

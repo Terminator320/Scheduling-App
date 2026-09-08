@@ -8,8 +8,10 @@ import 'package:mocktail/mocktail.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
+import 'package:scheduling/features/employees/application/employee_schedule_providers.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 import 'package:scheduling/features/employees/screens/employees_screen.dart';
@@ -113,6 +115,10 @@ void _useWideViewport(WidgetTester tester) {
 }
 
 void main() {
+  setUpAll(
+    () => registerFallbackValue(const EmployeeRecord(id: 'fallback')),
+  );
+
   testWidgets('renders employee cards from the stream', (tester) async {
     await tester.pumpWidget(
       _wrap(employees: () => Stream.value(const [_jane, _bob])),
@@ -140,6 +146,21 @@ void main() {
 
     expect(find.textContaining('rror'), findsWidgets);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('invite FAB stays disabled until the roster stream settles', (
+    tester,
+  ) async {
+    final controller = StreamController<List<EmployeeRecord>>();
+    addTearDown(controller.close);
+
+    await tester.pumpWidget(_wrap(employees: () => controller.stream));
+    await tester.pump();
+
+    final fab = tester.widget<FloatingActionButton>(
+      find.byType(FloatingActionButton),
+    );
+    expect(fab.onPressed, isNull);
   });
 
   testWidgets(
@@ -190,6 +211,37 @@ void main() {
   );
 
   testWidgets(
+    'mobile detail sheet reflects a live status change instead of keeping the '
+    'stale opening snapshot',
+    (tester) async {
+      final users = _seededUsers(const [_disabledJane]);
+      addTearDown(users.controller.close);
+
+      await tester.pumpWidget(_wrap(employees: users.make));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Jane Doe'));
+      await tester.pumpAndSettle();
+      expect(find.byType(EmployeeProfileCard), findsOneWidget);
+
+      // Scoped to the sheet's own card: the list row behind it carries a
+      // status chip too, so an unscoped finder matches both.
+      Finder statusInSheet(String label) => find.descendant(
+        of: find.byType(EmployeeProfileCard),
+        matching: find.text(label),
+      );
+      expect(statusInSheet('Disabled'), findsOneWidget);
+
+      users.emit(const [_activeJane]);
+      await tester.pumpAndSettle();
+
+      expect(statusInSheet('Active'), findsOneWidget);
+      expect(statusInSheet('Disabled'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'split-layout detail pane clears when the selected employee vanishes '
     'from the live stream (deleted elsewhere), leaving no ghost actions',
     (tester) async {
@@ -210,6 +262,29 @@ void main() {
       await tester.pumpAndSettle();
 
       // No ghost detail pane still offering actions against a gone record.
+      expect(find.byType(EmployeeProfileCard), findsNothing);
+      expect(find.text('Edit'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'mobile detail sheet closes when the employee vanishes from the live stream',
+    (tester) async {
+      final users = _seededUsers(const [_disabledJane]);
+      addTearDown(users.controller.close);
+
+      await tester.pumpWidget(_wrap(employees: users.make));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Jane Doe'));
+      await tester.pumpAndSettle();
+      expect(find.byType(EmployeeProfileCard), findsOneWidget);
+
+      users.emit(const []);
+      await tester.pump();
+      await tester.pumpAndSettle();
+
       expect(find.byType(EmployeeProfileCard), findsNothing);
       expect(find.text('Edit'), findsNothing);
       expect(tester.takeException(), isNull);
@@ -275,7 +350,7 @@ void main() {
       _useWideViewport(tester);
       const invited = EmployeeRecord(
         id: 'inv1',
-        name: 'Zoé Roy',
+        name: 'Zoe Roy',
         email: 'zoe@example.com',
         status: 'invited',
       );
@@ -291,14 +366,13 @@ void main() {
           phone: any(named: 'phone'),
           colorValue: any(named: 'colorValue'),
           jobTitle: any(named: 'jobTitle'),
-          isAdmin: any(named: 'isAdmin'),
         ),
       ).thenAnswer(
-      (_) async => const NewAccountCredentials(
-        email: 'zoe@example.com',
-        password: 'Welcome123!',
-      ),
-    );
+        (_) async => const NewAccountCredentials(
+          email: 'zoe@example.com',
+          password: 'Welcome123!',
+        ),
+      );
 
       await tester.pumpWidget(
         _wrap(
@@ -311,13 +385,76 @@ void main() {
       expect(find.byType(PendingInviteTile), findsOneWidget);
       expect(find.byType(EmployeeCard), findsOneWidget);
 
-      await tester.tap(find.text('Zoé Roy'));
+      await tester.tap(find.text('Zoe Roy'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
       // In-place expansion, and no detail pane claimed the row.
       expect(find.text('SIGN-IN DETAILS'), findsOneWidget);
       expect(find.byType(EmployeeProfileCard), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'mobile detail sheet opens edit with the latest live employee snapshot',
+    (tester) async {
+      final repo = _MockEmployeesRepo();
+      when(() => repo.watchEmergencyContact(any())).thenAnswer(
+        (_) => Stream.value(EmergencyContact.empty),
+      );
+      when(
+        () => repo.updateEmployee(
+          docId: any(named: 'docId'),
+          employee: any(named: 'employee'),
+        ),
+      ).thenAnswer((_) async {});
+
+      const staleJane = EmployeeRecord(
+        id: 'e1',
+        name: 'Jane Doe',
+        email: 'old@example.com',
+        status: 'active',
+      );
+      const freshJane = EmployeeRecord(
+        id: 'e1',
+        name: 'Jane Doe',
+        email: 'new@example.com',
+        status: 'active',
+      );
+      final users = _seededUsers(const [staleJane]);
+      addTearDown(users.controller.close);
+
+      await tester.pumpWidget(
+        _wrap(
+          employees: users.make,
+          overrides: [
+            employeesRepositoryProvider.overrideWithValue(repo),
+            futureAssignmentCountProvider('e1').overrideWith((_) async => 0),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Jane Doe'));
+      await tester.pumpAndSettle();
+      expect(find.byType(EmployeeProfileCard), findsOneWidget);
+      expect(find.text('old@example.com'), findsWidgets);
+
+      users.emit(const [freshJane]);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Edit').last);
+      await tester.pumpAndSettle();
+
+      final emailField = find.descendant(
+        of: find.byKey(const Key('email')),
+        matching: find.byType(EditableText),
+      );
+      expect(
+        tester.widget<EditableText>(emailField).controller.text,
+        'new@example.com',
+      );
       expect(tester.takeException(), isNull);
     },
   );

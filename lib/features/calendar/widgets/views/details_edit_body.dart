@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive_pickers.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -10,18 +14,23 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
+import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
+import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
-import 'package:scheduling/features/calendar/domain/series_outlook.dart';
-import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
+import 'package:scheduling/features/calendar/utils/assignee_availability_scope.dart';
+import 'package:scheduling/features/calendar/utils/client_booking_context_scope.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
+import 'package:scheduling/features/calendar/widgets/dialogs/personal_block_clash_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/series_scope_dialog.dart';
+import 'package:scheduling/features/calendar/widgets/fields/employee_picker.dart';
 import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/inline_add_client_host.dart';
+import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -47,7 +56,17 @@ class DetailsEditBody extends ConsumerStatefulWidget {
 
 class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     with InlineAddClientHost {
-  final _clientSearchDebounce = Debouncer(const Duration(milliseconds: 300));
+  late final Debouncer _clientSearchDebounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _clientSearchDebounce = Debouncer.tagged(
+      kSearchDebounce,
+      logger: ref.read(loggerProvider),
+      tag: 'CLI-SEARCH debounced client search failed',
+    );
+  }
 
   @override
   void dispose() {
@@ -70,21 +89,31 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     _clientSearchDebounce.run(() => notifier.searchClients(query));
   }
 
+  EventDetailsController get _notifier => ref.read(
+    eventDetailsControllerProvider(
+      EventDetailsKey(widget.appointment),
+    ).notifier,
+  );
+
+  void _onClientQueryModeChanged(ClientQueryMode mode) {
+    // Swapping keyboardType on a focused field does not reliably swap the
+    // software keyboard, so drop focus and let the rebuilt field take it back.
+    FocusScope.of(context).unfocus();
+    _clientSearchDebounce.cancel();
+    widget.controllers.clientSearch.clear();
+    _notifier.setClientQueryMode(mode);
+  }
+
+  void _onRetryClientSearch() =>
+      unawaited(_notifier.searchClients(widget.controllers.clientSearch.text));
+
   @override
   Widget build(BuildContext context) {
-    final appointment = widget.appointment;
-    final controllers = widget.controllers;
     final provider = eventDetailsControllerProvider(
-      EventDetailsKey(appointment),
+      EventDetailsKey(widget.appointment),
     );
     final state = ref.watch(provider);
     final notifier = ref.read(provider.notifier);
-    final allEmployees =
-        ref.watch(employeesStreamProvider).asData?.value ?? const [];
-    // One length feeds both the flag and the label, so they can't disagree:
-    // the run-length string is a plain interpolation, and a multi-day flag
-    // paired with a length of 1 would render "1 days".
-    final spanLength = runLengthDays(state.selectedDate, state.endDate);
 
     return FormSheetFrame(
       title: context.l10n.calendar_editAppointment,
@@ -93,49 +122,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       onPrimary: () => _save(context, ref),
       onCancel: widget.onClose,
       children: [
-        AppointmentFormFields(
-          controllers: controllers,
-          allEmployees: allEmployees,
-          selectedClient: state.selectedClient,
-          clientResults: state.clientResults,
-          isSearchingClient: state.isSearchingClient,
-          selectedEmployees: state.selectedEmployees,
-          repeat: state.repeat,
-          useCustomAddress: state.useCustomAddress,
-          isPersonal: state.isPersonal,
-          isAllDay: state.isAllDay,
-          onAllDayChanged: (value) => notifier.setAllDay(value: value),
-          // Offered only on a job that was already personal, so an ordinary
-          // client visit can't be converted mid-life (which would wipe its
-          // client and address).
-          onPersonalChanged: appointment.isPersonal
-              ? (value) => notifier.setPersonal(value: value)
-              : null,
-          errors: state.errors,
-          employeeLabel: context.l10n.calendar_assignedEmployee,
-          employeeRequired: false,
-          materialsHint: context.l10n.calendar_eGPipeWrenchTapeCommaSeparated,
-          editingStatus: state.editingStatus,
-          onStatusChanged: notifier.setStatus,
-          onSearchClients: _onClientSearchChanged,
-          onSelectClient: notifier.selectClient,
-          onClearClient: notifier.clearClient,
-          onRequestAddClient: requestAddClient,
-          onToggleEmployee: notifier.toggleEmployee,
-          onPickDate: () => _pickDate(context, state, notifier),
-          onPickEndDate: () => _pickEndDate(context, state, notifier),
-          isMultiDay: spanLength > 1,
-          isOvernight:
-              !state.isAllDay &&
-              isOvernightWindow(state.selectedStartTime, state.selectedEndTime),
-          spanLength: spanLength,
-          onPickStartTime: () => _pickStartTime(context, state, notifier),
-          onPickEndTime: () => _pickEndTime(context, state, notifier),
-          onSelectRepeat: notifier.selectRepeat,
-          onUseCustomAddress: (value) =>
-              notifier.setUseCustomAddress(value: value),
-          photosSection: _EditPhotosSection(appointment: appointment),
-        ),
+        _formFields(context, state, notifier),
         const SizedBox(height: AppSpacing.sp24),
         // Destructive actions live in the footer, never in the bar.
         _DeleteButton(
@@ -146,18 +133,117 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     );
   }
 
-  Future<void> _pickDate(
+  Widget _formFields(
     BuildContext context,
     EventDetailsState state,
     EventDetailsController notifier,
-  ) async {
-    final picked = await showAdaptiveDatePicker(
-      context,
-      initialDate: state.selectedDate,
-      firstDate: AppointmentDraftDefaults.datePickerFirstDate,
-      lastDate: AppointmentDraftDefaults.datePickerLastDate,
+  ) {
+    final appointment = widget.appointment;
+    // Crew, plus anyone already on the job who is active but no longer
+    // offerable by title — see `offerableAssignees`, which owns the rule and
+    // the reason a DISABLED assignee must stay unoffered.
+    final roster = ref.watch(employeesStreamProvider);
+    final allEmployees = offerableAssignees(
+      active: roster.asData?.value ?? const [],
+      alreadyAssignedIds: appointment.employeeIds,
     );
-    if (picked == null || !context.mounted) return;
+    // One length feeds both the flag and the label, so they can't disagree: the
+    // run-length string is a plain interpolation, and a multi-day flag paired
+    // with a length of 1 would render "1 days".
+    final spanLength = runLengthDays(state.selectedDate, state.endDate);
+    final bookingContext = watchClientBookingContext(
+      ref,
+      client: state.selectedClient,
+    );
+
+    return AppointmentFormFields(
+      controllers: widget.controllers,
+      allEmployees: allEmployees,
+      rosterStatus: rosterStatusOf(roster),
+      onRetryRoster: () => ref.invalidate(employeesStreamProvider),
+      // Excluding this doc, or its own assignees read as clashing with
+      // themselves.
+      assigneeAvailability: watchAssigneeAvailability(
+        ref,
+        date: state.selectedDate,
+        endDate: state.endDate,
+        isAllDay: state.isAllDay,
+        isPersonal: state.isPersonal,
+        startTime: state.selectedStartTime,
+        endTime: state.selectedEndTime,
+        alreadyAssignedIds: appointment.employeeIds.toSet(),
+        excludeAppointmentId: appointment.id,
+      ),
+      selectedClient: state.selectedClient,
+      clientResults: state.clientResults,
+      isSearchingClient: state.isSearchingClient,
+      clientSearchStatus: state.clientSearchStatus,
+      previousAddresses: bookingContext.previousAddresses,
+      lastVisitLabel: bookingContext.lastVisitLabel,
+      selectedEmployees: state.selectedEmployees,
+      repeat: state.repeat,
+      useCustomAddress: state.useCustomAddress,
+      selectedDate: state.selectedDate,
+      endDate: state.endDate,
+      isPersonal: state.isPersonal,
+      isDayOff: state.isDayOff,
+      isAllDay: state.isAllDay,
+      // Offered only on a job that was already personal, so an ordinary client
+      // visit can't be converted mid-life (which would wipe its client).
+      onPersonalChanged: appointment.isPersonal
+          ? (value) => notifier.setPersonal(value: value)
+          : null,
+      errors: state.errors,
+      employeeLabel: context.l10n.calendar_assignedEmployee,
+      employeeRequired: false,
+      materialsHint: context.l10n.calendar_eGPipeWrenchTapeCommaSeparated,
+      editingStatus: state.editingStatus,
+      onStatusChanged: notifier.setStatus,
+      onRequestAddClient: requestAddClient,
+      isMultiDay: spanLength > 1,
+      // One day of a multi-day RUN: the end date goes away, because the run's
+      // length is fixed at booking.
+      isRunMember: appointment.isRunMember,
+      // Editing may not widen a ONE-DAY client job into a multi-day one: only
+      // the ADD path splits a span into per-day documents, so this would write
+      // the wide document that closes every day at once.
+      canSpanDays: appointment.isPersonal || spanLength > 1,
+      isOvernight:
+          !state.isAllDay &&
+          isOvernightWindow(state.selectedStartTime, state.selectedEndTime),
+      spanLength: spanLength,
+      callbacks: _callbacks(context, state, notifier),
+      photosSection: _EditPhotosSection(appointment: appointment),
+    );
+  }
+
+  AppointmentFormCallbacks _callbacks(
+    BuildContext context,
+    EventDetailsState state,
+    EventDetailsController notifier,
+  ) => AppointmentFormCallbacks(
+    onSearchClients: _onClientSearchChanged,
+    onClientQueryModeChanged: _onClientQueryModeChanged,
+    onRetryClientSearch: _onRetryClientSearch,
+    onSelectClient: notifier.selectClient,
+    onClearClient: notifier.clearClient,
+    onToggleEmployee: notifier.toggleEmployee,
+    onSelectStartDate: (picked) => _onStartDateSelected(notifier, picked),
+    onSelectEndDate: (picked) => _onEndDateSelected(notifier, picked),
+    onPickStartTime: () => _pickStartTime(context, state, notifier),
+    onPickEndTime: () => _pickEndTime(context, state, notifier),
+    onSelectRepeat: notifier.selectRepeat,
+    onUseCustomAddress: (value) => notifier.setUseCustomAddress(value: value),
+    onDayOffChanged: (value) => notifier.setDayOff(value: value),
+    onAllDayChanged: (value) => notifier.setAllDay(value: value),
+  );
+
+  /// The date rows drop an inline month calendar down beneath themselves, so a
+  /// date arrives already picked — no modal to await, no cancelled outcome.
+  void _onStartDateSelected(EventDetailsController notifier, DateTime picked) {
+    // No setState around the controller writes: the body watches the controller
+    // provider and `selectDate` always emits a new state, so the rebuild is
+    // already coming.
     widget.controllers.date.text = DateUtilsHelper.formatDate(picked);
     notifier.selectDate(picked);
     // selectDate shifts the end date to preserve the run's length, and the end
@@ -170,22 +256,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     widget.controllers.endDate.text = DateUtilsHelper.formatDate(shifted);
   }
 
-  Future<void> _pickEndDate(
-    BuildContext context,
-    EventDetailsState state,
-    EventDetailsController notifier,
-  ) async {
-    final picked = await showAdaptiveDatePicker(
-      context,
-      initialDate: state.endDate,
-      // Never offer a date before the start: an end date that precedes it is
-      // unbookable, so it shouldn't be reachable in the picker either. Floored
-      // to midnight — the seeded start carries the record's clock time, which
-      // would otherwise sit after the end date on the run's first day.
-      firstDate: state.selectedDate.dateOnly,
-      lastDate: AppointmentDraftDefaults.datePickerLastDate,
-    );
-    if (picked == null || !context.mounted) return;
+  void _onEndDateSelected(EventDetailsController notifier, DateTime picked) {
     widget.controllers.endDate.text = DateUtilsHelper.formatDate(picked);
     notifier.selectEndDate(picked);
   }
@@ -218,20 +289,26 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     notifier.selectEndTime(picked);
   }
 
-  /// The occurrences a "this and all future" save would touch. A failed count
-  /// must never block the edit, so this degrades to an empty outlook and the
-  /// dialog just renders without its consequence lines.
+  /// The occurrences a "this and all future" save would touch.
   Future<({int count, DateTime? last})> _seriesOutlook(
     WidgetRef ref,
     AppointmentRecord appointment,
   ) async {
+    // Both reads happen before the await: this method promises to degrade to an
+    // empty outlook rather than block the edit, and a `ref.read` in the catch
+    // would defeat exactly that once the sheet has been dismissed mid-fetch
+    // (Riverpod 3 throws on an unmounted consumer).
+    final repository = ref.read(appointmentsRepositoryProvider);
+    final logger = ref.read(loggerProvider);
     try {
-      final series = await ref
-          .read(appointmentsRepositoryProvider)
-          .getSeries(appointment.seriesId);
-      return seriesOutlook(series, appointment.startTime);
+      final series = await repository.getSeries(appointment.seriesId);
+      return seriesOutlook(
+        series,
+        anchor: appointment,
+        excludeId: appointment.id ?? '',
+      );
     } on Object catch (e, st) {
-      ref.read(loggerProvider).warn('APPT-SAVE series outlook failed', e, st);
+      logger.warn('APPT-SAVE series outlook failed', e, st);
       return (count: 0, last: null);
     }
   }
@@ -269,42 +346,36 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           forceBusy: forceBusy,
         );
 
-    var outcome = await attempt();
-    if (!context.mounted) return;
-    if (outcome is EventDetailsBusyEmployees) {
-      final confirmed = await showBusyConflictDialog(
-        context,
-        busyEmployees: outcome.busyEmployees,
-        start: outcome.start,
-        end: outcome.end,
-      );
-      if (!confirmed || !context.mounted) return;
-      outcome = await attempt(forceBusy: true);
+    final outcome = await retryPastBusyConflict(
+      context,
+      attempt: attempt,
+      busyOf: (o) => o is EventDetailsBusyEmployees
+          ? (busyEmployees: o.busyEmployees, start: o.start, end: o.end)
+          : null,
+    );
+    // The helper already returned null if unmounted; repeated so the
+    // analyzer can still see the guard across the await.
+    if (outcome == null || !context.mounted) return;
+    // Editing a day off's DATES re-runs the check on the days that were added —
+    // extending Mon–Tue to Friday is the common case — because the span this
+    // reads is the saved record's, not the one it had before.
+    if (outcome case EventDetailsSaved(:final appointment)) {
+      await showPersonalBlockClashesIfAny(context, ref, block: appointment);
       if (!context.mounted) return;
     }
     _announce(context, ref, outcome);
   }
 
-  /// Asks whether an edit to a repeating visit applies to this visit only or
-  /// to future ones too, and returns that as `applyToSeries`.
-  ///
-  /// **`null` means "stop"** — the admin dismissed the dialog, or the sheet was
-  /// torn down while it was open. `false` is a real answer, not an absence.
-  ///
-  /// Split out of [_save] because it owns a busy-flag handoff of its own: the
-  /// form is marked busy for the duration so a second tap cannot stack a
-  /// duplicate dialog, and every exit from here — including the mounted bail —
-  /// has to clear it before `save()` takes the flag over.
-  ///
-  /// Skipped entirely when the repeat RULE is what changed: that rewrites the
-  /// whole series regardless, so there is nothing to ask.
+  /// Asks whether an edit to a repeating visit applies to this visit only or to
+  /// future ones too, and returns that as `applyToSeries`.
   Future<bool?> _resolveSeriesScope(
     BuildContext context,
     WidgetRef ref,
     EventDetailsState state,
   ) async {
     final appointment = widget.appointment;
-    if (appointment.seriesId.isEmpty || state.repeat != state.savedRepeat) {
+    if (appointment.seriesId.isEmpty ||
+        (state.repeat != state.savedRepeat && !appointment.isRunMember)) {
       return false;
     }
     final provider = eventDetailsControllerProvider(
@@ -319,26 +390,52 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       notifier.setSaving(busy: false);
       return null;
     }
+    // A run member and a repeat occurrence take the same dialog with different
+    // words: one is "the rest of this job", the other "the visits after this
+    // one".
+    final isRun = appointment.isRunMember;
     final choice = await showSeriesScopeDialog(
       context,
       title: context.l10n.calendar_applyChangesTo,
-      contextLabel: context.l10n.calendar_repeatsEveryLabel(
-        repeatIntervalLabel(context.l10n, state.repeat).toUpperCase(),
-      ),
-      thisOnlyLabel: context.l10n.calendar_editThisVisitOnly,
-      thisAndFutureLabel: context.l10n.calendar_editThisAndFutureVisits,
-      thisOnlyDetail: context.l10n.calendar_thisVisitKeepsSeries(
-        DateUtilsHelper.formatDate(appointment.startTime),
-      ),
+      contextLabel: isRun
+          ? context.l10n.calendar_runDayLabel(
+              appointment.dayIndex,
+              appointment.dayCount,
+            )
+          : context.l10n.calendar_repeatsEveryLabel(
+              repeatIntervalLabel(context.l10n, state.repeat).toUpperCase(),
+            ),
+      thisOnlyLabel: isRun
+          ? context.l10n.calendar_editThisDayOnly
+          : context.l10n.calendar_editThisVisitOnly,
+      thisAndFutureLabel: isRun
+          ? context.l10n.calendar_editThisAndFollowingDays
+          : context.l10n.calendar_editThisAndFutureVisits,
+      thisOnlyDetail: isRun
+          ? context.l10n.calendar_thisDayKeepsRun(
+              DateUtilsHelper.formatDate(appointment.startTime),
+            )
+          : context.l10n.calendar_thisVisitKeepsSeries(
+              DateUtilsHelper.formatDate(appointment.startTime),
+            ),
       thisAndFutureDetail: outlook.last == null
           ? null
-          : context.l10n.calendar_remainingVisitsThrough(
-              outlook.count,
-              DateUtilsHelper.formatDate(outlook.last!),
-            ),
-      primaryLabelFor: (choice) => choice == SeriesScopeChoice.thisOnly
-          ? context.l10n.calendar_saveThisVisit
-          : context.l10n.calendar_saveNVisits(outlook.count),
+          : (isRun
+                ? context.l10n.calendar_remainingDaysThrough(
+                    outlook.count,
+                    DateUtilsHelper.formatDate(outlook.last!),
+                  )
+                : context.l10n.calendar_remainingVisitsThrough(
+                    outlook.count,
+                    DateUtilsHelper.formatDate(outlook.last!),
+                  )),
+      primaryLabelFor: (choice) => switch ((isRun, choice)) {
+        (true, SeriesScopeChoice.thisOnly) => context.l10n.calendar_saveThisDay,
+        (true, _) => context.l10n.calendar_saveNDays(outlook.count),
+        (false, SeriesScopeChoice.thisOnly) =>
+          context.l10n.calendar_saveThisVisit,
+        (false, _) => context.l10n.calendar_saveNVisits(outlook.count),
+      },
     );
     // Reset before the mounted guard — the notifier is context-free, and
     // bailing while still busy would wedge a surviving controller.
@@ -348,17 +445,18 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
   }
 
   /// Turns a settled save outcome into the one notice it earns.
-  ///
-  /// Both no-op outcomes surface NOTHING: `Invalid` is already shown as field
-  /// errors, and `BusyEmployees` was resolved above — the dialog either forced
-  /// a retry or the admin backed out.
   void _announce(
     BuildContext context,
     WidgetRef ref,
     EventDetailsSaveOutcome outcome,
   ) {
     switch (outcome) {
-      case EventDetailsInvalid() || EventDetailsBusyEmployees():
+      // Each surfaces nothing: the form already shows its own field errors, the
+      // conflict prompt owns `BusyEmployees`, and `SaveBusy` is a skipped
+      // duplicate save rather than a failure.
+      case EventDetailsInvalid() ||
+          EventDetailsBusyEmployees() ||
+          EventDetailsSaveBusy():
         return;
       case EventDetailsSaved(
         :final appointment,
@@ -374,6 +472,17 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
             : updatedSiblings > 0
             ? l10n.calendar_changesAppliedToSeries(updatedSiblings)
             : l10n.common_appointmentChangesSaved;
+        // `updatedSiblings`/`futureBookings` are what a series edit actually
+        // wrote, so they — not the dialog's answer — say whether the scope was
+        // a series.
+        ref
+            .read(analyticsServiceProvider)
+            .logAppointmentEdited(
+              scope: updatedSiblings > 0 || futureBookings > 0
+                  ? AnalyticsScopes.series
+                  : AnalyticsScopes.single,
+              assigneeCount: appointment.employeeIds.length,
+            );
         ref.read(noticeServiceProvider).success(message);
         widget.onSaved(appointment);
       case EventDetailsFailed(:final error):
@@ -391,34 +500,53 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
     final appointment = widget.appointment;
+    // Busied for the whole dialog, so a second tap can't stack a duplicate —
+    // the same handoff [_resolveSeriesScope] does.
+    final notifier = ref.read(
+      eventDetailsControllerProvider(EventDetailsKey(appointment)).notifier,
+    )..setSaving(busy: true);
     final choice = await showDeleteAppointmentDialog(
       context,
       isSeries: appointment.seriesId.isNotEmpty,
+      isRun: appointment.isRunMember,
     );
+    // Cleared before the mounted guard (the notifier is context-free, and
+    // bailing while busy would wedge a surviving controller) and before the
+    // call below, which now refuses while the flag is set.
+    notifier.setSaving(busy: false);
     if (choice == null || !context.mounted) return;
-    final notifier = ref.read(
-      eventDetailsControllerProvider(EventDetailsKey(appointment)).notifier,
-    );
-    final error = await notifier.deleteAppointment(
+    final outcome = await notifier.deleteAppointment(
       appointment,
       includeFuture: choice == SeriesScopeChoice.thisAndFuture,
     );
     if (!context.mounted) return;
-    if (error == null) {
-      ref
-          .read(noticeServiceProvider)
-          .success(context.l10n.common_appointmentDeleted);
-      widget.onClose();
-    } else {
-      ref
-          .read(noticeServiceProvider)
-          .error(
-            composeErrorNotice(
-              context,
-              intro: context.l10n.error_introDeleteAppointment,
-              error: error,
-            ),
-          );
+    switch (outcome) {
+      // A delete skipped by the reentrancy guard wrote nothing, so it must
+      // announce nothing — neither the success notice nor an error.
+      case EventDetailsActionBusy():
+        return;
+      case EventDetailsActionOk():
+        ref
+            .read(analyticsServiceProvider)
+            .logAppointmentDeleted(
+              scope: choice == SeriesScopeChoice.thisAndFuture
+                  ? AnalyticsScopes.series
+                  : AnalyticsScopes.single,
+            );
+        ref
+            .read(noticeServiceProvider)
+            .success(context.l10n.common_appointmentDeleted);
+        widget.onClose();
+      case EventDetailsActionFailed(:final error):
+        ref
+            .read(noticeServiceProvider)
+            .error(
+              composeErrorNotice(
+                context,
+                intro: context.l10n.error_introDeleteAppointment,
+                error: error,
+              ),
+            );
     }
   }
 }
@@ -457,15 +585,12 @@ class _EditPhotosSection extends ConsumerWidget {
       existingImages: existingImages,
       newImages: newImages,
       isEditing: true,
-      onPickImages: () async {
-        final picked = await pickAppointmentImages(context, ref);
-        // The longest await in the app — an OS action sheet and then the
-        // camera/Photos picker. The notifier is autoDispose.family, so
-        // calling it after this view was torn down under the picker throws a
-        // StateError out of an unawaited callback, filed as FATAL.
-        if (!context.mounted) return;
-        if (picked.isNotEmpty) notifier.addImages(picked);
-      },
+      onPickImages: () => pickAndAddAppointmentImages(
+        context,
+        ref,
+        addImages: notifier.addImages,
+        remainingSlots: () => notifier.remainingImageSlots,
+      ),
       onRemoveExisting: notifier.removeExistingImage,
       onRemoveNew: notifier.removeNewImage,
     );

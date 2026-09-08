@@ -13,7 +13,6 @@ import 'package:scheduling/features/employees/application/employee_form_controll
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
-import 'package:scheduling/features/employees/domain/policies/starting_password_policy.dart';
 import 'package:scheduling/features/employees/widgets/fields/credential_line.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
@@ -26,9 +25,10 @@ import 'package:scheduling/shared/widgets/primitives/name_initials.dart';
 /// in. Tapping expands it in place — they have no detail page worth opening
 /// (no jobs, no availability that matters yet).
 ///
-/// Expanding is NOT a reveal here: the starting password is a fixed shared
-/// value, so the row can show it without asking the server for anything. Only
-/// Reset password re-provisions, and only that rotates what they were given.
+/// Expanding is NOT a reveal here: it makes no server round-trip and rotates
+/// nothing. The starting password is random per account and never persisted,
+/// so a row holding no server echo masks it. Only Reset password
+/// re-provisions, and only that rotates what they were given.
 class PendingInviteTile extends ConsumerStatefulWidget {
   const PendingInviteTile({required this.employee, super.key});
 
@@ -56,11 +56,11 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
       _credentialsFor == widget.employee.id ? _credentials : null;
 
   /// Expanding costs nothing: unlike the retired code flow, there is no
-  /// server round-trip to reveal a shared starting password.
+  /// server round-trip, and nothing is re-issued.
   void _toggleExpanded() => setState(() => _expanded = !_expanded);
 
   /// Re-provisions the account through the idempotent `createEmployeeAccount`
-  /// path, which resets the password back to the shared default.
+  /// path, which issues a fresh random password and echoes it back once.
   ///
   /// Every argument comes from the stored record: the callable's re-provision
   /// branch *updates* name/phone/colour/job title with whatever it is handed,
@@ -139,6 +139,8 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
         // No notice: the live stream drops the row, and that IS the
         // confirmation.
         break;
+      case AccountDeleteBusy():
+        break;
       case AccountDeleteFailed(:final error):
         notices.error(
           error is EmployeesFailureAccountNoLongerPending
@@ -152,7 +154,7 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
     }
   }
 
-  void _copy(String email, String password) {
+  void _copy(String email, String? password) {
     copyCredentialsToClipboard(email: email, password: password);
     setState(() => _copied = true);
   }
@@ -205,7 +207,7 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final compact = context.isCompact;
-    final name = widget.employee.name.isEmpty ? '—' : widget.employee.name;
+    final displayName = widget.employee.displayName;
     const chip = UserStatusChip(status: UserStatus.invited);
 
     return Material(
@@ -220,7 +222,7 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _DashedAvatar(name: widget.employee.name),
+              _DashedAvatar(name: displayName),
               const SizedBox(width: AppSpacing.sp12),
               Expanded(
                 child: Column(
@@ -228,14 +230,15 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      name,
+                      displayName,
                       maxLines: compact ? 2 : 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyLarge?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    if (widget.employee.email.isNotEmpty) ...[
+                    if (widget.employee.email.isNotEmpty &&
+                        displayName != widget.employee.email) ...[
                       const SizedBox(height: AppSpacing.sp4),
                       Text(
                         widget.employee.email,
@@ -286,11 +289,12 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
   }) {
     final l10n = context.l10n;
     final reissued = _cached;
-    // Before any reset, the row shows what the account was created with: the
-    // stored email, and the shared starting password. After one, it shows
-    // exactly what the server just set instead of assuming the two agree.
+    // Before any reset the row shows the stored email; the starting password
+    // is random per account and is never persisted, so there is nothing to
+    // show until a reset issues a new one.
     final email = reissued?.email ?? widget.employee.email;
-    final password = reissued?.password ?? kDefaultStartingPassword;
+    final password = reissued?.password;
+    final actionsBusy = isResetting || isRemoving;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -330,8 +334,8 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
             resetLabel: reissued != null
                 ? l10n.employees_passwordReset
                 : l10n.employees_resetPassword,
-            onReset: isResetting ? null : _resetPassword,
-            onRemove: isRemoving ? null : _remove,
+            onReset: actionsBusy ? null : _resetPassword,
+            onRemove: actionsBusy ? null : _remove,
             isRemoving: isRemoving,
           ),
         ],
@@ -341,8 +345,8 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
 }
 
 /// The `SIGN-IN DETAILS` block: the email and starting password side by side
-/// with one Copy pill that takes both, or a spinner while a reset is in
-/// flight.
+/// with one Copy pill, or a spinner while a reset is in flight. With no
+/// password held the pill copies the email alone.
 class _CredentialsBlock extends StatelessWidget {
   const _CredentialsBlock({
     required this.email,
@@ -353,7 +357,10 @@ class _CredentialsBlock extends StatelessWidget {
   });
 
   final String email;
-  final String password;
+
+  /// Null when the app holds no server echo — the row masks it and points at
+  /// Reset password instead.
+  final String? password;
   final bool isBusy;
   final bool copied;
   final VoidCallback onCopy;
@@ -372,7 +379,11 @@ class _CredentialsBlock extends StatelessWidget {
       );
     }
 
-    final copyButton = CopyCredentialsButton(copied: copied, onCopy: onCopy);
+    final copyButton = CopyCredentialsButton(
+      copied: copied,
+      password: password,
+      onCopy: onCopy,
+    );
 
     final values = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -382,8 +393,17 @@ class _CredentialsBlock extends StatelessWidget {
         const SizedBox(height: AppSpacing.sp8),
         CredentialLine(
           label: l10n.employees_temporaryPassword,
-          value: password,
+          value: password ?? kMaskedCredential,
         ),
+        if (password == null) ...[
+          const SizedBox(height: AppSpacing.sp4),
+          Text(
+            l10n.employees_passwordHiddenUntilReset,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.palette.textMuted,
+            ),
+          ),
+        ],
       ],
     );
 

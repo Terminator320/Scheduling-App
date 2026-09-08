@@ -2,37 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 
-/// Whether an [AuthBanner] shows a failure (error colors) or a confirmation
-/// (green success tokens).
-enum AuthBannerKind { error, success }
-
-/// Inline status banner for the auth forms: fade/size-animates a colored box
+/// Inline error banner for the auth forms: fade/size-animates a colored box
 /// in when [message] is non-null and collapses it when cleared.
+///
+/// Error-only by design. It carried an `AuthBannerKind` with a `success`
+/// member that no call site ever constructed, so `isError` was always true and
+/// five colour ternaries were dead branches. The confirmation surfaces that
+/// might have used it own their own panels (`_SentPanel` on the forgot-password
+/// screen), so the member was removed rather than wired up.
 class AuthBanner extends StatelessWidget {
-  const AuthBanner({
-    required this.message,
-    this.kind = AuthBannerKind.error,
-    super.key,
-  });
+  const AuthBanner({required this.message, super.key});
 
   final String? message;
-  final AuthBannerKind kind;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final status = theme.statusColors;
     final message = this.message;
-    final isError = kind == AuthBannerKind.error;
-    final background = isError
-        ? scheme.errorContainer
-        : status.successContainer;
-    final foreground = isError
-        ? scheme.onErrorContainer
-        : status.onSuccessContainer;
-    final accent = isError ? scheme.error : status.success;
-    final icon = isError ? Icons.error_outline : Icons.check_circle_outline;
 
     return AnimatedSwitcher(
       duration: AppAnimationDurations.banner,
@@ -47,23 +34,23 @@ class AuthBanner extends StatelessWidget {
       child: message == null
           ? const SizedBox.shrink(key: ValueKey('banner_none'))
           : Padding(
-              key: ValueKey('banner_${kind.name}_$message'),
+              key: ValueKey('banner_error_$message'),
               padding: const EdgeInsets.only(top: AppSpacing.sp12),
               child: Container(
                 padding: const EdgeInsets.all(AppSpacing.sp12),
                 decoration: BoxDecoration(
-                  color: background,
+                  color: scheme.errorContainer,
                   borderRadius: BorderRadius.circular(AppRadius.r8),
                 ),
                 child: Row(
                   children: [
-                    Icon(icon, color: accent, size: 16),
+                    Icon(Icons.error_outline, color: scheme.error, size: 16),
                     const SizedBox(width: AppSpacing.sp8),
                     Expanded(
                       child: Text(
                         message,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: foreground,
+                          color: scheme.onErrorContainer,
                         ),
                       ),
                     ),

@@ -6,10 +6,36 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/clients/data/firebase_clients_repository.dart';
 import 'package:scheduling/features/clients/domain/clients_failure.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/models/clients_sort.dart';
+
+class _RecordingLogger extends AppLogger {
+  final warnings = <String>[];
+
+  @override
+  void warn(String message, [Object? error, StackTrace? stack]) {
+    warnings.add(message);
+  }
+}
+
+/// A plain fake rather than a `Mock`: the cap test builds a thousand of them,
+/// and only `id` and `data()` are ever read.
+class _FakeDoc extends Fake
+    implements QueryDocumentSnapshot<Map<String, dynamic>> {
+  _FakeDoc(this.id, this._data);
+
+  @override
+  final String id;
+
+  final Map<String, dynamic> _data;
+
+  @override
+  Map<String, dynamic> data() => _data;
+}
 
 class _MockFirestore extends Mock implements FirebaseFirestore {}
 
@@ -37,6 +63,7 @@ class _MockCallableResult extends Mock implements HttpsCallableResult<void> {}
 
 void main() {
   late _MockFirestore firestore;
+  late _RecordingLogger logger;
   late _MockCollection collection;
   late _MockQuery query;
   late _MockQuerySnapshot snapshot;
@@ -59,6 +86,7 @@ void main() {
 
   setUp(() {
     firestore = _MockFirestore();
+    logger = _RecordingLogger();
     collection = _MockCollection();
     query = _MockQuery();
     snapshot = _MockQuerySnapshot();
@@ -94,7 +122,13 @@ void main() {
   });
 
   FirebaseClientsRepository repo({DateTime Function()? clock}) =>
-      FirebaseClientsRepository(firestore, functions: functions, clock: clock);
+      FirebaseClientsRepository(
+        firestore,
+        functions: functions,
+        clock: clock,
+        logger: logger,
+        useCallableSearch: false,
+      );
 
   ClientRecord client({String id = 'c1', String name = 'Test Client'}) =>
       ClientRecord(
@@ -119,6 +153,42 @@ void main() {
       expect(captured['email'], 'test@example.com');
       expect(captured.containsKey('createdAt'), isTrue);
       expect(captured.containsKey('updatedAt'), isTrue);
+    });
+
+    test('normalizes EVERY contact email, not just the top-level one', () async {
+      // The loop was unhit: only the top-level address was ever asserted, so a
+      // regression that normalized the client and skipped its contacts would
+      // ship green.
+      await repo().addClient(
+        client().copyWith(
+          email: '  Owner@Example.COM ',
+          contacts: const [
+            ClientContact(name: 'Site', email: ' Site@Example.COM'),
+            ClientContact(name: 'Billing', email: 'BILLING@example.com  '),
+          ],
+        ),
+      );
+
+      final captured =
+          (verify(() => collection.add(captureAny())).captured.single as Map)
+              .cast<String, dynamic>();
+      expect(captured['email'], 'owner@example.com');
+      final contacts = (captured['contacts'] as List)
+          .map((c) => (c as Map)['email'])
+          .toList();
+      expect(contacts, ['site@example.com', 'billing@example.com']);
+    });
+
+    test('a contact with no email normalizes to empty, not null', () async {
+      // `normalizeEmail` is fed `??
+      await repo().addClient(
+        client().copyWith(contacts: const [ClientContact(name: 'Site')]),
+      );
+
+      final captured =
+          (verify(() => collection.add(captureAny())).captured.single as Map)
+              .cast<String, dynamic>();
+      expect(((captured['contacts'] as List).single as Map)['email'], '');
     });
 
     test('returns the client with the generated doc id', () async {
@@ -184,29 +254,147 @@ void main() {
       },
     );
 
-    test(
-      'legacy business-only boundary doc: cursor uses the stored (empty) '
-      'name, not the businessName display fallback',
-      () async {
-        final r = repo();
-        final docs = [
-          doc('c9', {'name': '', 'businessName': 'Zebra Corp'}),
-        ];
-        when(() => snapshot.docs).thenReturn(docs);
-        final page1 = await r.fetchClientsPage(limit: 1);
-        // The record's display name falls back to the business name…
-        expect(page1.last.name, 'Zebra Corp');
+    test('legacy business-only boundary doc: cursor uses the stored (empty) '
+        'name, not the businessName display fallback', () async {
+      final r = repo();
+      final docs = [
+        doc('c9', {'name': '', 'businessName': 'Zebra Corp'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+      final page1 = await r.fetchClientsPage(limit: 1);
+      // The record's display name falls back to the business name…
+      expect(page1.last.name, 'Zebra Corp');
 
-        await r.fetchClientsPage(limit: 1, after: page1.last);
+      await r.fetchClientsPage(limit: 1, after: page1.last);
 
-        // …but the cursor must match the stored orderBy value or Firestore
-        // would skip every doc sorted between '' and 'Zebra Corp'.
-        final captured = verify(
-          () => query.startAfter(captureAny()),
-        ).captured.single;
-        expect(captured, ['', 'c9']);
-      },
-    );
+      // …but the cursor must match the stored orderBy value or Firestore
+      // would skip every doc sorted between '' and 'Zebra Corp'.
+      final captured = verify(
+        () => query.startAfter(captureAny()),
+      ).captured.single;
+      expect(captured, ['', 'c9']);
+    });
+
+    test('mostJobs orders by jobCount descending', () async {
+      await repo().fetchClientsPage(limit: 50, sort: ClientsSort.mostJobs);
+
+      verify(() => query.orderBy('jobCount', descending: true)).called(1);
+      verify(() => query.orderBy(FieldPath.documentId)).called(1);
+    });
+
+    test('recentlyAdded orders by createdAt descending', () async {
+      await repo().fetchClientsPage(limit: 50, sort: ClientsSort.recentlyAdded);
+
+      verify(() => query.orderBy('createdAt', descending: true)).called(1);
+    });
+
+    test('archived is filtered out under every sort', () async {
+      await repo().fetchClientsPage(limit: 50, sort: ClientsSort.mostJobs);
+
+      verify(() => collection.where('archived', isEqualTo: false)).called(1);
+    });
+
+    test('the cursor tuple follows the sort, not the name', () async {
+      final r = repo();
+      final docs = [
+        doc('c1', {'name': 'Test Client', 'jobCount': 7}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+      final page1 = await r.fetchClientsPage(
+        limit: 1,
+        sort: ClientsSort.mostJobs,
+      );
+
+      await r.fetchClientsPage(
+        limit: 1,
+        after: page1.last,
+        sort: ClientsSort.mostJobs,
+      );
+
+      final captured = verify(
+        () => query.startAfter(captureAny()),
+      ).captured.single;
+      expect(captured, [7, 'c1']);
+    });
+
+    test('a boundary captured under one sort never resumes another', () async {
+      final r = repo();
+      final docs = [
+        doc('c1', {'name': 'Test Client', 'jobCount': 7}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+      // Page 1 under NAME caches 'Test Client' against c1...
+      final page1 = await r.fetchClientsPage(limit: 1);
+
+      // ...and resuming under jobCount must not reach for it, or Firestore
+      // compares a string against a number and returns the wrong slice.
+      await r.fetchClientsPage(
+        limit: 1,
+        after: page1.last,
+        sort: ClientsSort.mostJobs,
+      );
+
+      final captured = verify(
+        () => query.startAfter(captureAny()),
+      ).captured.single;
+      expect(captured, [7, 'c1']);
+    });
+  });
+
+  group('the client scan window warns at its cap', () {
+    // This is the quietest truncation in the app.
+    void withClients(int count) => when(() => snapshot.docs).thenReturn([
+      for (var i = 0; i < count; i++)
+        _FakeDoc('c$i', {'name': 'Client ${i.toString().padLeft(4, '0')}'}),
+    ]);
+
+    test('a full first page is followed by the next page', () async {
+      final firstPage = [
+        for (var i = 0; i < 500; i++)
+          _FakeDoc('c$i', {'name': 'Client ${i.toString().padLeft(4, '0')}'}),
+      ];
+      // Named so it, and only it, matches the query - a doc that landed on the
+      // second page has to be findable, and ranking would bury a 'Client 0500'
+      // below the alphabetically-earlier first page.
+      final secondPage = [
+        _FakeDoc('c500', {'name': 'Zephyr Holdings'}),
+      ];
+      final secondSnapshot = _MockQuerySnapshot();
+      when(() => snapshot.docs).thenReturn(firstPage);
+      when(() => secondSnapshot.docs).thenReturn(secondPage);
+      var call = 0;
+      when(() => query.get()).thenAnswer((_) async {
+        call++;
+        return call == 1 ? snapshot : secondSnapshot;
+      });
+
+      final results = await repo().searchClients('zephyr');
+
+      expect(results.map((c) => c.id), contains('c500'));
+      verify(() => query.startAfter(['Client 0499', 'c499'])).called(1);
+    });
+
+    test('a short window stays on one page', () async {
+      withClients(499);
+
+      await repo().searchClients('client');
+
+      verifyNever(() => query.startAfter(any()));
+    });
+
+    test('the window stops at its ceiling and warns', () async {
+      withClients(500);
+
+      await repo().searchClients('client');
+
+      // 5000 / 500 per page, PLUS one 1-document probe past the cap — the only
+      // way to tell a roster of exactly 5000 (nothing hidden) from a larger
+      // one, and paid only in the cap case.
+      verify(() => query.get()).called(11);
+      expect(logger.warnings, hasLength(1));
+      expect(logger.warnings.single, startsWith('CLI-SEARCH'));
+      expect(logger.warnings.single, contains('5000'));
+    });
   });
 
   group('searchClients', () {
@@ -263,6 +451,54 @@ void main() {
       verify(() => query.get()).called(2);
     });
 
+    test('a local write keeps the window alive past the plain TTL', () async {
+      // `patched()` used to carry the ORIGINAL fetchedAt through, so the window
+      // expired two minutes after the tab-open scan however much activity there
+      // had been — and the first write after that idle re-paged every client
+      // doc, plus a `fromMap` and a `buildingKeyFor` each, on the UI isolate.
+      final docs = [
+        doc('c1', {'name': 'John Smith'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      var now = DateTime(2026, 7, 2, 12);
+      final r = repo(clock: () => now);
+
+      await r.searchClients('John');
+      now = now.add(const Duration(minutes: 1, seconds: 30));
+      await r.updateClient(client(name: 'John Smith'));
+      // Past the 2-minute TTL measured from the ORIGINAL read, but only 30s
+      // past the write.
+      now = now.add(const Duration(minutes: 1, seconds: 30));
+      await r.searchClients('John');
+
+      verify(() => query.get()).called(1);
+    });
+
+    test('but never past the absolute ceiling', () async {
+      // The TTL is the only protection against a REMOTE write, so a steadily
+      // edited window must still age out.
+      final docs = [
+        doc('c1', {'name': 'John Smith'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      var now = DateTime(2026, 7, 2, 12);
+      final r = repo(clock: () => now);
+
+      await r.searchClients('John');
+      // Eleven one-minute writes: each is inside the TTL, and together they
+      // carry the window past the 10-minute ceiling.
+      for (var i = 0; i < 11; i++) {
+        now = now.add(const Duration(minutes: 1));
+        await r.updateClient(client(name: 'John Smith'));
+      }
+      now = now.add(const Duration(seconds: 30));
+      await r.searchClients('John');
+
+      verify(() => query.get()).called(2);
+    });
+
     test(
       'updating a client is reflected in search without re-reading the window',
       () async {
@@ -301,6 +537,41 @@ void main() {
       },
     );
 
+    // I7: `_patchWindow` MERGES the write over the cached doc rather than
+    // substituting it, because `toMap()` emits user-owned fields only.
+    test(
+      'a local write KEEPS the function-owned fields on the cached doc',
+      () async {
+        // Built before the stub: `doc()` stubs internally, and mocktail refuses
+        // a `when` inside a stub response.
+        final docs = [
+          doc('c1', {
+            'name': 'John Smith',
+            // Function-owned: written by recountClientJobs and the server, and
+            // deliberately absent from ClientRecord.toMap().
+            'jobCount': 7,
+            'waveCustomerId': 'wave-123',
+          }),
+        ];
+        when(() => snapshot.docs).thenReturn(docs);
+
+        final r = repo();
+        expect((await r.searchClients('John')).single.jobCount, 7);
+
+        await r.updateClient(client(name: 'John Smith Jr'));
+
+        final patched = (await r.searchClients('John')).single;
+        expect(patched.name, 'John Smith Jr');
+        expect(
+          patched.jobCount,
+          7,
+          reason: 'jobCount was dropped by the patch',
+        );
+        expect(patched.waveCustomerId, 'wave-123');
+        verify(() => query.get()).called(1);
+      },
+    );
+
     test('ranks exact/prefix matches first, then alphabetical', () async {
       final docs = [
         doc('c1', {'name': 'Aaron Johnson', 'phone': '514-555-0101'}),
@@ -311,9 +582,226 @@ void main() {
 
       final results = await repo().searchClients('John');
 
-      // Prefix matches (John Smith, Johnny Cash) rank above the substring
-      // match (Aaron Johnson); ties break alphabetically.
+      // Prefix matches (John Smith, Johnny Cash) rank above the substring match
+      // (Aaron Johnson); ties break alphabetically.
       expect(results.map((c) => c.id), ['c2', 'c3', 'c1']);
+    });
+  });
+
+  group('building filtering', () {
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> paton() => [
+      doc('c1', {
+        'name': 'Zeta',
+        'address': '914-4450 Prom. Paton',
+        'city': 'Laval',
+        'province': 'QC',
+        'postalCode': 'H7W 5J7',
+        'country': 'Canada',
+      }),
+      doc('c2', {
+        'name': 'Alpha',
+        // Legacy shape — the locality is in `address` AND in its own fields,
+        // which is exactly what makes it reduce to the same building.
+        'address': '1207-4450 Prom. Paton, Laval, QC H7W 5J7, Canada',
+        'city': 'Laval',
+        'province': 'QC',
+        'postalCode': 'H7W 5J7',
+        'country': 'Canada',
+      }),
+      doc('c3', {
+        'name': 'Elsewhere',
+        'address': '7 Rue Seule',
+        'city': 'Laval',
+        'province': 'QC',
+      }),
+    ];
+
+    test('fetchBuildings groups shared addresses only', () async {
+      // Built before `when` — `doc()` stubs internally, and mocktail refuses a
+      // `when` inside a stub response.
+      final docs = paton();
+      when(() => snapshot.docs).thenReturn(docs);
+
+      final buildings = await repo().fetchBuildings();
+
+      expect(buildings, hasLength(1));
+      expect(buildings.single.street, '4450 Prom. Paton');
+      expect(buildings.single.clientCount, 2);
+    });
+
+    test('fetchClientsByBuilding returns both shapes, name-sorted', () async {
+      final docs = paton();
+      when(() => snapshot.docs).thenReturn(docs);
+      final key = (await repo().fetchBuildings()).single.key;
+
+      final clients = await repo().fetchClientsByBuilding(key);
+
+      expect(clients.map((c) => c.name), ['Alpha', 'Zeta']);
+    });
+
+    test('an archived client is not counted or listed', () async {
+      // Same rule the type filter keeps: the Archived chip is where they live.
+      final docs = [
+        doc('c1', {
+          'name': 'Live',
+          'address': '914-4450 Prom. Paton',
+          'city': 'Laval',
+        }),
+        doc('c2', {
+          'name': 'Gone',
+          'address': '1207-4450 Prom. Paton',
+          'city': 'Laval',
+          'archived': true,
+        }),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      // One live client at that address is not a building.
+      expect(await repo().fetchBuildings(), isEmpty);
+    });
+
+    test('an empty key selects nothing', () async {
+      final docs = paton();
+      when(() => snapshot.docs).thenReturn(docs);
+      expect(await repo().fetchClientsByBuilding(''), isEmpty);
+    });
+
+    test('a client with no address at all forms no building', () async {
+      final docs = [
+        ...paton(),
+        doc('c4', {'name': 'Nowhere'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+      final r = repo();
+
+      final key = (await r.fetchBuildings()).single.key;
+
+      expect(
+        (await r.fetchClientsByBuilding(key)).map((c) => c.id),
+        unorderedEquals(['c1', 'c2']),
+      );
+    });
+
+    test('the selection agrees with the count the menu offers', () async {
+      // They come off one cached window and one derivation; a disagreement
+      // between them would show a building the filter cannot fill.
+      final docs = paton();
+      when(() => snapshot.docs).thenReturn(docs);
+      final r = repo();
+
+      final building = (await r.fetchBuildings()).single;
+
+      expect(
+        await r.fetchClientsByBuilding(building.key),
+        hasLength(building.clientCount),
+      );
+    });
+
+    // `_patchWindow` carries the already-materialized records and building keys
+    // across a local write and re-derives only the one client that changed,
+    // rather than discarding the window's memos and rebuilding every record and
+    // key on the UI isolate.
+    group('a local write patches the derived maps in place', () {
+      ClientRecord patonClient(String id, String name, String address) =>
+          ClientRecord(
+            id: id,
+            name: name,
+            address: address,
+            city: 'Laval',
+            province: 'QC',
+            postalCode: 'H7W 5J7',
+            country: 'Canada',
+          );
+
+      test(
+        'an edit that moves a client INTO the building recounts it',
+        () async {
+          final docs = paton();
+          when(() => snapshot.docs).thenReturn(docs);
+          final r = repo();
+          // Materialize the memos first — this is the state the patch reuses.
+          expect((await r.fetchBuildings()).single.clientCount, 2);
+
+          await r.updateClient(
+            patonClient('c3', 'Elsewhere', '88-4450 Prom. Paton'),
+          );
+
+          final buildings = await r.fetchBuildings();
+          expect(buildings.single.clientCount, 3);
+          // The two clients that did not change stay in the building.
+          expect(
+            (await r.fetchClientsByBuilding(buildings.single.key))
+                .map((c) => c.id),
+            containsAll(['c1', 'c2', 'c3']),
+          );
+        },
+      );
+
+      test(
+        'an edit that moves a client OUT drops it from the building',
+        () async {
+          final docs = paton();
+          when(() => snapshot.docs).thenReturn(docs);
+          final r = repo();
+          final key = (await r.fetchBuildings()).single.key;
+
+          // A street nothing else in the window shares, so moving c1 there can
+          // only dissolve Paton rather than form a second building with c3.
+          await r.updateClient(patonClient('c1', 'Zeta', '12 Rue Unique'));
+
+          expect(
+            (await r.fetchClientsByBuilding(key)).map((c) => c.id),
+            ['c2'],
+          );
+          // One client left at Paton is below the 2-client minimum.
+          expect(await r.fetchBuildings(), isEmpty);
+        },
+      );
+
+      test('an untouched client is NOT rebuilt across a write', () async {
+        // The point of the patch, asserted the only way it can be from outside:
+        // a record the write did not touch comes back as the SAME instance,
+        // which is only true if the window carried it across instead of
+        // re-running `ClientRecord.fromMap` over the whole scan.
+        final docs = paton();
+        when(() => snapshot.docs).thenReturn(docs);
+        final r = repo();
+        final key = (await r.fetchBuildings()).single.key;
+        final before = (await r.fetchClientsByBuilding(
+          key,
+        )).firstWhere((c) => c.id == 'c2');
+
+        await r.updateClient(patonClient('c1', 'Zeta', '12 Rue Unique'));
+
+        final after = (await r.fetchClientsByBuilding(
+          key,
+        )).firstWhere((c) => c.id == 'c2');
+        expect(identical(before, after), isTrue);
+      });
+
+      test('archiving removes the client from the derived maps', () async {
+        final docs = paton();
+        when(() => snapshot.docs).thenReturn(docs);
+        final r = repo();
+        expect((await r.fetchBuildings()).single.clientCount, 2);
+
+        await r.setClientArchived('c1', archived: true);
+
+        // Archived clients are excluded from `records`, so the derived maps
+        // must lose the entry rather than keep a stale one.
+        expect(await r.fetchBuildings(), isEmpty);
+      });
+
+      test('deleting removes the client from the derived maps', () async {
+        final docs = paton();
+        when(() => snapshot.docs).thenReturn(docs);
+        final r = repo();
+        expect((await r.fetchBuildings()).single.clientCount, 2);
+
+        await r.deleteClient('c1');
+
+        expect(await r.fetchBuildings(), isEmpty);
+      });
     });
   });
 
@@ -366,13 +854,11 @@ void main() {
 
     test('property mgmt maps from its stored raw value', () async {
       final docs = [
-        doc('c1', {'name': 'Gestion', 'type': 'property_mgmt'}),
+        doc('c1', {'name': 'Gestion', 'type': 'building'}),
       ];
       when(() => snapshot.docs).thenReturn(docs);
 
-      final typed = await repo().fetchClientsByType(
-        ClientType.propertyManagement,
-      );
+      final typed = await repo().fetchClientsByType(ClientType.building);
 
       expect(typed.single.name, 'Gestion');
     });

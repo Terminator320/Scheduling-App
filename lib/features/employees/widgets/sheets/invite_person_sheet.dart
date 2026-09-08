@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:scheduling/core/analytics/analytics_providers.dart';
+import 'package:scheduling/core/analytics/analytics_screens.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/employees/application/employee_form_controller.dart';
@@ -58,7 +60,6 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
 
   JobTitle _jobTitle = JobTitle.unset;
   late int _selectedColor;
-  bool _isAdmin = false;
   final Map<String, String?> errors = {};
 
   // Admin-only surface: the Team tab's FAB is the only way in.
@@ -78,6 +79,9 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
           orElse: () => AppColors.crewPalette.first,
         )
         .toARGB32();
+    ref
+        .read(analyticsServiceProvider)
+        .logScreenView(AnalyticsScreens.invitePerson);
   }
 
   @override
@@ -136,10 +140,11 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
             name: composedName,
             firstName: _firstNameController.text.trim(),
             lastName: _lastNameController.text.trim(),
-            email: _emailController.text.trim().toLowerCase(),
+            email: normalizeEmail(_emailController.text),
             phone: _phoneController.text.trim(),
             color: Color(_selectedColor),
-            role: _isAdmin ? 'admin' : 'employee',
+            // role defaults to 'employee'; createEmployeeAccount always
+            // writes it server-side regardless of what the client sends.
             jobTitle: _jobTitle,
           ),
         );
@@ -150,6 +155,9 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
       case EmployeeSaveBusy():
         break;
       case EmployeeAccountCreated(:final credentials):
+        // Fires before the credentials dialog: the account exists at this
+        // point, and the dialog can be dismissed without changing that.
+        ref.read(analyticsServiceProvider).logEmployeeInvited();
         await showNewAccountDialog(
           context,
           name: _firstNameController.text.trim(),
@@ -198,7 +206,9 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
           ..._detailsSection(theme, l10n),
           ..._roleSection(theme, l10n),
           ..._colourSection(theme, l10n),
-          ..._accessSection(theme, l10n),
+          // Outside every _section: it is advice about the whole form, and
+          // inside one it would sit under that step's tour spotlight.
+          WarningNote(message: l10n.employees_invitedNote),
         ],
       ),
     );
@@ -300,21 +310,4 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
         ),
         const SizedBox(height: AppSpacing.sp24),
       ]);
-
-  List<Widget> _accessSection(ThemeData theme, AppLocalizations l10n) =>
-      _section(TourStepId.personAccess, l10n.employees_sectionAccess, [
-        SwitchListTile.adaptive(
-          key: const Key('adminAccess'),
-          value: _isAdmin,
-          activeTrackColor: theme.colorScheme.primary,
-          contentPadding: EdgeInsets.zero,
-          title: Text(l10n.employees_adminAccess),
-          subtitle: Text(l10n.employees_adminAccessDescription),
-          onChanged: (value) => setState(() => _isAdmin = value),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        WarningNote(message: context.l10n.employees_invitedNote),
-      ]);
 }
-
-/// The amber advisory under the form. Warning-toned on purpose — the account

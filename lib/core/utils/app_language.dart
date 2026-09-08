@@ -1,3 +1,5 @@
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -15,16 +17,15 @@ class AppLanguageController extends ValueNotifier<String> {
   }
 }
 
-class AppLanguageScope extends InheritedNotifier<AppLanguageController> {
-  const AppLanguageScope({
-    required AppLanguageController controller,
-    required super.child,
-    super.key,
-  }) : super(notifier: controller);
+/// Narrows any language code to the two locales the SERVER renders in.
+String serverLocaleOf(String? code) => code == 'fr' ? 'fr' : 'en';
 
-  static AppLanguageController of(BuildContext context) {
-    final scope = context
-        .dependOnInheritedWidgetOfExactType<AppLanguageScope>();
-    return scope?.notifier ?? AppLanguageController.instance;
-  }
+/// [serverLocaleOf] for the app's current language.
+String get currentServerLocale =>
+    serverLocaleOf(AppLanguageController.instance.value);
+
+/// The language a FIRST launch should open in, read from the device.
+String deviceServerLocale([Locale? locale]) {
+  final code = (locale ?? PlatformDispatcher.instance.locale).languageCode;
+  return serverLocaleOf(code.toLowerCase());
 }

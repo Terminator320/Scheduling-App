@@ -8,6 +8,7 @@ enum TourStepId {
   calendarCollapse,
   clientsSearch,
   clientsFilter,
+  clientsSort,
   clientsAdd,
   clientsRow,
   employeesSearch,
@@ -32,6 +33,7 @@ enum TourStepId {
   // The add-appointment walkthrough.
   apptTemplates,
   apptClient,
+  apptJobAddress,
   apptCrew,
   apptSchedule,
   apptDetails,
@@ -45,6 +47,15 @@ enum TourStepId {
   personDetails,
   personJobTitle,
   personColour,
-  personAccess,
   personCreate,
+  // The 1.56/1.57 features.
+  calendarWeekToggle,
+  calendarCrewFilter,
+  settingsLocationSharing,
+  // The job-details sheet walkthrough.
+  jobPushBack,
+  jobFieldRecord,
+  jobStart,
+  jobMarkDone,
+  jobBookAgain,
 }

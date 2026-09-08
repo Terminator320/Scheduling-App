@@ -4,10 +4,10 @@
  * @fileoverview The i18n (EN/FR) message table for push notifications plus the
  * pure `build*Message` helpers that consume it. Split out of
  * `notification_utils.js` to keep that module focused on the diff/ledger/send
- * pipeline. Depends only on `time_utils` for locale-aware time formatting, so
- * it closes no require cycle (nothing here requires back into
- * `notification_utils`).
- *
+ * pipeline. Depends only on `time_utils` (locale-aware formatting) and
+ * `day_slice_utils` (the run's last work day), both of which are leaves, so it
+ * closes no require cycle — nothing here requires back into
+ * `notification_utils`.
  * @module notification_messages
  */
 
@@ -15,12 +15,18 @@ const {
   formatBusinessTime,
   formatTimeOfDay,
   businessMinutesOfDay,
+  toMillis,
 } = require("./time_utils");
+const {
+  clampedLastWorkDayMs,
+  calendarDaysBetween,
+} = require("./day_slice_utils");
+// `_who` lives in job_naming so the Lock Screen card and the push beside it
+// cannot come to call the same job two different things.
+const {whoFor: _who} = require("./job_naming");
 
 /**
- * Localized "Wed, Jul 8, 2:00 p.m." style datetime. An all-day block stores a
- * real midnight start, so speaking its clock time ("Wed, Jul 8, 12:00 a.m.")
- * would be actively wrong — the date alone is the whole of what it means.
+ * Localized "Wed, Jul 8, 2:00 p.m." style datetime.
  * @param {string} locale
  * @param {*} startTime
  * @param {boolean=} allDay
@@ -51,8 +57,7 @@ function _timeOnly(locale, startTime, allDay) {
 /**
  * Localized recurrence phrase ("every 6 months"/"aux 6 mois") for a
  * RepeatInterval raw value, mirroring RepeatInterval.raw
- * (repeat_interval.dart). Returns "" for none/unknown, so a one-off job
- * reads as a plain assignment.
+ * (repeat_interval.dart).
  * @param {string} raw
  * @param {string} locale 'en' | 'fr'.
  * @return {string}
@@ -68,24 +73,18 @@ function _repeatLabel(raw, locale) {
 }
 
 /**
- * Who a push names the job after: the client, or — for a personal job, which
- * has none — its title. Only a record with neither falls back to `generic`.
- * @param {!Object} c Message context or appointment record.
- * @param {string} generic Localized "Client" placeholder.
- * @return {string}
- */
-function _who(c, generic) {
-  return (c.clientName || "").trim() || (c.title || "").trim() || generic;
-}
-
-/**
- * `_dateTime` for a message context — all-day aware.
+ * `_dateTime` for a message context — all-day and multi-day aware.
  * @param {string} locale
  * @param {!Object} c
  * @return {string}
  */
 function _when(locale, c) {
-  return _dateTime(locale, c.startTime, c.isAllDay === true);
+  const base = _dateTime(locale, c.startTime, c.isAllDay === true);
+  const last = clampedLastWorkDayMs(c);
+  const startMs = toMillis(c.startTime);
+  if (last == null || startMs == null) return base;
+  if (calendarDaysBetween(startMs, last) < 1) return base;
+  return `${base} – ${_dateTime(locale, last, true)}`;
 }
 
 /**
@@ -210,9 +209,8 @@ const _MESSAGES = {
 
 /**
  * Builds a localized {title, body} for a per-appointment notification.
- * Pure — unit-testable.
  * @param {string} kind
- *   assigned|rescheduled|cancelled|removed|reminder|doneCheck.
+ * assigned|rescheduled|cancelled|removed|reminder|doneCheck.
  * @param {{clientName: string, startTime: *, address: string}} ctx
  * @param {string} locale 'en' | 'fr'.
  * @return {{title: string, body: string}}
@@ -226,7 +224,7 @@ function buildNotificationMessage(kind, ctx, locale) {
 }
 
 /**
- * Builds the nightly-digest {title, body}. Pure — unit-testable.
+ * Builds the nightly-digest {title, body}.
  * @param {!Array<!Object>} jobs Tomorrow's jobs for one employee.
  * @param {string} locale 'en' | 'fr'.
  * @return {{title: string, body: string}}
@@ -263,13 +261,7 @@ function buildDigestMessage(jobs, locale) {
 }
 
 /**
- * Builds the "an admin changed your sign-in email" {title, body}. Pure.
- *
- * The new address is IN the body on purpose: this push is the only warning the
- * person gets before their old address stops working, so it has to be
- * actionable on the lock screen rather than send them hunting. It is their own
- * address going to their own device — not a disclosure.
- *
+ * Builds the "an admin changed your sign-in email" {title, body}.
  * @param {string} email The new sign-in email.
  * @param {string} locale 'en' | 'fr'.
  * @return {{title: string, body: string}}
@@ -292,8 +284,60 @@ function buildEmailChangedMessage(email, locale) {
   };
 }
 
+/**
+ * Tells an ADMIN that a team member moved their OWN sign-in address.
+ * @param {string} name The person's display name.
+ * @param {string} locale 'en' or 'fr'.
+ * @return {{title: string, body: string}}
+ */
+function buildSelfEmailChangedMessage(name, locale) {
+  const who = String(name || "").trim();
+  if (locale === "fr") {
+    return {
+      title: "Courriel de connexion modifié",
+      body: who ?
+        `${who} a modifié son adresse de connexion.` :
+        "Un membre de l'équipe a modifié son adresse de connexion.",
+    };
+  }
+  return {
+    title: "Sign-in email changed",
+    body: who ?
+      `${who} changed their sign-in address.` :
+      "A team member changed their sign-in address.",
+  };
+}
+
+/**
+ * "Marc finished Leak fix" — the completion notice the dispatcher gets.
+ * @param {string} who The crew member's display name.
+ * @param {string} what The job's client name or title.
+ * @param {string} locale 'en' or 'fr'.
+ * @return {{title: string, body: string}}
+ */
+function buildJobCompletedMessage(who, what, locale) {
+  const crew = String(who || "").trim();
+  const job = String(what || "").trim();
+  if (locale === "fr") {
+    return {
+      title: "Travail terminé",
+      body: crew && job ?
+        `${crew} a terminé ${job}.` :
+        (job ? `${job} est terminé.` : "Un travail a été terminé."),
+    };
+  }
+  return {
+    title: "Job finished",
+    body: crew && job ?
+      `${crew} finished ${job}.` :
+      (job ? `${job} was marked complete.` : "A job was marked complete."),
+  };
+}
+
 module.exports = {
   buildNotificationMessage,
   buildDigestMessage,
   buildEmailChangedMessage,
+  buildSelfEmailChangedMessage,
+  buildJobCompletedMessage,
 };

@@ -1,13 +1,20 @@
-/// The denormalized name stored at position [index], or null when there isn't
-/// one.
-///
-/// `employeeIds` and `employeeNames` are paired POSITIONALLY and the names list
-/// can be shorter — a job assigned before names were denormalized, or a
-/// partially-written doc. That bounds check was re-spelled at five call sites
-/// with four different missing-name fallbacks; the fallbacks are legitimately
-/// per-surface (the day route shows the id, the history filter shows nothing),
-/// so this owns only the LOOKUP and returns null for "no name here", leaving
-/// each caller to pick its own substitute.
+import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+
+/// Returns active staff the picker may offer, including active stored assignees.
+List<EmployeeRecord> offerableAssignees({
+  required List<EmployeeRecord> active,
+  required Iterable<String> alreadyAssignedIds,
+}) {
+  final assignedIds = alreadyAssignedIds.toSet();
+  return [
+    for (final e in active)
+      if (e.isAssignable || assignedIds.contains(e.id)) e,
+  ];
+}
+
+/// Returns the denormalized assignee name at [index], if present.
 String? assigneeNameAt(List<String> employeeNames, int index) =>
     index >= 0 && index < employeeNames.length ? employeeNames[index] : null;
 
@@ -34,3 +41,84 @@ String? assigneeNameAt(List<String> employeeNames, int index) =>
     names: [...selectedNames, ...retainedNames],
   );
 }
+
+/// [job] with [removeId] swapped out for [addId]/[addName].
+///
+/// Takes the replacement as an id and a name rather than an `EmployeeRecord`
+/// because the time-off clash alert runs it BACKWARDS for Undo — putting the
+/// person who is off back in place of whoever took the job — and that dialog
+/// only ever holds the person's name, never a roster record for them.
+///
+/// `employeeIds` and `employeeNames` are paired POSITIONALLY, so both lists are
+/// rebuilt in one pass — writing the id and appending the name would silently
+/// re-pair every assignee after the one replaced.
+AppointmentRecord replaceAssignee(
+  AppointmentRecord job, {
+  required String removeId,
+  required String addId,
+  required String addName,
+}) {
+  // This re-serializes the WHOLE record, so a legacy `confirmed`/unknown
+  // status would be written back verbatim and rejected by the rules as an
+  // opaque permission-denied on an ordinary-looking swap.
+  final status = AppointmentStatus.storedRaw(job.status);
+  final ids = <String>[];
+  final names = <String>[];
+  for (var i = 0; i < job.employeeIds.length; i++) {
+    final isTarget = job.employeeIds[i] == removeId;
+    ids.add(isTarget ? addId : job.employeeIds[i]);
+    names.add(
+      isTarget ? addName : (assigneeNameAt(job.employeeNames, i) ?? ''),
+    );
+  }
+  return job.copyWith(employeeIds: ids, employeeNames: names, status: status);
+}
+
+/// How the picker must treat one offered assignee on the chosen date.
+enum AssigneeOfferState {
+  /// No clash — an ordinary tappable chip.
+  free,
+
+  /// A clash, and they are not on the job: dimmed, not tappable.
+  unavailable,
+
+  /// A clash, but already assigned and still tappable.
+  onTheJob,
+}
+
+/// Returns whether [employeeId] is free, unavailable, or already on this job.
+AssigneeOfferState assigneeOfferState({
+  required String employeeId,
+  required Set<String> clashingIds,
+  required Set<String> selectedIds,
+  required Set<String> alreadyAssignedIds,
+}) {
+  if (!clashingIds.contains(employeeId)) return AssigneeOfferState.free;
+  return selectedIds.contains(employeeId) ||
+          alreadyAssignedIds.contains(employeeId)
+      ? AssigneeOfferState.onTheJob
+      : AssigneeOfferState.unavailable;
+}
+
+/// Short display name, disambiguated by last initial when first names repeat.
+String shortAssigneeName(String name, {required Map<String, int> among}) {
+  final parts = name.trim().split(_nameGap);
+  final first = parts.first;
+  if (parts.length < 2 || first.isEmpty) return name.trim();
+  final sharers = among[first.toLowerCase()] ?? 0;
+  return sharers > 1 ? '$first ${parts.last[0]}.' : first;
+}
+
+/// Tallies lowercased first names for [shortAssigneeName].
+Map<String, int> firstNameTally(Iterable<String> names) {
+  final tally = <String, int>{};
+  for (final name in names) {
+    final first = name.trim().split(_nameGap).first.toLowerCase();
+    if (first.isEmpty) continue;
+    tally[first] = (tally[first] ?? 0) + 1;
+  }
+  return tally;
+}
+
+/// Shared whitespace splitter for assignee-name helpers.
+final _nameGap = RegExp(r'\s+');

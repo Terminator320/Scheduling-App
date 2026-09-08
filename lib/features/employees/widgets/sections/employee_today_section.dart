@@ -48,7 +48,7 @@ class EmployeeTodaySection extends ConsumerWidget {
               appointment: job,
               crew: crewFor(job, colorMap: colorMap, nameMap: nameMap),
               dimWhenCancelled: true,
-              onTap: () => onJobTap(job.id ?? ''),
+              onTap: job.id == null ? null : () => onJobTap(job.id!),
             ),
             const SizedBox(height: AppSpacing.sp8),
           ],

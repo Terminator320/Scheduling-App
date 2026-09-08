@@ -20,6 +20,8 @@ AppointmentRecord _job({
   required DateTime end,
   List<String> employeeIds = const ['e1'],
   String status = 'pending',
+  bool isPersonal = false,
+  bool isDayOff = false,
 }) => AppointmentRecord(
   id: id,
   title: 'Job $id',
@@ -27,6 +29,8 @@ AppointmentRecord _job({
   endTime: end,
   employeeIds: employeeIds,
   status: status,
+  isPersonal: isPersonal,
+  isDayOff: isDayOff,
 );
 
 Future<ProviderContainer> _containerWith(List<AppointmentRecord> jobs) async {
@@ -45,8 +49,14 @@ Future<ProviderContainer> _containerWith(List<AppointmentRecord> jobs) async {
     ..listen(employeeTodayJobsProvider('e1'), (_, _) {});
   // The override is still a Stream, so the reducers read `.value == null`
   // until it emits — await the first frame before asserting.
+  //
+  // The range comes from `todayRangeProvider` rather than being rebuilt here:
+  // that provider deliberately asks for the WIDER `forMirrors` window (so it
+  // shares the listener the Siri snapshot already holds open rather than
+  // forking a second one), and naming a different range here would instantiate
+  // a family member nothing listens to, which then disposes mid-load.
   await container.read(
-    appointmentsInRangeProvider(AppointmentDateRange.forDay(_today)).future,
+    appointmentsInRangeProvider(container.read(todayRangeProvider)).future,
   );
   return container;
 }
@@ -109,6 +119,23 @@ void main() {
         ),
       ]);
       expect(container.read(employeeJobsTodayProvider), isEmpty);
+    });
+
+    test('does not count a day off, but the panel still lists it', () async {
+      // The deliberate asymmetry: a COUNT answers "how much work", a card list
+      // answers "what is on this person's day". A "Day off" card under a row
+      // reading 0 jobs is the point, not a disagreement.
+      final container = await _containerWith([
+        _job(
+          id: 'off',
+          start: DateTime(2026, 8, 4),
+          end: DateTime(2026, 8, 4, 23, 59),
+          isPersonal: true,
+          isDayOff: true,
+        ),
+      ]);
+      expect(container.read(employeeJobsTodayProvider), isEmpty);
+      expect(container.read(employeeTodayJobsProvider('e1')), hasLength(1));
     });
 
     test('counts per assignee', () async {

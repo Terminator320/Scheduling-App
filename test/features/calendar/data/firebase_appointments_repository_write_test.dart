@@ -37,8 +37,8 @@ AppointmentRecord _record({
   status: status,
 );
 
-// Declared as a top-level function (not a closure) so its runtime type
-// exactly matches mocktail's `any()` for the repo's transaction handler.
+// Declared as a top-level function (not a closure) so its runtime type exactly
+// matches mocktail's `any()` for the repo's transaction handler.
 Future<Null> _fallbackHandler(Transaction _) async => null;
 
 void main() {
@@ -81,6 +81,13 @@ void main() {
       // update must NOT stamp createdAt (only inserts do), or a re-save would
       // reset the original creation time.
       expect(payload.containsKey('createdAt'), isFalse);
+      // Nor `pictureCount`: the recount trigger owns it after creation, and the
+      // rules reject an update that moves it — so emitting the record's
+      // possibly-stale copy here turns every edit of a job with photos into an
+      // opaque permission-denied.
+      expect(payload.containsKey('pictureCount'), isFalse);
+      // Nor the retired `pictures` array.
+      expect(payload.containsKey('pictures'), isFalse);
     });
 
     test('is a no-op when the record has no id', () async {
@@ -98,6 +105,8 @@ void main() {
     test('stamps both createdAt and updatedAt server timestamps', () async {
       final doc = _MockDoc();
       final batch = _MockBatch();
+      // `addAppointments` reads the ref's id to patch the history scan window.
+      when(() => doc.id).thenReturn('a1');
       when(() => collection.doc('a1')).thenReturn(doc);
       when(() => firestore.batch()).thenReturn(batch);
       when(
@@ -116,6 +125,32 @@ void main() {
       expect(payload['status'], 'confirmed');
       expect(payload['createdAt'], isA<FieldValue>());
       expect(payload['updatedAt'], isA<FieldValue>());
+    });
+
+    test('seeds pictureCount at zero — the one client write of it', () async {
+      // A create is the only write the rules let touch this counter, and it has
+      // to: the recount trigger fires on a photo write, so without the seed
+      // every photo-less job would read as count-unknown forever.
+      final doc = _MockDoc();
+      final batch = _MockBatch();
+      // `addAppointments` reads the ref's id to patch the history scan window.
+      when(() => doc.id).thenReturn('a1');
+      when(() => collection.doc('a1')).thenReturn(doc);
+      when(() => firestore.batch()).thenReturn(batch);
+      when(
+        () => batch.set<Map<String, dynamic>>(any(), any()),
+      ).thenReturn(null);
+      when(batch.commit).thenAnswer((_) async {});
+
+      await repo().addAppointment(_record());
+
+      final payload =
+          (verify(
+                    () => batch.set<Map<String, dynamic>>(any(), captureAny()),
+                  ).captured.single
+                  as Map)
+              .cast<String, dynamic>();
+      expect(payload['pictureCount'], 0);
     });
   });
 
@@ -158,6 +193,84 @@ void main() {
     test('is a no-op (no transaction) when no record has an id', () async {
       await repo().updateAppointments([_record(id: null)]);
       verifyNever(() => firestore.runTransaction<Null>(any()));
+    });
+  });
+
+  group('seriesOpId', () {
+    /// Captures the `seriesOpId` written onto every document of one batch.
+    Future<List<String>> opIdsFromRewrite() async {
+      final batch = _MockBatch();
+      when(() => collection.doc(any())).thenReturn(_MockDoc());
+      when(() => firestore.batch()).thenReturn(batch);
+      when(
+        () => batch.update(
+          any<DocumentReference<Map<String, dynamic>>>(),
+          any<Map<String, dynamic>>(),
+        ),
+      ).thenReturn(null);
+      when(() => batch.delete(any())).thenReturn(null);
+      when(
+        () => batch.set<Map<String, dynamic>>(any(), any()),
+      ).thenReturn(null);
+      when(batch.commit).thenAnswer((_) async {});
+
+      await repo().rewriteSeries(
+        updated: _record(),
+        deleteIds: const ['a9'],
+        copies: [
+          _record(id: 'a2'),
+          _record(id: 'a3'),
+        ],
+      );
+
+      final written = <String>[
+        for (final m in verify(
+          () => batch.update(
+            any<DocumentReference<Map<String, dynamic>>>(),
+            captureAny<Map<String, dynamic>>(),
+          ),
+        ).captured)
+          ((m as Map).cast<String, dynamic>()['seriesOpId'] as String),
+        for (final m in verify(
+          () => batch.set<Map<String, dynamic>>(any(), captureAny()),
+        ).captured)
+          ((m as Map).cast<String, dynamic>()['seriesOpId'] as String),
+      ];
+      return written;
+    }
+
+    test('is the SAME on every document of one batch', () async {
+      // The producer half of the notification-collapse contract.
+      final ids = await opIdsFromRewrite();
+
+      expect(ids, hasLength(3));
+      expect(ids.toSet(), hasLength(1));
+      expect(ids.first, isNotEmpty);
+    });
+
+    test('is DIFFERENT across two separate calls', () async {
+      // The other half, and the one that broke: reusing an id across two
+      // independent edits made the server treat the second as a replay of the
+      // first and drop its push entirely.
+      final first = await opIdsFromRewrite();
+      final second = await opIdsFromRewrite();
+
+      expect(first.first, isNot(second.first));
+    });
+
+    test('a plain update stamps one too', () async {
+      final doc = _MockDoc();
+      when(() => collection.doc('a1')).thenReturn(doc);
+      when(() => doc.update(any())).thenAnswer((_) async {});
+
+      await repo().updateAppointment(_record());
+      await repo().updateAppointment(_record());
+
+      final ids = verify(() => doc.update(captureAny())).captured
+          .map((m) => (m as Map).cast<String, dynamic>()['seriesOpId'])
+          .toList();
+      expect(ids, hasLength(2));
+      expect(ids.first, isNot(ids.last));
     });
   });
 }

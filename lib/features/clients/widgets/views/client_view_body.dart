@@ -8,7 +8,6 @@ import 'package:scheduling/features/clients/email_compose_launcher.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_contacts_cards.dart';
 import 'package:scheduling/features/clients/widgets/sections/client_job_history_section.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
-import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/features/wave/widgets/wave_sync_badge.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/key_value_panel.dart';
@@ -31,36 +30,8 @@ class ClientDetailViewBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final hasPhone = client.phone.isNotEmpty;
-    final hasEmail = client.email.isNotEmpty;
-    final hasAddress = client.address.isNotEmpty;
-    final displayAddress = AddressParser.canonicalToDisplay(client.address);
-
-    // Handlers built here (where `ref` lives) so widgets stay presentational.
-    final onCall = hasPhone
-        ? () => launchPhoneCall(context, ref, client.phone)
-        : null;
-    final onEmail = hasEmail
-        ? () => EmailComposeLauncher.showEmailChoices(
-            context,
-            ref,
-            email: client.email,
-          )
-        : null;
-    final onDirections = hasAddress
-        ? () => AddressMapLauncher.showMapChoices(
-            context,
-            address: client.address,
-          )
-        : null;
-    // Always offered — even a name-only client is worth saving to the phone.
-    void onSaveToContacts() => saveClientToPhoneContacts(context, ref, client);
-
-    // `contacts` holds only the extra contacts — the customer's own details already
-    // live in the header and the info panel.
-    final extraContacts = client.contacts;
-
-    final hasSyncBadge = client.waveSyncState.isNotEmpty;
+    final displayAddress = client.fullAddress;
+    final actions = _handlers(context, ref, displayAddress);
 
     final billingLine = [
       client.billingTerms,
@@ -71,37 +42,15 @@ class ClientDetailViewBody extends ConsumerWidget {
       context,
       displayAddress: displayAddress,
       billingLine: billingLine,
-      onCall: onCall,
-      onEmail: onEmail,
-      onDirections: onDirections,
+      onCall: actions.onCall,
+      onEmail: actions.onEmail,
+      onDirections: actions.onDirections,
     );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Exactly three tiles by design. Save-to-contacts moves below the panel
-        // rather than competing for a tile slot.
-        QuickActionsRow(
-          buttons: [
-            if (onCall != null)
-              QuickActionButton(
-                icon: Icons.phone_outlined,
-                label: context.l10n.clients_call,
-                onTap: onCall,
-              ),
-            if (onDirections != null)
-              QuickActionButton(
-                icon: Icons.directions_outlined,
-                label: context.l10n.clients_directions,
-                onTap: onDirections,
-              ),
-            QuickActionButton(
-              icon: Icons.event_available_outlined,
-              label: context.l10n.clients_bookJob,
-              onTap: onBookJob,
-            ),
-          ],
-        ),
+        _quickActions(context, actions),
         if (infoRows.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sp24),
           KeyValuePanel(rows: infoRows),
@@ -110,15 +59,17 @@ class ClientDetailViewBody extends ConsumerWidget {
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: TextButton.icon(
-            onPressed: onSaveToContacts,
+            onPressed: actions.onSaveToContacts,
             icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
             label: Text(context.l10n.clients_saveToContacts),
           ),
         ),
-        ClientContactsCards(contacts: extraContacts),
+        // `contacts` holds only the EXTRA contacts — the customer's own
+        // details already live in the header and the info panel.
+        ClientContactsCards(contacts: client.contacts),
         const SizedBox(height: AppSpacing.sp24),
         ClientJobHistorySection(clientId: client.id),
-        if (hasSyncBadge) ...[
+        if (client.waveSyncState.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sp16),
           Align(
             alignment: Alignment.centerLeft,
@@ -131,6 +82,72 @@ class ClientDetailViewBody extends ConsumerWidget {
       ],
     );
   }
+
+  /// The `ref`-dependent actions, built where `ref` lives so every widget
+  /// below stays presentational. A null entry means there is nothing to act
+  /// on, which is what omits both the tile and the info row.
+  ({
+    VoidCallback? onCall,
+    VoidCallback? onDirections,
+    VoidCallback? onEmail,
+    VoidCallback onSaveToContacts,
+  })
+  _handlers(BuildContext context, WidgetRef ref, String displayAddress) => (
+    onCall: client.phone.isEmpty
+        ? null
+        : () => launchPhoneCall(context, ref, client.phone),
+    onDirections: client.address.isEmpty
+        ? null
+        : () => AddressMapLauncher.showMapChoices(
+            context,
+            ref,
+            // The composed address, never the stored one: a street-only doc
+            // would send the maps app a street with no city.
+            address: displayAddress,
+          ),
+    onEmail: client.email.isEmpty
+        ? null
+        : () => EmailComposeLauncher.showEmailChoices(
+            context,
+            ref,
+            email: client.email,
+          ),
+    // Always offered — even a name-only client is worth saving to the phone.
+    onSaveToContacts: () => saveClientToPhoneContacts(context, ref, client),
+  );
+
+  /// Exactly three tiles by design. Save-to-contacts sits below the panel
+  /// rather than competing for a tile slot.
+  Widget _quickActions(
+    BuildContext context,
+    ({
+      VoidCallback? onCall,
+      VoidCallback? onDirections,
+      VoidCallback? onEmail,
+      VoidCallback onSaveToContacts,
+    })
+    actions,
+  ) => QuickActionsRow(
+    buttons: [
+      if (actions.onCall case final onCall?)
+        QuickActionButton(
+          icon: Icons.phone_outlined,
+          label: context.l10n.clients_call,
+          onTap: onCall,
+        ),
+      if (actions.onDirections case final onDirections?)
+        QuickActionButton(
+          icon: Icons.directions_outlined,
+          label: context.l10n.clients_directions,
+          onTap: onDirections,
+        ),
+      QuickActionButton(
+        icon: Icons.event_available_outlined,
+        label: context.l10n.clients_bookJob,
+        onTap: onBookJob,
+      ),
+    ],
+  );
 
   /// Empty rows are omitted entirely — a read-only detail body never renders
   /// "None" placeholders.

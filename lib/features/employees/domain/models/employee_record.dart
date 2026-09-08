@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
+import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
 
 part 'employee_record.freezed.dart';
@@ -16,9 +18,10 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     @Default('') String lastName,
     @Default('') String email,
     @Default('') String phone,
-    // Legacy default (Material blue) for docs predating the color palette —
-    // changing this recolors those employees.
-    @Default(Color(0xFF2196F3)) Color color,
+    // A crewPalette member, not Material blue: an off-palette hue is also
+    // outside the dark-theme override map, so a doc that never picked a colour
+    // rendered unlifted in dark.
+    @Default(AppColors.crewDefault) Color color,
     @Default('employee') String role,
     @Default('') String status,
     @Default('') String uid,
@@ -29,10 +32,14 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     // 0 means no cap.
     @Default(0) int maxJobsPerDay,
     @Default(false) bool onCall,
+    // Per-person opt-out for the traffic-aware "time to leave" push.
+    @Default(true) bool travelAlertsEnabled,
+    // Explicit consent for live location uploads used by the staff map and
+    // travel-time presence.
+    @Default(false) bool locationSharingEnabled,
     // NOTE: emergencyContact/emergencyPhone are NOT here — they live in
     // users/{docId}/private/emergency so rules can gate them to the admin and
-    // the person themselves. See EmergencyContact.
-    // Server timestamp, same read-only contract as ClientRecord.createdAt.
+    // the person themselves.
     DateTime? createdAt,
   }) = _EmployeeRecord;
   const EmployeeRecord._();
@@ -40,10 +47,12 @@ abstract class EmployeeRecord with _$EmployeeRecord {
   factory EmployeeRecord.fromMap(String id, Map<String, dynamic> data) {
     final colorValue =
         int.tryParse((data['colorValue'] ?? '').toString()) ??
-        Colors.blue.toARGB32();
-    final storedDays = (data['workingDays'] as List?)
-        ?.map((v) => v == true)
-        .toList();
+        AppColors.crewDefault.toARGB32();
+    // `firestoreList`, never `as List?` — same leniency rule as the fields
+    // below, and a non-list collapses to the same default an absent one does.
+    final storedDays = firestoreList(
+      data['workingDays'],
+    ).map((v) => v == true).toList();
 
     return EmployeeRecord(
       id: id,
@@ -56,31 +65,32 @@ abstract class EmployeeRecord with _$EmployeeRecord {
       role: (data['role'] ?? 'employee').toString(),
       status: (data['status'] ?? '').toString(),
       uid: (data['uid'] ?? '').toString(),
-      jobTitle: JobTitle.fromRaw(data['jobTitle'] as String?),
-      workingDays: normalizeWorkingDays(storedDays ?? const []),
+      // Lenient like every other field here, and for a sharper reason: this
+      // factory runs inside three `users` snapshot streams AND on the sign-in
+      // path, so one console-edited doc holding a numeric jobTitle or a string
+      // "480" would throw app-wide — crew picker, day route, live-map roster
+      // and calendar dots at once — and lock that person out of signing in.
+      jobTitle: JobTitle.fromRaw(data['jobTitle']?.toString()),
+      workingDays: normalizeWorkingDays(storedDays),
       workStartMinutes:
-          (data['workStartMinutes'] as num?)?.toInt() ??
-          kDefaultWorkStartMinutes,
+          firestoreInt(data['workStartMinutes']) ?? kDefaultWorkStartMinutes,
       workEndMinutes:
-          (data['workEndMinutes'] as num?)?.toInt() ?? kDefaultWorkEndMinutes,
-      maxJobsPerDay: (data['maxJobsPerDay'] as num?)?.toInt() ?? 0,
+          firestoreInt(data['workEndMinutes']) ?? kDefaultWorkEndMinutes,
+      maxJobsPerDay: firestoreInt(data['maxJobsPerDay']) ?? 0,
       onCall: data['onCall'] == true,
+      // `!= false`, never `== true`: an absent field must read as ON.
+      travelAlertsEnabled: data['travelAlertsEnabled'] != false,
+      locationSharingEnabled: data['locationSharingEnabled'] == true,
       createdAt: firestoreDateTime(data['createdAt']),
     );
   }
 
   /// Editable fields only. `createdAt` is function-owned and deliberately
   /// absent — see its declaration.
-  ///
-  /// `uid` and `status` are absent for the same reason: `uid` is on the
-  /// `/users` update denylist in `firestore.rules`, and `status` belongs to
-  /// deactivate/reactivate. Emitting either would make a whole-record write
-  /// fail with an opaque `permission-denied`.
   Map<String, dynamic> toMap() => {
     'name': name,
     'firstName': firstName,
     'lastName': lastName,
-    'email': email,
     'phone': phone,
     'colorValue': color.toARGB32().toString(),
     'role': role,
@@ -90,17 +100,31 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     'workEndMinutes': workEndMinutes,
     'maxJobsPerDay': maxJobsPerDay,
     'onCall': onCall,
+    // NOTE: `travelAlertsEnabled` is deliberately NOT emitted. It is the
+    // person's own notification preference, written only by `updateSelfDetails`
+    // — an admin save must leave it exactly as it was, and emitting it here
+    // would let a future whole-record write flip somebody else's push setting.
+    // `locationSharingEnabled` follows the same self-service-only contract.
   };
 
+  /// The name every in-app surface renders — the split halves first, then the
+  /// stored composed [name], then [email].
+  String get displayName => displayEmployeeName(
+    firstName: firstName,
+    lastName: lastName,
+    name: name,
+    email: email,
+  );
+
   bool get isAdmin => role == 'admin';
+
+  /// Crew — someone a job can be assigned to. See [JobTitle.isAssignable].
+  bool get isAssignable => jobTitle.isAssignable;
+
   bool get isActive => status == 'active';
   bool get isDisabled => status == 'disabled';
 
   /// The account exists with a real `uid` but setup has never been completed —
   /// the person is still on the password their admin handed them.
-  ///
-  /// This is the one non-active status the auth gates route rather than sign
-  /// out, so it is an EXACT match: an empty or unknown status must keep
-  /// falling through to the sign-out branch, exactly as `isDisabled` does.
   bool get isInvited => status == 'invited';
 }

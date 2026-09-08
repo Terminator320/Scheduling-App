@@ -79,6 +79,31 @@ describe("relevantClientChange", () => {
     expect(change).toEqual({clientPhone: "222", address: null});
   });
 
+  // The stored `name` IS the Wave customer name — a phone number on a person —
+  // so what propagates onto an appointment must be the DISPLAY name. Without
+  // these two, a "cleanup" dropping the strip would put phone numbers on every
+  // appointment card with nothing failing.
+  test("propagates the DISPLAY name, never the stored number", () => {
+    const change = relevantClientChange(
+        {name: "(514) 555-1234", phone: "(514) 555-1234",
+          firstName: "Marc", lastName: "Tremblay"},
+        {name: "(514) 555-1234", phone: "(514) 555-1234",
+          firstName: "Marc", lastName: "Gagnon"});
+    expect(change).toEqual({clientName: "Marc Gagnon", address: null});
+  });
+
+  test("a phone-only edit produces NO clientName patch", () => {
+    // The number moves, but a person's display name is their halves — so the
+    // denormalized `clientName` on every appointment must stay put.
+    const change = relevantClientChange(
+        {name: "(514) 555-1234", phone: "(514) 555-1234",
+          firstName: "Marc", lastName: "Tremblay"},
+        {name: "(438) 555-9876", phone: "(438) 555-9876",
+          firstName: "Marc", lastName: "Tremblay"});
+    expect(change).toEqual({clientPhone: "(438) 555-9876", address: null});
+    expect(change.clientName).toBeUndefined();
+  });
+
   test("detects a name change via the legacy businessName fallback", () => {
     const change = relevantClientChange(
         {name: "", businessName: "Old Co"},
@@ -92,6 +117,63 @@ describe("relevantClientChange", () => {
     expect(change).toEqual({address: {from: "1 Old St", to: "2 New Rd"}});
   });
 
+  test("normalizing `address` to the street line propagates NOTHING", () => {
+    // The safety property the address backfill rests on. An appointment holds
+    // ONE address string and no city/province/postal of its own, so fanning a
+    // stripped street onto it would destroy the locality with nothing left to
+    // rebuild from. Both shapes compose to the same string, so the change is
+    // invisible here.
+    const locality = {
+      city: "Montréal", province: "QC", postalCode: "H2X 1Y4",
+      country: "Canada",
+    };
+    const change = relevantClientChange(
+        {address: "1234 Rue Principale, Montréal, QC H2X 1Y4, Canada",
+          ...locality},
+        {address: "1234 Rue Principale", ...locality});
+    expect(change).toBeNull();
+  });
+
+  test("an apt-bearing client MATCHES what the app actually books", () => {
+    // The values below are the DISPLAY spelling, which is what the app writes
+    // into `appointments.address` (it seeds `client.fullAddress`, and did the
+    // equivalent before the split). `buildAppointmentPatch` compares `from`
+    // to that string verbatim, so this is the case that decides whether an
+    // apt-bearing client's address correction reaches their jobs at all.
+    // Until 2026-08-28 this composed "4-1234 ..." and asserted it against
+    // itself, so it passed while the propagation silently matched nothing.
+    const locality = {city: "Montréal", province: "QC"};
+    const change = relevantClientChange(
+        {address: "4-1234 Rue Principale", ...locality},
+        {address: "4-1234 Rue Sherbrooke", ...locality});
+    expect(change.address.from)
+        .toBe("1234 Rue Principale #4, Montréal, QC");
+    expect(change.address.to)
+        .toBe("1234 Rue Sherbrooke #4, Montréal, QC");
+  });
+
+  test("an apt-bearing client's booked address is PATCHED, end to end", () => {
+    // The regression this whole pair exists for: the appointment holds the
+    // display spelling, so the patch must fire.
+    const locality = {city: "Montréal", province: "QC"};
+    const change = relevantClientChange(
+        {address: "4-1234 Rue Principale", ...locality},
+        {address: "4-1234 Rue Sherbrooke", ...locality});
+    const patch = buildAppointmentPatch(
+        change, {address: "1234 Rue Principale #4, Montréal, QC"});
+    expect(patch).toEqual({address: "1234 Rue Sherbrooke #4, Montréal, QC"});
+  });
+
+  test("a CITY edit alone now reaches the appointment", () => {
+    // The stored `address` is untouched by this edit, so comparing it raw saw
+    // no change and the appointment kept the old city forever.
+    const change = relevantClientChange(
+        {address: "1 Rue Peel", city: "Laval"},
+        {address: "1 Rue Peel", city: "Montréal"});
+    expect(change.address).toEqual(
+        {from: "1 Rue Peel, Laval", to: "1 Rue Peel, Montréal"});
+  });
+
   test("does NOT propagate when the previous address was empty", () => {
     // An empty stored appointment address means custom/none. Matching on ""
     // would clobber those, so an empty-from change carries no instruction.
@@ -103,9 +185,29 @@ describe("relevantClientChange", () => {
 describe("buildAppointmentPatch", () => {
   test("patches clientName only when it differs", () => {
     const change = {clientName: "Bea"};
-    expect(buildAppointmentPatch(change, {clientName: "Ada"}))
-        .toEqual({clientName: "Bea"});
+    const patch = buildAppointmentPatch(change, {clientName: "Ada"});
+    expect(patch.clientName).toBe("Bea");
     expect(buildAppointmentPatch(change, {clientName: "Bea"})).toBeNull();
+  });
+
+  test("rebuilds the history tokens when the name or phone moves", () => {
+    // Otherwise the job stays findable under the OLD name and vanishes under
+    // the corrected one, with nothing rewriting it before it closes.
+    const patch = buildAppointmentPatch(
+        {clientName: "Bea"},
+        {clientName: "Ada", employeeIds: ["emp1"]},
+    );
+    expect(patch.historySearchScopes).toContain("all:t:bea");
+    expect(patch.historySearchScopes).toContain("emp:emp1:t:bea");
+    expect(patch.historySearchScopes).not.toContain("all:t:ada");
+  });
+
+  test("leaves the tokens alone for an address-only patch", () => {
+    const patch = buildAppointmentPatch(
+        {address: {from: "1 Old St", to: "2 New Rd"}},
+        {address: "1 Old St", clientName: "Ada"},
+    );
+    expect(patch.historySearchScopes).toBeUndefined();
   });
 
   test("follows the client address when the stored one matches from", () => {

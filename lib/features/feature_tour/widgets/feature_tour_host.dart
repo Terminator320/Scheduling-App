@@ -19,8 +19,11 @@ import 'package:showcaseview/showcaseview.dart';
 const ScrollCacheExtent kTourScrollCacheExtent = ScrollCacheExtent.pixels(3000);
 
 /// Runs one scope's feature tour — registers the showcase scope, auto-starts
-/// once ready, and marks the scope seen when the tour finishes. A scope is a
-/// whole screen or one of the create-flow sheets.
+/// once ready, and marks the steps that RAN seen when the tour finishes. A
+/// scope is a whole screen or one of the sheets that carries a walkthrough.
+///
+/// Only unseen steps are offered, so a release that adds a step to a screen
+/// someone already toured shows them that one step.
 class FeatureTourHost extends ConsumerStatefulWidget {
   const FeatureTourHost({
     required this.scope,
@@ -55,12 +58,30 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
   bool _started = false;
   bool _wasVisible = false;
 
+  /// Held as a field, and assigned EAGERLY in [initState] rather than as a
+  /// lazy `late final` initializer: [dispose] logs through it, and `ref.read`
+  /// throws once the consumer is unmounted (Riverpod 3) — which `dispose`
+  /// always is, so a lazy first touch there would throw exactly where this
+  /// exists to avoid it. Riverpod's own error text prescribes this: "save the
+  /// provider state in a field of your State class."
+  late final AppLogger _logger;
+
   /// True while the tour is actually running, from startShowCase until
   /// onFinish/onDismiss. Gates markSeen so we never mark a tour seen that
   /// didn't actually run.
   bool _tourRunning = false;
 
   String get _scope => widget.scope.storageKey;
+
+  /// The ids handed to startShowCase, so only they are marked seen. A step
+  /// dropped by isTargetRendered was never shown and must stay unseen.
+  List<TourStepId> _runningIds = const [];
+
+  /// This scope's catalog minus what the device has already been shown.
+  List<TourStepId> _pendingSteps(Set<TourStepId> seen) => [
+    for (final id in tourStepsFor(widget.scope, isAdmin: widget.isAdmin))
+      if (!seen.contains(id)) id,
+  ];
 
   /// Captured each build in route mode. ModalRoute.of cannot be called from
   /// a post-frame callback without registering a spurious dependency, so
@@ -109,6 +130,7 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
   @override
   void initState() {
     super.initState();
+    _logger = ref.read(loggerProvider);
     // register() replaces any existing scope with the same name, so this is
     // safe to call again on an identity rebuild.
     ShowcaseView.register(
@@ -125,25 +147,27 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
     // runs before this dispose does.
     if (_tourRunning) {
       _tourRunning = false; // Don't mark seen (unfinished tour).
+      _runningIds = const [];
       try {
         ShowcaseView.getNamed(_scope).dismiss();
       } catch (e, st) {
-        ref.read(loggerProvider).warn('TOUR dispose dismiss failed', e, st);
+        _logger.warn('TOUR dispose dismiss failed', e, st);
       }
     }
     super.dispose();
   }
 
   /// Finish and dismiss both end the tour, but only a tour that actually ran
-  /// marks the tab seen.
+  /// marks its steps seen.
   void _onTourEnd() {
     if (!_tourRunning) return;
     _tourRunning = false;
-    _markSeen();
+    _markRanStepsSeen();
   }
 
-  void _markSeen() {
-    unawaited(ref.read(tourSeenProvider.notifier).markSeen(widget.scope));
+  void _markRanStepsSeen() {
+    unawaited(ref.read(tourSeenProvider.notifier).markSteps(_runningIds));
+    _runningIds = const [];
   }
 
   @override
@@ -158,12 +182,13 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
           ShowcaseView.getNamed(_scope).dismiss();
         } catch (e, st) {
           _tourRunning = false;
-          ref.read(loggerProvider).warn('TOUR dismiss failed', e, st);
+          _started = false;
+          _logger.warn('TOUR dismiss failed', e, st);
         }
       });
     }
     _wasVisible = visible;
-    if (seen.contains(widget.scope)) {
+    if (_pendingSteps(seen).isEmpty) {
       // Re-arm so a Settings "replay" reset can start the tour again.
       _started = false;
     } else if (visible && widget.ready && !_started) {
@@ -177,7 +202,7 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
     // Wait for ready — we never want to act on the optimistic empty default.
     await ref.read(tourSeenProvider.notifier).ready;
     if (!mounted) return;
-    if (ref.read(tourSeenProvider).contains(widget.scope)) return;
+    if (_pendingSteps(ref.read(tourSeenProvider)).isEmpty) return;
     await _routeTransitionSettled();
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -193,31 +218,37 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
         _started = false;
         return;
       }
-      final steps = tourStepsFor(widget.scope, isAdmin: widget.isAdmin);
+      final steps = _pendingSteps(ref.read(tourSeenProvider));
       try {
         final showcaseView = ShowcaseView.getNamed(_scope);
         // showcaseview 5.x never forwards key to Element; use isTargetRendered.
-        final keys = <GlobalKey>[
-          for (final id in steps)
-            if (widget.stepKeys[id] case final key?
-                when showcaseView.isTargetRendered(key))
-              key,
-        ];
+        final running = <TourStepId>[];
+        final keys = <GlobalKey>[];
+        for (final id in steps) {
+          if (widget.stepKeys[id] case final key?
+              when showcaseView.isTargetRendered(key)) {
+            running.add(id);
+            keys.add(key);
+          }
+        }
         if (keys.isEmpty) {
-          // No targets for this layout/role, so just mark it seen directly.
-          _markSeen();
+          // Nothing rendered for this layout, role or job state. Mark NOTHING —
+          // these steps haven't been seen, and the next visit retries them.
           return;
         }
         // A form sheet may autofocus its first field, and the keyboard then
         // covers the lower half of every target. Harmless on the screen
         // tours — none of them autofocus.
         FocusManager.instance.primaryFocus?.unfocus();
+        _runningIds = running;
         _tourRunning = true;
         showcaseView.startShowCase(keys);
       } catch (e, st) {
         // getNamed throws if the scope's already gone — don't let that crash the tab.
         _tourRunning = false;
-        ref.read(loggerProvider).warn('TOUR start failed', e, st);
+        _started = false;
+        _runningIds = const [];
+        _logger.warn('TOUR start failed', e, st);
       }
     });
   }

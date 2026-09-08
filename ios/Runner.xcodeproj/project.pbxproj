@@ -12,6 +12,7 @@
 		25006DD63002A7A500204FFE /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 25006DD53002A7A500204FFE /* SwiftUI.framework */; };
 		25006DE73002A7A600204FFE /* ScheduleWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 25006DD13002A7A500204FFE /* ScheduleWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		259019422FE840DE003177D5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 259019412FE840DE003177D5 /* GoogleService-Info.plist */; };
+		25FF1A010000000000000004 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 25FF1A010000000000000003 /* InfoPlist.strings */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		34C5FE088C1F397A02A9E945 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9D48DC829E96DEF5E51D596A /* Foundation.framework */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
@@ -103,6 +104,8 @@
 		25006DD53002A7A500204FFE /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		25006E043002AFF100204FFE /* ScheduleWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ScheduleWidgetExtension.entitlements; sourceTree = "<group>"; };
 		259019412FE840DE003177D5 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		25FF1A010000000000000001 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		25FF1A010000000000000002 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		25AC829F2FFEAB0A00DD3CDD /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		2ECD0A6DE641D05902F08E54 /* ScheduleSnapshot.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScheduleSnapshot.swift; sourceTree = "<group>"; };
 		331C807B294A618700263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
@@ -265,6 +268,7 @@
 				97C146FD1CF9000F007C117D /* Assets.xcassets */,
 				97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */,
 				97C147021CF9000F007C117D /* Info.plist */,
+				25FF1A010000000000000003 /* InfoPlist.strings */,
 				BB4A3C8E1D353ABC0083082F /* PrivacyInfo.xcprivacy */,
 				1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */,
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
@@ -405,6 +409,7 @@
 			knownRegions = (
 				en,
 				Base,
+				fr,
 			);
 			mainGroup = 97C146E51CF9000F007C117D;
 			packageReferences = (
@@ -455,6 +460,7 @@
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
 				BB4A3C8F1D353ABC0083082F /* PrivacyInfo.xcprivacy in Resources */,
 				259019422FE840DE003177D5 /* GoogleService-Info.plist in Resources */,
+				25FF1A010000000000000004 /* InfoPlist.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -628,6 +634,15 @@
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
+		25FF1A010000000000000003 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				25FF1A010000000000000001 /* en */,
+				25FF1A010000000000000002 /* fr */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
 		97C146FA1CF9000F007C117D /* Main.storyboard */ = {
 			isa = PBXVariantGroup;
 			children = (

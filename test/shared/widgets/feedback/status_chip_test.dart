@@ -49,6 +49,43 @@ void main() {
     expect(pill.background, isNot(lightTheme().colorScheme.errorContainer));
   });
 
+  group('the label each status speaks', () {
+    for (final (status, label) in const [
+      (AppointmentStatus.done, 'Complete'),
+      (AppointmentStatus.pending, 'Scheduled'),
+      (AppointmentStatus.cancelled, 'Cancelled'),
+      (AppointmentStatus.inProgress, 'In Progress'),
+    ]) {
+      testWidgets(label, (tester) async {
+        await tester.pumpWidget(_wrap(StatusChip(status: status)));
+        expect(find.text(label), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  });
+
+  testWidgets('the chip caps user text scaling so the pill stays compact', (
+    tester,
+  ) async {
+    // The chip caps user scaling at 1.3x INTERNALLY, which is why no call site
+    // may wrap it in `TextScaler.noScaling`.
+    Widget chipAt(double scale) => MediaQuery(
+      data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+      child: const Center(child: StatusChip(status: AppointmentStatus.inProgress)),
+    );
+
+    await tester.pumpWidget(_wrap(chipAt(1)));
+    final baseline = tester.getSize(find.text('In Progress')).width;
+
+    await tester.pumpWidget(_wrap(chipAt(3)));
+    final scaled = tester.getSize(find.text('In Progress')).width;
+
+    // 1.3x cap plus a small epsilon for sub-pixel rounding.
+    expect(scaled, lessThanOrEqualTo(baseline * 1.31));
+    // Still scales a bit at 3x — not clamped flat to no-scale.
+    expect(scaled, greaterThan(baseline * 1.05));
+  });
+
   group('AppointmentStatus.raw', () {
     test('overdue throws — it is display-only and has no stored value', () {
       // Deliberate. `overdue` is derived from the clock and is NOT on the

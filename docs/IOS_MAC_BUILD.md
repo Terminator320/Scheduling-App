@@ -1,12 +1,16 @@
-# First iOS Build on a Mac — Set-by-Set
+# iOS Build on a Mac — Set-by-Set
 
-The config side of the iOS port is **done** (deployment target 18.0 in
+**This has all been done — the app builds on a Mac and has shipped to the App
+Store several times.** Read this as the setup runbook for a *fresh* machine (or
+a fresh checkout), not as outstanding work: the Mac-only parts are native
+tooling, the two gitignored secret files, the App Attest capability and device
+verification, and every one of them has been through at least once.
+
+The config side is committed and needs nothing: deployment target 18.0 in
 `project.pbxproj` and `AppFrameworkInfo.plist`, `Info.plist` +
-`PrivacyInfo.xcprivacy` in place, `main.dart` already using
+`PrivacyInfo.xcprivacy` in place, `main.dart` on
 `DefaultFirebaseOptions.currentPlatform`, and the Crashlytics dSYM run-script
-phases committed on all three targets). What's left is Mac-only: native
-tooling, the two gitignored secret files, the App Attest capability, and device
-verification.
+phases on all three targets.
 
 > **This project uses Swift Package Manager — there is no `Podfile` and never
 > will be.** Ignore any older notes mentioning `pod install` / `${PODS_ROOT}`.
@@ -41,16 +45,18 @@ AirDrop/USB/secure channel; **never commit them**:
 
 | File | Needed for |
 |---|---|
-| `dev/.env` | Firebase client config (incl. `IOS_API_KEY` / `IOS_APP_ID`) |
+| `dev/firebase.local.json` | Local `--dart-define-from-file` values; copy from `dev/firebase.local.example.json` |
 | `ios/GoogleService-Info.plist` | iOS Firebase — lives at the `ios/` **root**, not `ios/Runner/` |
 
 (There is no third file — `android/` was deleted on 2026-08-05 and iOS is the
 only platform.)
 
-- Confirm `dev/.env` contains **`IOS_API_KEY`** and **`IOS_APP_ID`** —
-  `firebase_options.dart`'s iOS block reads them. Do **not** re-run
+- Confirm the dart-define file contains **`IOS_API_KEY`**, **`IOS_APP_ID`**,
+  **`MESSAGING_SENDER_ID`**, **`PROJECT_ID`**, **`STORAGE_BUCKET`**, and
+  **`IOS_MAPS_API_KEY`**. `firebase_options.dart`'s iOS block reads the
+  Firebase keys from compile-time defines. Do **not** re-run
   `flutterfire configure` — it rewrites `firebase_options.dart` into the
-  literal-values style and breaks the env-based setup.
+  literal-values style and breaks the define-based setup.
 - If `GoogleService-Info.plist` is lost: re-download from Firebase Console → the
   iOS app above (bundle `net.vogas.scheduling`) and drop it at `ios/`.
 
@@ -134,13 +140,38 @@ Walk the **device-only checklist** (none covered by the test harness):
 - **Save-to-contacts** (`NSContactsUsageDescription`)
 - Image upload pipeline (compress → upload) and image cleanup on delete
 - **App Attest** on a **real device** in a Release build (fails on Simulator)
-- **Admin live staff map** — needs `IOS_MAPS_API_KEY` in `dev/.env` (blank key →
+- **Admin live staff map** — needs `IOS_MAPS_API_KEY` as a dart define (blank key →
   the map renders blank; see `AppDelegate.swift`)
 - **Push notifications** — assignment/reminder/overdue pushes + tap deep-link
 - **Background GPS presence** (`geolocator`) — powers the "time to leave" reminder
 - **iOS Live Activities** — the "time to leave" Lock Screen card (iOS 17.2+;
   Dynamic Island needs Pro hardware)
 - **Siri App Intents** — the read intents (count / today / next / a specific day)
+
+### Verifying analytics events in DebugView
+
+Analytics collection is **off in debug builds by default**, so day-to-day
+`flutter run` never files events against the production property. Watching
+events live needs BOTH halves — they do different things, and only having one
+is why "DebugView shows nothing" is the usual first result:
+
+1. **Turn collection on** for the run:
+   `flutter run --dart-define=ANALYTICS_DEBUG=true --dart-define-from-file=dev/firebase.local.json`.
+   This also stamps the `build_env=debug` user property, so this traffic stays
+   filterable (and excludable) in the console afterwards.
+2. **Add the launch argument** so events stream immediately instead of being
+   batched: Xcode → *Product → Scheme → Edit Scheme…* → **Run** → *Arguments* →
+   *Arguments Passed On Launch* → `+` → `-FIRDebugEnabled`. Run from Xcode, or
+   from `flutter run` after the scheme is saved.
+3. Open Firebase Console → *Analytics → DebugView* and pick the device in the
+   top-left selector. Events appear within seconds.
+4. **Turn it back off** when finished: remove `-FIRDebugEnabled` (or set
+   `-FIRDebugDisabled`) on the scheme. Leaving it on keeps that device
+   streaming every session into DebugView.
+
+Verify at least one of each shape: a `screen_view` (switch hub tabs), a custom
+event with parameters (create an appointment), and the `user_role` user
+property under *DebugView → the device card → User properties*.
 
 ## Phase G — Before TestFlight / App Store (not for dev builds)
 
@@ -151,9 +182,20 @@ Walk the **device-only checklist** (none covered by the test harness):
    (All Cloud Function callables already enforce App Check — nothing to flip in
    `functions/`; the old pre-ship `enforceAppCheck: false` carve-out was retired
    in 1.25.1.)
-2. Bump `+BUILD` in `pubspec.yaml` + add a `CHANGELOG.md` entry, then **Archive**
+2. **Build with `FIREBASE_ANALYTICS_WITHOUT_ADID=true`** in the environment.
+   The plugin's `Package.swift` reads it and links `FirebaseAnalyticsCore`
+   instead of `FirebaseAnalytics`, dropping IDFA/advertising-identifier
+   collection — this app sells no ads and needs no attribution, so the ad id
+   buys nothing and costs a heavier privacy disclosure (and a possible ATT
+   prompt).
+3. **Update the App Store Connect privacy labels for analytics.**
+   `ios/Runner/PrivacyInfo.xcprivacy` declares **Product Interaction** (Usage
+   Data), not linked and not used for tracking — `setUserId` is never called
+   and no analytics parameter carries a name, email, phone, address or note.
+   The App Store Connect answers must match that manifest.
+4. Bump `+BUILD` in `pubspec.yaml` + add a `CHANGELOG.md` entry, then **Archive**
    in Xcode (*Product → Archive*) and upload.
-3. **Verify Crashlytics symbolication:** on the first TestFlight build,
+5. **Verify Crashlytics symbolication:** on the first TestFlight build,
    trigger a test crash and confirm the symbolicated report appears in the
    Firebase Crashlytics console within ~10 minutes (proves the Run Script
    phase + dSYM settings from Phase D are correct).
@@ -162,10 +204,14 @@ Walk the **device-only checklist** (none covered by the test harness):
 
 Neither applies today — recorded so they aren't forgotten:
 
-- **App Tracking Transparency:** if an analytics/ads SDK with cross-app
-  tracking is ever added, present the ATT prompt and add
-  `NSUserTrackingUsageDescription` to `Info.plist`. (`PrivacyInfo.xcprivacy`
-  currently declares `NSPrivacyTracking: false`.)
+- **App Tracking Transparency:** if an SDK with CROSS-APP tracking is ever
+  added, present the ATT prompt and add `NSUserTrackingUsageDescription` to
+  `Info.plist`. (`PrivacyInfo.xcprivacy` declares `NSPrivacyTracking: false`.)
+  Firebase Analytics, added 2026-09-07, does NOT change this — it is built
+  with `FIREBASE_ANALYTICS_WITHOUT_ADID=true` (Phase G step 2), so it collects
+  no advertising identifier and does no cross-app tracking. Dropping that build
+  flag is what would put ATT back on the table, which is the reason it is a
+  documented release step rather than a preference.
 - **Sign in with Apple:** required by Apple as soon as any third-party
   sign-in provider (Google, Facebook, …) is offered. Not required for the
   current Firebase email/password-only auth.

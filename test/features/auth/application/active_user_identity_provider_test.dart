@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart' show FirebaseException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,10 +16,8 @@ class _MockEmployeesRepository extends Mock implements EmployeesRepository {}
 const _uid = 'auth-uid-1';
 const _docId = 'users-doc-1';
 
-FirebaseException _permissionDenied() => FirebaseException(
-  plugin: 'cloud_firestore',
-  code: 'permission-denied',
-);
+FirebaseException _permissionDenied() =>
+    FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied');
 
 void main() {
   late _MockEmployeesRepository repo;
@@ -61,7 +61,7 @@ void main() {
   Future<ActiveUserIdentity?> resolve(ProviderContainer container) async {
     await container.read(currentUserDocProvider.future);
     await container.read(authUidProvider.future);
-    return container.read(activeUserIdentityProvider.future);
+    return await container.read(activeUserIdentityProvider.future);
   }
 
   group('active identity', () {
@@ -97,6 +97,85 @@ void main() {
 
       expect(identity?.role, 'admin');
     });
+
+    test(
+      'waits for the users doc to settle before resolving identity',
+      () async {
+        final docs = StreamController<Map<String, dynamic>>();
+        addTearDown(docs.close);
+        final container = ProviderContainer(
+          retry: (retryCount, error) => null,
+          overrides: [
+            currentUserDocProvider.overrideWith((ref) => docs.stream),
+            authUidProvider.overrideWith((ref) => Stream.value(_uid)),
+            employeesRepositoryProvider.overrideWithValue(repo),
+          ],
+        );
+        addTearDown(container.dispose);
+        container
+          ..listen(currentUserDocProvider, (_, _) {})
+          ..listen(authUidProvider, (_, _) {})
+          ..listen(activeUserIdentityProvider, (_, _) {});
+
+        var completed = false;
+        final future = container.read(activeUserIdentityProvider.future).then((
+          value,
+        ) {
+          completed = true;
+          return value;
+        });
+
+        await pumpEventQueue();
+        expect(completed, isFalse);
+
+        docs.add(const {'role': 'employee', 'status': 'active'});
+        final identity = await future;
+
+        expect(identity?.docId, _docId);
+        verify(() => repo.findUserByUid(_uid)).called(1);
+      },
+    );
+
+    test(
+      'waits for the auth uid to settle before resolving identity',
+      () async {
+        final uids = StreamController<String?>();
+        addTearDown(uids.close);
+        final container = ProviderContainer(
+          retry: (retryCount, error) => null,
+          overrides: [
+            currentUserDocProvider.overrideWith(
+              (ref) =>
+                  Stream.value(const {'role': 'employee', 'status': 'active'}),
+            ),
+            authUidProvider.overrideWith((ref) => uids.stream),
+            employeesRepositoryProvider.overrideWithValue(repo),
+          ],
+        );
+        addTearDown(container.dispose);
+        container
+          ..listen(currentUserDocProvider, (_, _) {})
+          ..listen(authUidProvider, (_, _) {})
+          ..listen(activeUserIdentityProvider, (_, _) {});
+
+        var completed = false;
+        final future = container.read(activeUserIdentityProvider.future).then((
+          value,
+        ) {
+          completed = true;
+          return value;
+        });
+
+        await pumpEventQueue();
+        expect(completed, isFalse);
+
+        uids.add(_uid);
+        final identity = await future;
+
+        expect(identity?.docId, _docId);
+        verify(() => repo.findUserByUid(_uid)).called(1);
+      },
+    );
   });
 
   group('returns null (this is what wipes the widget + Siri mirrors)', () {
@@ -171,9 +250,9 @@ void main() {
     test('a persistent failure surfaces as an error, never a silent null', () {
       // A silent null would wipe the widget + Siri mirrors on a transient
       // failure, so exhausting the retries must propagate instead.
-      when(
-        () => repo.findUserByUid(any()),
-      ).thenAnswer((_) async => throw _permissionDenied());
+      when(() => repo.findUserByUid(any())).thenAnswer((_) async {
+        throw _permissionDenied();
+      });
 
       return expectLater(
         resolve(makeContainer()),

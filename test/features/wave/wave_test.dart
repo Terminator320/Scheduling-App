@@ -194,6 +194,82 @@ void main() {
       expect(conn.businessId, '');
       expect(conn.businessName, '');
     });
+
+    test('reads the outbox counts', () {
+      final conn = WaveConnection.fromMap(const {
+        'businessId': 'biz-1',
+        'pendingCount': 3,
+        'failedCount': 1,
+      });
+      expect(conn.pendingCount, 3);
+      expect(conn.failedCount, 1);
+      expect(conn.hasPending, isTrue);
+      expect(conn.hasFailed, isTrue);
+    });
+
+    test('an ABSENT count is null, not zero', () {
+      // The counts are additive fields: a backend that predates them sends
+      // nothing, and the server itself sends null when the aggregate read
+      // failed. Both must stay distinguishable from an empty queue, which is
+      // the one reading an admin acts on by NOT pressing Sync.
+      final conn = WaveConnection.fromMap(const {'businessId': 'biz-1'});
+      expect(conn.pendingCount, isNull);
+      expect(conn.failedCount, isNull);
+      expect(conn.hasPending, isFalse);
+      expect(conn.hasFailed, isFalse);
+    });
+
+    test('an explicit zero is a real, empty queue', () {
+      final conn = WaveConnection.fromMap(const {
+        'businessId': 'biz-1',
+        'pendingCount': 0,
+        'failedCount': 0,
+      });
+      expect(conn.pendingCount, 0);
+      expect(conn.hasPending, isFalse);
+    });
+  });
+
+  group('WaveRetryResult.fromMap', () {
+    test('parses a requeue that also pushed', () {
+      final r = WaveRetryResult.fromMap(const {
+        'requeued': 2,
+        'scanned': 3,
+        'pushed': 2,
+      });
+      expect(r.requeued, 2);
+      expect(r.scanned, 3);
+      expect(r.pushed, 2);
+    });
+
+    test('a missing `pushed` is null, not zero', () {
+      // The requeue committed; only the optional push behind it failed. Zero
+      // would read as "nothing reached Wave", which is a different and worse
+      // claim than "we do not know yet".
+      final r = WaveRetryResult.fromMap(const {'requeued': 4, 'scanned': 4});
+      expect(r.requeued, 4);
+      expect(r.pushed, isNull);
+    });
+
+    test('parses jobs that dead-lettered again on the push', () {
+      final r = WaveRetryResult.fromMap(const {
+        'requeued': 3,
+        'scanned': 3,
+        'pushed': 2,
+        'failed': 1,
+      });
+      expect(r.failed, 1);
+      expect(r.hasFailed, isTrue);
+    });
+
+    test('a missing `failed` is unknown, never "nothing failed"', () {
+      // An older backend does not send it, and a drain that threw cannot know.
+      // Reading either as zero would let the app claim a clean retry over an
+      // outbox row that never moved.
+      final r = WaveRetryResult.fromMap(const {'requeued': 4, 'scanned': 4});
+      expect(r.failed, isNull);
+      expect(r.hasFailed, isFalse);
+    });
   });
 
   // -------------------------------------------------------------------------

@@ -1,9 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:saver_gallery/saver_gallery.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -22,10 +22,7 @@ class ImageViewer extends ConsumerStatefulWidget {
     required List<ImageProvider> images,
     int initialIndex = 0,
   }) {
-    // Clamped because the index is composed by the caller from two lists
-    // (resolved existing URLs + local files) and the first of those can still
-    // be resolving. An out-of-range index reads `images[_currentIndex]` on
-    // Save/Share and throws a RangeError out of a gesture handler.
+    // Clamp while remote images may still be resolving.
     final index = images.isEmpty ? 0 : initialIndex.clamp(0, images.length - 1);
     final scheme = Theme.of(context).colorScheme;
     return Navigator.of(context).push(
@@ -61,14 +58,14 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
   late final PageController _pageController;
   late int _currentIndex;
 
-  /// Shared by every page's [InteractiveViewer]. Its transform drives [_zoomed], which decides whether a drag zooms the image or dismisses the viewer.
+  /// Tracks whether drags should pan or dismiss.
   final _transformController = TransformationController();
   bool _zoomed = false;
 
   /// Current vertical drag displacement of the image, in logical pixels.
   double _dragOffset = 0;
 
-  /// True while a save or share is in flight — disables the action buttons so we can't double-launch either one.
+  /// Prevents double-launching save or share.
   bool _busy = false;
 
   /// Anchors the iPad share-sheet popover to the share button's frame.
@@ -79,6 +76,12 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
 
   /// Downward fling velocity (px/s) that dismisses regardless of distance.
   static const double _dismissVelocity = 700;
+
+  static String _photoFileName() =>
+      'ESPro_${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+  static String _pathIn(String parent, String child) =>
+      '$parent${Platform.pathSeparator}$child';
 
   @override
   void initState() {
@@ -117,34 +120,37 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     setState(() => _dragOffset = 0);
   }
 
-  /// Resolves the on-screen image to an on-disk file for share/save to use.
-  /// Local picks are already files; network images resolve to their cached
-  /// copy, downloading it again if it's been evicted.
+  /// Resolves the current image to a file for share/save.
   Future<File?> _currentImageFile() async {
     final provider = widget.images[_currentIndex];
     if (provider is FileImage) return provider.file;
-    if (provider is CachedNetworkImageProvider) {
-      return DefaultCacheManager().getSingleFile(provider.url);
+    // Refused photos use a placeholder that should not be exported.
+    if (isRefusedImage(provider)) return null;
+    if (provider is MemoryImage) {
+      final dir = await getTemporaryDirectory();
+      final file = File(_pathIn(dir.path, _photoFileName()));
+      return await file.writeAsBytes(provider.bytes);
     }
     return null;
   }
 
-  /// Runs [body] under the shared `_busy` guard, so a double-tap can't launch
-  /// two saves or shares at once. Logs under [logTag] and shows [errorMessage]
-  /// if it throws.
+  /// Runs [body] behind the shared busy guard.
   Future<void> _runExclusive(
     String logTag,
     String errorMessage,
     Future<void> Function() body,
   ) async {
     if (_busy) return;
+    // Resolve providers before awaits because dismissing unmounts this consumer.
+    final logger = ref.read(loggerProvider);
+    final notices = ref.read(noticeServiceProvider);
     setState(() => _busy = true);
     try {
       await body();
     } catch (e, st) {
-      ref.read(loggerProvider).warn('$logTag failed', e, st);
+      logger.warn('$logTag failed', e, st);
       if (!mounted) return;
-      ref.read(noticeServiceProvider).error(errorMessage);
+      notices.error(errorMessage);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -154,7 +160,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     'IMG-SAVE',
     context.l10n.calendar_couldNotSavePhoto,
     () async {
-      // iOS needs add-only Photos access first — saver_gallery fails silently without it. Android (dev-only here) handles its own permission natively.
+      // iOS needs add-only Photos access before saver_gallery runs.
       if (Platform.isIOS) {
         final perm = await ref
             .read(mediaPermissionServiceProvider)
@@ -171,7 +177,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
       if (file == null) throw StateError('image source not resolvable');
       final result = await SaverGallery.saveFile(
         filePath: file.path,
-        fileName: 'ESPro_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        fileName: _photoFileName(),
         skipIfExists: false,
       );
       if (!mounted) return;
@@ -192,14 +198,11 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
 
   Future<void> _share() => _runExclusive(
     'IMG-SHARE',
-    // A specific intro, like its neighbour _saveToPhotos — the generic string
-    // is forbidden at catch sites (.claude/rules/error-handling.md) precisely
-    // because it costs the room the message needs to say what failed.
     context.l10n.calendar_couldNotSharePhoto,
     () async {
       final file = await _currentImageFile();
       if (file == null) throw StateError('image source not resolvable');
-      // On iPad the share popover needs to be anchored to the button's frame, or it throws.
+      // iPad share sheets need an anchor rect.
       final box =
           _shareButtonKey.currentContext?.findRenderObject() as RenderBox?;
       final origin = box != null && box.hasSize
@@ -214,6 +217,10 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Raw white, deliberately: the viewer paints its own black ground in BOTH
+    // themes — a photo is shown against black wherever it is opened — so this
+    // is not a theme-dependent foreground, and a `ColorScheme` token here would
+    // flip it to dark-on-black in the light theme.
     const foreground = Colors.white;
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final dragFraction = (_dragOffset.abs() / (_dismissDistance * 2)).clamp(
@@ -231,8 +238,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
       itemBuilder: (context, index) {
         return InteractiveViewer(
           transformationController: _transformController,
-          // Single-finger pans belong to drag-down-to-dismiss until the user
-          // has pinch-zoomed in; then they pan the zoomed image instead.
+          // A zoomed image owns single-finger pans.
           panEnabled: _zoomed,
           minScale: 1,
           maxScale: 4,
@@ -251,9 +257,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
       },
     );
 
-    // Translate and fade the image as it follows the drag. With reduce-motion
-    // on, the image just stays put and only pops away once the gesture
-    // crosses the threshold.
+    // Reduce motion skips the live drag transform.
     if (!reduceMotion && _dragOffset != 0) {
       pager = Transform.translate(
         offset: Offset(0, _dragOffset),
@@ -288,9 +292,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
   }
 }
 
-/// The three fixed overlays drawn above the pager — save/share in the
-/// top-left, close in the top-right, and the page counter top-center
-/// (only shown when there's more than one image).
+/// Fixed save/share, close, and page-count controls.
 class _ViewerOverlay extends StatelessWidget {
   const _ViewerOverlay({
     required this.busy,
@@ -312,6 +314,8 @@ class _ViewerOverlay extends StatelessWidget {
   final VoidCallback onClose;
   final TextTheme textTheme;
 
+  /// Raw white for the same reason as the viewer body: this chrome sits on the
+  /// viewer's own black ground in both themes.
   static const Color _foreground = Colors.white;
 
   @override
@@ -373,12 +377,35 @@ class _ViewerOverlay extends StatelessWidget {
   }
 }
 
+/// Placeholder provider for a photo the loader refused.
+final refusedImage = MemoryImage(
+  Uint8List.fromList(const [
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, //
+    0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+    0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+    0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+    0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+    0x42, 0x60, 0x82,
+  ]),
+);
+
+/// Whether [provider] is the placeholder [buildImageProviders] substitutes for
+/// a photo Storage refused.
+bool isRefusedImage(ImageProvider provider) =>
+    identical(provider, refusedImage);
+
 List<ImageProvider> buildImageProviders({
-  required List<String> urls,
+  required List<Uint8List> bytes,
   required List<File> files,
 }) {
   return [
-    ...urls.map<ImageProvider>(CachedNetworkImageProvider.new),
+    // Empty bytes mean a refused photo, so keep the slot stable.
+    ...bytes.map<ImageProvider>(
+      (b) => b.isEmpty ? refusedImage : MemoryImage(b),
+    ),
     ...files.map<ImageProvider>(FileImage.new),
   ];
 }

@@ -44,16 +44,28 @@ service firebase.storage {
       // Read: admin sees all; assigned employees see their appointments' images.
       allow read: if isAdmin() || isAssignedToAppointment(appointmentId);
 
-      // Admin only — employees are view-only on appointments, and the upload flow only
-      // runs in admin sessions anyway. contentType is client-set and easy to fake, so
-      // these checks are just defense in depth; the real defense is the magic-byte
-      // trigger in functions/index.js.
-      allow write: if isAdmin()
+      // Admin, OR an assignee of THIS appointment (2026-09-01). It was
+      // admin-only because "the upload flow only runs in admin sessions" —
+      // which was true, and was the gap: the crew who are actually on site
+      // could not photograph what they found, on an app whose whole photo
+      // pipeline already existed. The grant is per-appointment, so a
+      // technician can only write under a job they are on.
+      //
+      // contentType is client-set and easy to fake, so these checks are
+      // defense in depth; the real defense is the magic-byte trigger
+      // (`validateUploadedImage`), which deletes a non-JPEG/PNG object
+      // server-side. `firestore.rules` grants the matching row create at the
+      // same path.
+      allow write: if (isAdmin() || isAssignedToAppointment(appointmentId))
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/(jpeg|png)');
 
-      // Admin only — employees can't modify the pictures array, so if we let them
-      // delete the blob directly, the doc would end up with broken imageUrls.
+      // Admin only, and deliberately NOT widened with the write above: adding
+      // to the record is additive, removing from it is not. A field record is
+      // the billable artifact, so a photo must not be quietly deletable by the
+      // person whose work it documents. (The old reason given here — that
+      // employees can't modify the `pictures` array — is stale: that array is
+      // gone.)
       allow delete: if isAdmin();
     }
 

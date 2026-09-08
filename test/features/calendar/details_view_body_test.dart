@@ -9,6 +9,7 @@ import 'package:scheduling/features/calendar/application/appointments_providers.
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/widgets/views/details_action_bar.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_view_body.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
@@ -62,6 +63,20 @@ final _appointmentWithNotes = AppointmentRecord(
   status: 'booked',
 );
 
+final _dayOff = AppointmentRecord(
+  id: 'appt-off',
+  title: 'Vacation',
+  startTime: DateTime(2026, 5, 10),
+  endTime: DateTime(2026, 5, 12, 23, 59),
+  address: '1 First St',
+  materialsNeeded: 'copper pipe',
+  employeeIds: const ['e1'],
+  employeeNames: const ['Alex'],
+  notes: 'Back on the Monday.',
+  isPersonal: true,
+  isDayOff: true,
+);
+
 Widget _wrap(Widget child, {required List<Override> overrides}) {
   return ProviderScope(
     overrides: overrides,
@@ -105,6 +120,9 @@ void main() {
     when(
       employees.watchEmployees,
     ).thenAnswer((_) => Stream.value(const [_employeeA]));
+    when(
+      () => appointments.onLocalWrite,
+    ).thenAnswer((_) => const Stream.empty());
   });
 
   testWidgets(
@@ -245,5 +263,69 @@ void main() {
 
     expect(find.text('NOTES'), findsOneWidget);
     expect(find.text('Gate code 4821'), findsOneWidget);
+  });
+  testWidgets('an untitled day off leads with the person, not "Personal"', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        DetailsViewBody(
+          // What an unnamed personal block actually stores.
+          appointment: _dayOff.copyWith(title: 'Personal'),
+          showActions: true,
+          onClose: () {},
+        ),
+        overrides: [
+          appointmentsRepositoryProvider.overrideWithValue(appointments),
+          clientsRepositoryProvider.overrideWithValue(clients),
+          employeesRepositoryProvider.overrideWithValue(employees),
+          photoUploadNotifierProvider.overrideWithValue(uploadNotifier),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alex'), findsOneWidget);
+    expect(find.text('Personal'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a day off opens as its own body, not an appointment', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        DetailsViewBody(
+          appointment: _dayOff,
+          showActions: true,
+          onClose: () {},
+        ),
+        overrides: [
+          appointmentsRepositoryProvider.overrideWithValue(appointments),
+          clientsRepositoryProvider.overrideWithValue(clients),
+          employeesRepositoryProvider.overrideWithValue(employees),
+          photoUploadNotifierProvider.overrideWithValue(uploadNotifier),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Leads with the typed REASON, person underneath — the same hierarchy
+    // the agenda strip shows, so tapping "Vacation" cannot open a screen
+    // that has dropped the word.
+    expect(find.text('Vacation'), findsOneWidget);
+    expect(find.text('Alex'), findsOneWidget);
+    expect(find.text('3 days'), findsOneWidget);
+    expect(find.text('Back on the Monday.'), findsOneWidget);
+
+    // Nothing a day off does not have — even though the record still carries
+    // a stale address and materials from before it was marked as one.
+    expect(find.text('1 First St'), findsNothing);
+    expect(find.text('copper pipe'), findsNothing);
+    // No lifecycle: neither action is offered.
+    expect(find.text('Mark as complete'), findsNothing);
+    expect(find.text('Cancel appointment'), findsNothing);
+    expect(find.byType(DetailsActionBar), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }

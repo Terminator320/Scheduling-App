@@ -7,14 +7,19 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/features/calendar/application/appointment_conflict_checker.dart';
 import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_prefill.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
+import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 part 'add_event_controller.freezed.dart';
@@ -27,17 +32,21 @@ abstract class AddEventState
     DateTime? selectedDate,
     DateTime? endDate,
 
-    /// The user picked an end date explicitly, so it no longer mirrors the
-    /// start — moving the start now SHIFTS it instead of collapsing the run.
+    /// Whether the end date should move with later start-date changes.
     @Default(false) bool endDateTouched,
     TimeOfDay? selectedStartTime,
     TimeOfDay? selectedEndTime,
     @Default(false) bool endTimeWasPickedManually,
+
+    /// Seeded job length; the end follows the start by this many minutes.
+    int? durationMinutes,
     ClientRecord? selectedClient,
     @Default(<ClientRecord>[]) List<ClientRecord> clientResults,
     @Default(false) bool isSearchingClient,
+    @Default(ClientSearchStatus()) ClientSearchStatus clientSearchStatus,
     @Default(false) bool useCustomAddress,
     @Default(false) bool isPersonal,
+    @Default(false) bool isDayOff,
     @Default(false) bool isAllDay,
     @Default(<EmployeeRecord>[]) List<EmployeeRecord> selectedEmployees,
     @Default(RepeatInterval.none) RepeatInterval repeat,
@@ -56,6 +65,11 @@ class AddEventInvalid extends AddEventSubmitOutcome {
   const AddEventInvalid();
 }
 
+/// A submit skipped by the reentrancy guard.
+class AddEventBusy extends AddEventSubmitOutcome {
+  const AddEventBusy();
+}
+
 class AddEventBusyEmployees extends AddEventSubmitOutcome {
   const AddEventBusyEmployees({
     required this.busyEmployees,
@@ -68,11 +82,18 @@ class AddEventBusyEmployees extends AddEventSubmitOutcome {
 }
 
 class AddEventSubmitted extends AddEventSubmitOutcome {
-  const AddEventSubmitted(this.appointment, {this.futureBookings = 0});
+  const AddEventSubmitted(
+    this.appointment, {
+    this.futureBookings = 0,
+    this.runDays = 1,
+  });
   final AppointmentRecord appointment;
 
-  /// Pre-booked repeat occurrences created alongside [appointment].
+  /// Pre-booked REPEAT occurrences created alongside [appointment].
   final int futureBookings;
+
+  /// How many days the booked run covers; 1 for an ordinary single-day job.
+  final int runDays;
 }
 
 class AddEventFailed extends AddEventSubmitOutcome {
@@ -91,8 +112,6 @@ class AddEventController extends Notifier<AddEventState>
     return AddEventState(selectedDate: initialDate, endDate: initialDate);
   }
 
-  // --- AppointmentFormConcerns adapters ---
-
   @override
   AddEventState applyFormUpdate(
     AddEventState current,
@@ -101,6 +120,8 @@ class AddEventController extends Notifier<AddEventState>
     var next = current.copyWith(
       clientResults: update.clientResults ?? current.clientResults,
       isSearchingClient: update.isSearchingClient ?? current.isSearchingClient,
+      clientSearchStatus:
+          update.clientSearchStatus ?? current.clientSearchStatus,
       useCustomAddress: update.useCustomAddress ?? current.useCustomAddress,
       selectedEmployees: update.selectedEmployees ?? current.selectedEmployees,
       errors: update.errors ?? current.errors,
@@ -123,19 +144,20 @@ class AddEventController extends Notifier<AddEventState>
   void removeImage(int index) => removePendingImageAt(index);
 
   void selectDate(DateTime date) {
+    final endDate = _shiftedEndDate(date);
     state = state.copyWith(
       selectedDate: date,
-      endDate: _shiftedEndDate(date),
-      errors: withoutKey(withoutKey(state.errors, 'date'), 'endDate'),
+      endDate: endDate,
+      repeat: _repeatForSpan(date, endDate),
+      errors: withoutKeys(state.errors, const ['date', 'endDate']),
     );
   }
 
-  /// Where the end date lands when the start moves to [date].
-  ///
-  /// Untouched, it simply mirrors the start. Touched, the run keeps its
-  /// LENGTH — a 5-day job stays 5 days rather than collapsing to one — which
-  /// is why `endDateTouched` is tracked explicitly rather than inferred from
-  /// the two dates being equal.
+  /// A multi-day draft cannot carry a hidden repeat rule.
+  RepeatInterval _repeatForSpan(DateTime? start, DateTime? end) =>
+      runLengthDays(start, end) > 1 ? RepeatInterval.none : state.repeat;
+
+  /// Returns the end date after moving the start to [date].
   DateTime _shiftedEndDate(DateTime date) {
     final previousStart = state.selectedDate;
     final previousEnd = state.endDate;
@@ -150,6 +172,7 @@ class AddEventController extends Notifier<AddEventState>
     state = state.copyWith(
       endDate: date,
       endDateTouched: true,
+      repeat: _repeatForSpan(state.selectedDate, date),
       errors: withoutKey(state.errors, 'endDate'),
     );
   }
@@ -160,11 +183,68 @@ class AddEventController extends Notifier<AddEventState>
     if (auto) errors = withoutKey(errors, 'endTime');
     state = state.copyWith(
       selectedStartTime: time,
-      selectedEndTime: auto
-          ? AppointmentDraftDefaults.defaultEndTime(time)
-          : state.selectedEndTime,
+      selectedEndTime: auto ? _seededEndTime(time) : state.selectedEndTime,
       errors: errors,
     );
+  }
+
+  TimeOfDay _seededEndTime(TimeOfDay start) {
+    final duration = state.durationMinutes;
+    return duration == null
+        ? AppointmentDraftDefaults.defaultEndTime(start)
+        : AppointmentDraftDefaults.endTimeFor(start, duration);
+  }
+
+  /// Seeds the job length: the end lands [minutes] after the start, clamped
+  /// inside the day — now if a start is picked, else when one is.
+  void setDurationMinutes(int minutes) {
+    final start = state.selectedStartTime;
+    if (start == null) {
+      state = state.copyWith(durationMinutes: minutes);
+      return;
+    }
+    // Seeding over a picked start re-owns the end, so it follows the start from
+    // here on even if it had been picked by hand before.
+    state = state.copyWith(
+      durationMinutes: minutes,
+      selectedEndTime: AppointmentDraftDefaults.endTimeFor(start, minutes),
+      endTimeWasPickedManually: false,
+      errors: withoutKey(state.errors, 'endTime'),
+    );
+  }
+
+  /// Seeds a draft from [prefill]: the client, whether the source used its own
+  /// address, the job length, and whichever of its crew is still assignable —
+  /// resolved against the roster STREAM's first value, so a cold provider
+  /// cannot make a carried assignee silently vanish.
+  Future<void> applyPrefill(AppointmentPrefill prefill) async {
+    final client = prefill.client;
+    if (client != null) selectClient(client);
+    // selectClient already forces custom for a client with no address; the
+    // source's own choice can only add to that, never undo it.
+    if (prefill.useCustomAddress) setUseCustomAddress(value: true);
+    final duration = prefill.durationMinutes;
+    if (duration != null) setDurationMinutes(duration);
+    if (prefill.employeeIds.isEmpty) return;
+    // Read before the await: `ref` may be unmounted by the time it resolves.
+    final logger = ref.read(loggerProvider);
+    // The roster stream is autoDispose, so this HOLDS it for the length of the
+    // read rather than trusting whatever else happens to be watching it.
+    final subscription = ref.listen(employeesStreamProvider, (_, _) {});
+    try {
+      final roster = await ref.read(employeesStreamProvider.future);
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        selectedEmployees: [
+          for (final e in roster)
+            if (e.isAssignable && prefill.employeeIds.contains(e.id)) e,
+        ],
+      );
+    } catch (e, st) {
+      logger.warn('APPT-CREATE prefill roster read failed', e, st);
+    } finally {
+      subscription.close();
+    }
   }
 
   void selectEndTime(TimeOfDay time) {
@@ -179,28 +259,32 @@ class AddEventController extends Notifier<AddEventState>
     state = state.copyWith(repeat: value);
   }
 
-  /// Turning this on drops any client already picked: the picker is hidden from
-  /// here on, so a retained client would be saved invisibly.
+  void setDayOff({required bool value}) {
+    state = state.copyWith(
+      isDayOff: value,
+      isAllDay: value || state.isAllDay,
+      errors: withoutKeys(state.errors, const ['startTime', 'endTime']),
+    );
+  }
+
+  /// Toggles personal mode and clears hidden client-only fields.
   void setPersonal({required bool value}) {
     state = state.copyWith(
       isPersonal: value,
+      // Client visits cannot keep a hidden day-off flag.
+      isDayOff: value && state.isDayOff,
       selectedClient: value ? null : state.selectedClient,
       clientResults: value ? const [] : state.clientResults,
       useCustomAddress: !value && state.useCustomAddress,
-      // The repeat picker is hidden for a personal job, so a value chosen
-      // before the switch was flipped would silently pre-book a whole series.
-      // Safe here because nothing is saved yet; the edit flow deliberately
-      // keeps its repeat, where clearing it would rewrite a live series.
+      // Personal drafts cannot carry a hidden repeat rule.
       repeat: value ? RepeatInterval.none : state.repeat,
-      // Turning Personal ON defaults an untimed block to all-day. Turning it
-      // OFF leaves the flag alone — the switch is on every job now, so an
-      // all-day CLIENT visit is a legitimate, reachable, repairable state.
+      // Untimed personal drafts default to all-day.
       isAllDay: value
           ? state.selectedStartTime == null && state.selectedEndTime == null
           : state.isAllDay,
-      errors: withoutKey(
-        withoutKey(withoutKey(state.errors, 'client'), 'startTime'),
-        'endTime',
+      errors: withoutKeys(
+        state.errors,
+        const ['client', 'startTime', 'endTime'],
       ),
     );
   }
@@ -208,10 +292,7 @@ class AddEventController extends Notifier<AddEventState>
   void setAllDay({required bool value}) {
     state = state.copyWith(
       isAllDay: value,
-      errors: withoutKey(
-        withoutKey(state.errors, 'startTime'),
-        'endTime',
-      ),
+      errors: withoutKeys(state.errors, const ['startTime', 'endTime']),
     );
   }
 
@@ -222,8 +303,8 @@ class AddEventController extends Notifier<AddEventState>
     required String materialsNeeded,
     bool forceBusy = false,
   }) async {
-    // Guard against reentrancy: this blocks a double-tap during the conflict check and submit.
-    if (state.isSubmitting) return const AddEventInvalid();
+    // Double-taps are busy, not invalid form submissions.
+    if (state.isSubmitting) return const AddEventBusy();
     final errors = AppointmentFormValidator.validate(
       AppointmentFormInput(
         title: title,
@@ -240,53 +321,36 @@ class AddEventController extends Notifier<AddEventState>
     state = state.copyWith(errors: errors);
     if (errors.isNotEmpty) return const AddEventInvalid();
 
-    // Bail out early if we're offline — otherwise Save just spins waiting for a server ack that never comes.
+    // Offline writes would wait forever for a server ack.
     if (ref.read(isOfflineProvider)) {
       return const AddEventFailed(SocketException('offline'));
     }
 
+    final repo = ref.read(appointmentsRepositoryProvider);
+    // Read dependencies before any await.
+    final logger = ref.read(loggerProvider);
+    final uploader = ref.read(appointmentImageUploadProvider);
+    // Snapshot form state before async work starts.
+    final images = state.selectedImages;
+    final client = state.selectedClient;
+    final isPersonal = state.isPersonal;
+    final isDayOff = state.isDayOff;
+    final isAllDay = state.isAllDay;
+    final selectedEmployees = state.selectedEmployees;
+    final repeat = state.repeat;
+
     final (:start, :end) = appointmentSpan(
       date: state.selectedDate!,
       endDate: state.endDate ?? state.selectedDate!,
-      isAllDay: state.isAllDay,
+      isAllDay: isAllDay,
       startTime: state.selectedStartTime,
       endTime: state.selectedEndTime,
     );
 
-    final repo = ref.read(appointmentsRepositoryProvider);
-    // Resolve these before any awaits, so we don't crash if the notifier gets disposed mid-await (Riverpod 3).
-    final logger = ref.read(loggerProvider);
-    final uploader = ref.read(appointmentImageUploadProvider);
-    // Snapshot the state before the awaits, so it survives if the sheet gets dismissed mid-submit.
-    final images = state.selectedImages;
-    // Null for a personal job — the validator only demands a client otherwise.
-    final client = state.selectedClient;
-    final isPersonal = state.isPersonal;
-    final selectedEmployees = state.selectedEmployees;
-    final repeat = state.repeat;
-
-    // Set the flag before the conflict check, so the Save button disables right away.
+    // Disable Save before the conflict check starts.
     state = state.copyWith(isSubmitting: true);
 
     try {
-      // Keep the conflict check inside the try block, so an error there still resets the in-flight flag.
-      if (!forceBusy) {
-        final busy = await repo.findBusyEmployees(
-          candidates: selectedEmployees,
-          start: start,
-          end: end,
-        );
-        if (busy.isNotEmpty) {
-          // This isn't an error — let the user decide whether to force through the conflicts.
-          if (ref.mounted) state = state.copyWith(isSubmitting: false);
-          return AddEventBusyEmployees(
-            busyEmployees: busy,
-            start: start,
-            end: end,
-          );
-        }
-      }
-
       final docId = repo.newDocId();
       final appointment = AppointmentRecord(
         id: docId,
@@ -296,11 +360,11 @@ class AddEventController extends Notifier<AddEventState>
         clientId: client?.id ?? '',
         clientName: client?.displayName ?? '',
         clientPhone: client?.phone ?? '',
-        // The address field is hidden for a personal job, so drop whatever the
-        // controller still holds rather than saving a stale one.
-        address: isPersonal ? '' : address.trim(),
+        // Day off hides the address field, so it saves blank.
+        address: isDayOff ? '' : address.trim(),
         isPersonal: isPersonal,
-        isAllDay: state.isAllDay,
+        isDayOff: isDayOff,
+        isAllDay: isAllDay,
         employeeIds: selectedEmployees.map((e) => e.id).toList(),
         employeeNames: selectedEmployees.map((e) => e.name).toList(),
         notes: notes.trim(),
@@ -309,31 +373,76 @@ class AddEventController extends Notifier<AddEventState>
         seriesId: repeat == RepeatInterval.none ? '' : docId,
       );
 
-      // The conflict check only covers the first occurrence, and photos stay attached to that first visit.
-      final copies = [
-        for (final copyStart in repeat.occurrenceStartsAfter(start))
+      // Multi-day client jobs split into daily documents; personal blocks stay wide.
+      final runWindows = isPersonal
+          ? [(start: start, end: end)]
+          : expandRunWindows(start, end);
+      final dayCount = runWindows.length;
+
+      final days = [
+        for (var i = 0; i < dayCount; i++)
           appointment.copyWith(
-            id: repo.newDocId(),
-            startTime: copyStart,
-            endTime: occurrenceEnd(
-              originalStart: start,
-              originalEnd: end,
-              copyStart: copyStart,
-            ),
+            id: i == 0 ? docId : repo.newDocId(),
+            startTime: runWindows[i].start,
+            endTime: runWindows[i].end,
+            // Real runs use day one as their series id.
+            seriesId: dayCount > 1 ? docId : appointment.seriesId,
+            dayIndex: dayCount > 1 ? i + 1 : 0,
+            dayCount: dayCount > 1 ? dayCount : 0,
           ),
       ];
 
-      if (copies.isEmpty) {
-        await repo.addAppointment(appointment);
-      } else {
-        await repo.addAppointments([appointment, ...copies]);
+      // Only single-day client jobs can repeat.
+      final repeatCopies = dayCount > 1
+          ? const <AppointmentRecord>[]
+          : [
+              for (final copyStart in repeat.occurrenceStartsAfter(start))
+                days.first.copyWith(
+                  id: repo.newDocId(),
+                  startTime: copyStart,
+                  endTime: occurrenceEnd(
+                    originalStart: start,
+                    originalEnd: end,
+                    copyStart: copyStart,
+                  ),
+                ),
+            ];
+
+      final toWrite = [...days, ...repeatCopies];
+      // Personal clashes are handled by the time-off alert after write.
+      if (!forceBusy && !isPersonal) {
+        final conflict = await findFirstAppointmentConflict(
+          repo: repo,
+          candidates: selectedEmployees,
+          bookings: toWrite,
+        );
+        if (conflict != null) {
+          // Conflicts return to the sheet for a force-through choice.
+          if (ref.mounted) state = state.copyWith(isSubmitting: false);
+          return AddEventBusyEmployees(
+            busyEmployees: conflict.busyEmployees,
+            start: conflict.start,
+            end: conflict.end,
+          );
+        }
       }
 
+      if (toWrite.length == 1) {
+        await repo.addAppointment(toWrite.single);
+      } else {
+        await repo.addAppointments(toWrite);
+      }
+
+      // Draft photos attach to day one.
       if (images.isNotEmpty) {
         uploader.uploadInBackground(appointmentId: docId, newImages: images);
       }
 
-      return AddEventSubmitted(appointment, futureBookings: copies.length);
+      return AddEventSubmitted(
+        days.first,
+        futureBookings: repeatCopies.length,
+        runDays: dayCount,
+      );
     } catch (e, st) {
       logger.warn('APPT-CREATE submit failed', e, st);
       if (ref.mounted) state = state.copyWith(isSubmitting: false);

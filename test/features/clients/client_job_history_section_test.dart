@@ -24,6 +24,7 @@ class _FakeAppointmentsRepository extends Fake
   Future<List<AppointmentRecord>> fetchClientHistory({
     required String clientId,
     int limit = 50,
+    int? cap,
   }) async => _records;
 }
 
@@ -67,6 +68,21 @@ void main() {
     expect(find.text('JOB HISTORY'), findsOneWidget);
     expect(find.byType(AppointmentCard), findsOneWidget);
     expect(find.text('Water heater replacement'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('renders at most 50 cards however deep the history is', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _harness([for (var i = 0; i < 80; i++) _job('Job $i')]),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byType(AppointmentCard, skipOffstage: false),
+      findsNWidgets(50),
+    );
     expect(tester.takeException(), isNull);
   });
 

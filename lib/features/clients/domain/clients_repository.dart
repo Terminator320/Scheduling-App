@@ -1,7 +1,18 @@
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/models/clients_sort.dart';
+import 'package:scheduling/features/clients/domain/policies/client_building.dart';
 
 abstract class ClientsRepository {
+  /// Drops every cached client this repository is holding.
+  ///
+  /// The implementation is a process-scoped singleton, so its search windows
+  /// outlive the session that filled them — full client records, with name,
+  /// phone, email, address and contacts. Sign-out and account exit call this
+  /// through `deregisterThisDevice`, which is the single owner of "forget this
+  /// session".
+  void clearCaches();
+
   Future<ClientRecord?> getClientById(String id);
 
   /// Live stream of one client doc; emits null once the doc is gone.
@@ -30,25 +41,29 @@ abstract class ClientsRepository {
   /// their `clientId` links on existing appointments are untouched.
   Future<void> setClientArchived(String id, {required bool archived});
 
-  /// Archived clients, name-sorted, from the same bounded cached window
+  /// Archived clients, name-sorted, from the same cached window
   /// `searchClients` scans — so the Archived chip costs no extra read inside
   /// the TTL and needs no composite index.
   Future<List<ClientRecord>> fetchArchivedClients();
 
   Future<List<ClientRecord>> searchClients(String query);
 
-  /// Fetches the next page of clients, newest first. Pass the previous page's last item
-  /// as [after], or null for the first page.
+  /// One page of non-archived clients in [sort] order.
+  ///
+  /// [after] is the last record of the previous page; the cursor tuple is
+  /// (sort field, doc id), so a page fetched under one sort can never be used
+  /// to resume another.
   Future<List<ClientRecord>> fetchClientsPage({
     required int limit,
     ClientRecord? after,
+    ClientsSort sort = ClientsSort.name,
   });
 
-  /// One-shot fetch of clients created since [since], used for dashboard trends. Legacy
-  /// docs without `createdAt` (old imports) are excluded.
+  /// One-shot fetch of clients created since [since], used for dashboard
+  /// trends. Legacy docs without `createdAt` (old imports) are excluded.
   Future<List<ClientRecord>> fetchClientsCreatedSince(DateTime since);
 
-  /// Clients of [type], name-sorted, from the same bounded, cached window
+  /// Clients of [type], name-sorted, from the same cached window
   /// `searchClients` scans — so the filter costs no extra read inside the TTL
   /// and needs no composite index.
   ///
@@ -57,4 +72,12 @@ abstract class ClientsRepository {
   /// which stops the paginated list early. See the "never removed" invariant in
   /// CLAUDE.md for the full reasoning.
   Future<List<ClientRecord>> fetchClientsByType(ClientType type);
+
+  /// Clients at one building, keyed by `buildingKeyFor`. Same bounded cached
+  /// window as the type filter, so the Building menu costs no extra read.
+  Future<List<ClientRecord>> fetchClientsByBuilding(String key);
+
+  /// Every address shared by two or more clients, busiest first — the Building
+  /// menu's options and the per-row pill's counts.
+  Future<List<ClientBuilding>> fetchBuildings();
 }

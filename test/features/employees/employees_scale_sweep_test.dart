@@ -14,6 +14,7 @@ import 'package:scheduling/features/employees/domain/models/job_title.dart';
 import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 import 'package:scheduling/features/employees/widgets/cards/employee_card.dart';
 import 'package:scheduling/features/employees/widgets/cards/pending_invite_tile.dart';
+import 'package:scheduling/features/employees/widgets/fields/credential_line.dart';
 import 'package:scheduling/features/employees/widgets/sheets/edit_person_sheet.dart';
 import 'package:scheduling/features/employees/widgets/sheets/invite_person_sheet.dart';
 import 'package:scheduling/features/employees/widgets/views/employee_details_view.dart';
@@ -166,7 +167,6 @@ void main() {
         phone: any(named: 'phone'),
         colorValue: any(named: 'colorValue'),
         jobTitle: any(named: 'jobTitle'),
-        isAdmin: any(named: 'isAdmin'),
       ),
     ).thenAnswer(
       (_) async => const NewAccountCredentials(
@@ -190,7 +190,13 @@ void main() {
         // so pump a fixed span rather than settling.
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 400));
-        expect(find.text('Welcome123!'), findsOneWidget);
+        // Nothing was reset, so the row holds no credential to show: the
+        // masked value and its hint are what must survive the sweep.
+        expect(find.text(kMaskedCredential), findsOneWidget);
+        expect(
+          find.text('Reset password to issue a new one'),
+          findsOneWidget,
+        );
       },
     );
   });

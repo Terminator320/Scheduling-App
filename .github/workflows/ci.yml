@@ -2,7 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # `redesgin` is the long-lived active branch and carries dozens of commits
+    # between merges, so main-only push triggers meant most work was unverified
+    # until PR time. Both are listed rather than using a wildcard: a wildcard
+    # would double every PR run (once for the push, once for the PR).
+    branches: [main, redesgin]
   pull_request:
 
 jobs:
@@ -15,14 +19,21 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           # Pinned so a new "latest stable" release can't break CI on an
-          # unrelated push. Bump deliberately; keep >= pubspec's flutter floor.
-          flutter-version: 3.44.1
+          # unrelated push. Keep this equal to the SDK the work is actually
+          # verified on locally — a pin the developer never runs means a green
+          # CI proves nothing about the tree they tested, and a red one can't
+          # be reproduced. Bump deliberately, together; keep >= pubspec's floor.
+          flutter-version: 3.47.2
           channel: stable
           cache: true
 
-      - name: Bootstrap dev/.env from template
-        run: cp dev/.env.example dev/.env
-
+      # No config bootstrap step. `dev/.env` and `flutter_dotenv` were retired
+      # on 2026-09-04 (the file shipped as a readable IPA asset); the build now
+      # takes `--dart-define-from-file=dev/firebase.local.json`. Neither
+      # `analyze` nor `test` reads a define — `String.fromEnvironment` resolves
+      # to '' and only `main()` fails fast on that — so there is nothing to
+      # supply here. The step this replaced copied `dev/.env.example`, deleted
+      # in that same retirement, and failed EVERY run from then on.
       - name: Install dependencies
         run: flutter pub get
 
@@ -31,11 +42,26 @@ jobs:
       - name: Generate localizations
         run: flutter gen-l10n
 
+      # The repo's baseline is `No issues found!` — this is an exact gate, not
+      # a filtered one. Any lint that appears here is new.
       - name: Analyze
         run: flutter analyze
 
+      # `--coverage` so an untested unit is visible in the run's artifacts
+      # rather than only discoverable by a manual audit. No threshold is
+      # enforced: a hard gate on a repo with device-only paths (image picker,
+      # biometrics, geolocator) would fail on code that is deliberately
+      # untestable here.
       - name: Test
-        run: flutter test
+        run: flutter test --coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-coverage
+          path: coverage/lcov.info
+          if-no-files-found: warn
 
   functions:
     name: Cloud Functions lint + test
@@ -59,5 +85,17 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Same reasoning as the Flutter side: report coverage, don't gate on it.
+      # The modules that resolve a Storage bucket at load can't be required by
+      # jest at all, which is why their logic lives in pure `*_policy.js`
+      # siblings — a threshold here would punish that split.
       - name: Test
-        run: npx jest
+        run: npx jest --coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: functions-coverage
+          path: functions/coverage/lcov.info
+          if-no-files-found: warn

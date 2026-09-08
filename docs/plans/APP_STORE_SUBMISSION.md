@@ -1,7 +1,26 @@
 # App Store Submission — ES Pro
 
-`net.vogas.scheduling` · team **H5XWLU87AX** · v**1.36.0+60** · branch
-`notification` · launch scope **App Store only** (iPhone + iPad).
+`net.vogas.scheduling` · team **H5XWLU87AX** · branch `redesgin` · scope
+**App Store only** (iPhone + iPad). **The version lives in `pubspec.yaml`, not
+here** — it was pinned at 1.45.0+72 in this line until 2026-08-15 and had gone
+two releases stale (1.46.0+73, then 1.46.1+74); read `pubspec.yaml` and
+`CHANGELOG.md` for what is cut.
+
+> ## ⚠️ THE APP IS LIVE — this is no longer a launch runbook
+>
+> **Recorded 2026-08-11 on the owner's report:** ES Pro was **accepted by Apple**
+> and is on the App Store; **1.45.0+72 is the 4th update** since that first
+> release. Read every "first store cut" / "first upload" instruction below as
+> **history**, not as a pending task.
+>
+> **Part 13's list has not been reconciled against four shipped submissions** —
+> items like "confirm the app record", "pricing = Free", "add the French
+> localization", "upload screenshots" and "attach the reviewed build and submit"
+> were almost certainly done during the first release, but nobody ticked them
+> here, so the count is not trustworthy. Treat an unticked box as *unknown*,
+> not as *outstanding*. The genuinely recurring parts of this file are the **Mac
+> build runbook** (Parts 2–5), the **ASC copy blocks** (Part 11), and the
+> **device checks** (Part 6).
 
 Single source of truth for shipping this app: the Mac build runbook, the
 material that gets typed into App Store Connect (ASC), and the remaining
@@ -111,7 +130,7 @@ phone, or photos — so it adds no new collected data type.
   already builds iOS options from `dev/.env` with
   `iosBundleId: net.vogas.scheduling` — re-running rewrites the file into the
   literal-values style and breaks the env-based setup.
-- [ ] **First Xcode open resolves the SPM packages** — `firebase-ios-sdk`,
+- [x] **First Xcode open resolves the SPM packages** — `firebase-ios-sdk`,
   `google_maps_flutter_ios_sdk9` (Maps SDK 9.x), `live_activities`,
   `saver_gallery`. No Podfile; same SPM flow throughout.
 
@@ -242,8 +261,8 @@ Open `ios/Runner.xcworkspace`.
   deletes it; assign/reschedule/cancel/unassign each deliver the correct
   localized push with the app **killed**; reminder fires ~28 min out and writes
   its ledger doc; digest and overdue prompts fire; FR device gets French text.
-- [ ] **iPad pass** — split/master-detail layouts at tablet width.
-- [ ] **Admin live staff map renders + resolves addresses.** `AppDelegate`
+- [x] **iPad pass** — split/master-detail layouts at tablet width.
+- [x] **Admin live staff map renders + resolves addresses.** `AppDelegate`
   parses `IOS_MAPS_API_KEY` from the bundled `dev/.env` and calls
   `GMSServices.provideAPIKey(...)`; a missing key means a blank map plus a
   console line, never a crash. Backend is live. Grant location, confirm your own
@@ -254,18 +273,18 @@ Open `ios/Runner.xcworkspace`.
   travel-time leave-now reminders are not silently falling back to fixed 30-min
   timing. (Cloud Functions logs corroborate: zero `travel:` warnings in 8 days,
   and any misconfiguration would log a 403 on every attempt.)
-- [ ] **Notification tap deep-link** — tapping a push opens the specific
+- [x] **Notification tap deep-link** — tapping a push opens the specific
   appointment's detail sheet (not just the calendar root).
   **[was contradictory]** the old runbook listed deep-linking as a known
   deferral; it was implemented and taps now resolve `data.appointmentId`.
-- [ ] **Home-screen widget** — add in all three sizes, today's jobs render, a
+- [x] **Home-screen widget** — add in all three sizes, today's jobs render, a
   job rolls off the small widget once it starts, sign-out clears the widget.
-- [ ] **Wake-on-push widget refresh** — with the employee's app **fully closed**,
+- [x] **Wake-on-push widget refresh** — with the employee's app **fully closed**,
   have an admin move a job for later today. The widget updates **without opening
   the app** (`content-available` wakes `firebaseMessagingBackgroundHandler`,
   which rewrites the App Group payload). The visible push still shows alongside.
   iOS throttles background wakes under Low Power Mode — allow a short delay.
-- [ ] **Live Activity card** (new in 1.34, deployed 2026-07-19) — with a job
+- [x] **Live Activity card** (new in 1.34, deployed 2026-07-19) — with a job
   scheduled, confirm the "time to leave" card appears on the Lock Screen and in
   the Dynamic Island, the Directions button opens Maps, it flips to "On site" at
   the start time, and it clears when the job is marked complete. Confirm the
@@ -276,7 +295,7 @@ Open `ios/Runner.xcworkspace`.
 - [ ] **Siri phrases** (Phase 1) — "what's on my schedule today", "what's my
   next appointment", and the job-count phrase, per
   `ios/SiriIntents/README.md`.
-- [ ] **Time Sensitive Notifications entitlement** — needed for the `leaveNow`
+- [x] **Time Sensitive Notifications entitlement** — needed for the `leaveNow`
   interruption level. Confirm it's on the Runner target.
 
 ## Part 7. Archive + upload
@@ -585,7 +604,45 @@ In French and English:
 ES Pro is built for a plumbing crew by the company that runs one. Sign-in is by invitation from your administrator, so the whole team stays on one shared schedule.
 ```
 
-**What's New in This Version** (first App Store release)
+**What's New in This Version** — v1.46.2+75 (2026-08-16)
+```
+• Pick a date on a real calendar. Tapping a date row drops the whole month down
+  underneath it, instead of a spinning wheel that showed three days at a time
+  and covered the form. Start and end dates each get their own row, and days you
+  can't book are greyed out.
+• Job photos are checked against your account every time they're shown, and the
+  permanent web links older versions created no longer keep working for someone
+  whose account has been switched off. Photos now need a connection to load, and
+  signing out clears them from the phone.
+• Client edits reach Wave in seconds instead of minutes. Settings › Wave shows
+  how many are still queued and how many failed, and Retry failed now reports
+  what actually went through rather than what it queued up again.
+• A client's typed name is kept. Saving a client could replace it with their
+  phone number, and clients that already happened to are recovered.
+• The 6 p.m. "tomorrow's jobs" notification no longer goes quiet for everyone
+  once enough finished-but-never-closed jobs build up.
+• Fixes throughout: photos vanishing from a job, a cancelled job being marked
+  complete, saves rejected outright for a long name or address, one bad record
+  blanking a whole screen, and a smoother scroll and search through a long
+  History.
+```
+
+> **Covers three releases, because 1.46.0+73 and 1.46.1+74 were built but not
+> separately submitted.** If either did go to ASC on its own, trim this block to
+> what landed since — users only ever see the newest note, so it must describe
+> the cut being uploaded, not the whole gap.
+
+> **Write this block fresh for every update — it is per-version and users only
+> ever see the newest one.** Name features with the wording the app actually
+> uses (check `lib/l10n/app_en.arb` / `app_fr.arb`), or the note points at
+> something nobody can find on screen: the copy above uses *My details*,
+> *Time-to-leave alerts*, *Dashboard*, *Complete* and *Cancelled* for exactly
+> that reason. Keep the FR block in step — it is a shipped store locale, not a
+> nice-to-have.
+
+<details>
+<summary>Superseded: the first-release copy (kept for history)</summary>
+
 ```
 First release of ES Pro on the App Store.
 
@@ -597,6 +654,7 @@ First release of ES Pro on the App Store.
 - Works offline and syncs when you reconnect
 - Full French and English
 ```
+</details>
 
 **Support URL** (required)
 ```
@@ -621,13 +679,13 @@ Agreement" if you want it on the product page; **not optional to the app**)
 ```
 https://gvogas.github.io/es-pro-legal/terms-of-service.html
 ```
-Source: `docs/legal/terms-of-service.html` — publish it to the `es-pro-legal`
-Pages repo beside `support.html`. The app links to this URL in two places
-(`AppUrls.termsOfService`): the account-setup consent checkbox, whose tick
-stamps `termsAcceptedAt`, and the Settings › Legal row. **If the page is
-missing or the repo drifts from `docs/legal/`, every employee is accepting terms
-they can't read or that say something else** — republish it whenever that file
-changes, the same discipline as the accessibility page below.
+Source: `docs/legal/terms-of-service.html` — **published** to the `es-pro-legal`
+Pages repo beside `support.html`, verified byte-identical 2026-08-11. The app
+links to this URL in two places (`AppUrls.termsOfService`): the account-setup
+consent checkbox, whose tick stamps `termsAcceptedAt`, and the Settings › Legal
+row. **If the repo drifts from `docs/legal/`, every employee is accepting terms
+that say something else** — republish it whenever that file changes, the same
+discipline as the accessibility page below.
 
 **Accessibility URL** (optional, App Store Connect → App Accessibility →
 Accessibility Nutrition Labels → "Manage the accessibility URL"; shown on the
@@ -694,7 +752,35 @@ En français et en anglais :
 ES Pro est conçu pour une équipe de plomberie par l'entreprise qui en exploite une. La connexion se fait sur invitation de votre administrateur, pour que toute l'équipe partage le même horaire.
 ```
 
-**Nouveautés de cette version** (première sortie)
+**Nouveautés de cette version** — v1.46.2+75 (2026-08-16)
+```
+• Choisissez une date sur un vrai calendrier. Toucher une ligne de date déroule
+  le mois complet en dessous, au lieu de la roulette qui affichait trois jours à
+  la fois et masquait le formulaire. Les dates de début et de fin ont chacune
+  leur ligne, et les jours non réservables sont grisés.
+• Les photos de chantier sont vérifiées avec votre compte à chaque affichage, et
+  les liens web permanents créés par les versions précédentes ne fonctionnent
+  plus pour une personne dont le compte a été désactivé. Les photos ont
+  maintenant besoin d'une connexion pour s'afficher, et la déconnexion les
+  efface de l'appareil.
+• Les modifications de clients atteignent Wave en quelques secondes plutôt qu'en
+  quelques minutes. Paramètres › Wave indique combien sont en attente et combien
+  ont échoué, et Réessayer indique maintenant ce qui est réellement passé plutôt
+  que ce qui a été remis en file.
+• Le nom saisi pour un client est conservé. L'enregistrement pouvait le
+  remplacer par son numéro de téléphone; les clients déjà touchés sont rétablis.
+• La notification de 18 h « chantiers de demain » ne cesse plus d'être envoyée à
+  tout le monde lorsque trop de chantiers terminés mais jamais fermés
+  s'accumulent.
+• Corrections diverses : photos qui disparaissaient d'un chantier, chantier
+  annulé pouvant être marqué terminé, enregistrements refusés à cause d'un nom
+  ou d'une adresse trop longs, une seule fiche erronée qui vidait tout un écran,
+  et un défilement et une recherche plus fluides dans un long Historique.
+```
+
+<details>
+<summary>Remplacé : le texte de la première sortie (conservé pour l'historique)</summary>
+
 ```
 Première version d'ES Pro sur l'App Store.
 
@@ -706,6 +792,7 @@ Première version d'ES Pro sur l'App Store.
 - Fonctionne hors ligne et se synchronise au retour du réseau
 - Entièrement en français et en anglais
 ```
+</details>
 
 ## Part 11. Screenshots
 
@@ -845,11 +932,13 @@ block submission regardless of the build.
 - [ ] Paste the demo account's email + password into ASC → App Review
   Information → Sign-In Required, plus the Part 12 review notes and a contact
   phone.
-- [ ] ⚠️ **Publish `docs/legal/terms-of-service.html`** to the `es-pro-legal`
-  Pages repo (and republish the privacy policy if it changed — both were
-  updated 2026-08-05). The app links to the terms URL from the account-setup
-  consent checkbox and Settings › Legal, so a missing page means every employee
-  accepts terms they cannot read.
+- [x] **Publish `docs/legal/terms-of-service.html`** to the `es-pro-legal`
+  Pages repo. **DONE** — verified 2026-08-11: all four pages return HTTP 200
+  and are **byte-identical** to `docs/legal/` (`terms-of-service.html`,
+  `accessibility.html`, `support.html`, and the privacy policy served as the
+  repo's `index`). The app links to the terms URL from the account-setup
+  consent checkbox and Settings › Legal, so re-verify this whenever any file in
+  `docs/legal/` changes — republishing is part of that edit, not a follow-up.
 
 **ASC content**
 - [ ] Confirm the app record (ES Pro, `net.vogas.scheduling`, Business /
@@ -888,8 +977,8 @@ Export Compliance needs no action: `ITSAppUsesNonExemptEncryption = false` is in
   if a Play release is ever revisited.
 - **Series bulk edits** write N appointment docs → N pushes. Accepted for v1
   (each is a real change).
-- The rest of the audit's findings live in `docs/audits/CODEBASE_AUDIT.md`.
-  Nothing there blocks the steps above.
+- The remaining audit work lives in `docs/audits/CODEBASE_AUDIT.md`. Nothing
+  there blocks the steps above.
 
 ## Part 15. Assumptions the owner must verify
 

@@ -81,6 +81,10 @@ void main() {
     }
 
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getStringList('tour_seen_tabs'), isEmpty);
+    // Progress is per STEP now. The legacy per-scope key is deliberately left
+    // untouched — it is only ever read when tour_seen_steps is ABSENT, and an
+    // empty list is still a present key, so the migration cannot undo this
+    // replay.
+    expect(prefs.getStringList('tour_seen_steps'), isEmpty);
   });
 }

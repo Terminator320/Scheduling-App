@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -38,6 +39,9 @@ void main() {
 
     when(() => user.uid).thenReturn('uid-1');
     when(() => auth.currentUser).thenReturn(user);
+    when(
+      () => service.authorizationStatus(),
+    ).thenAnswer((_) async => AuthorizationStatus.authorized);
     when(() => service.requestPermission()).thenAnswer((_) async => true);
     when(
       () => service.configureForegroundPresentation(),
@@ -88,9 +92,32 @@ void main() {
 
     await container.read(pushRegistrationControllerProvider).sync();
 
+    verifyNever(() => service.authorizationStatus());
     verifyNever(() => service.requestPermission());
     verifyNever(() => employees.findUserByUid(any()));
   });
+
+  test(
+    'a throwing account gate is contained, not escaped as a fatal',
+    () async {
+      // Shipped as a FATAL on 2026-08-31 and fixed by opening the try ABOVE the
+      // gate read.
+      when(() => auth.currentUser).thenThrow(StateError('auth blew up'));
+      final container = makeContainer(const {
+        'role': 'employee',
+        'status': 'active',
+      });
+      addTearDown(container.dispose);
+      await settleDoc(container);
+
+      await expectLater(
+        container.read(pushRegistrationControllerProvider).sync(),
+        completes,
+      );
+      verifyNever(() => service.authorizationStatus());
+      verifyNever(() => service.requestPermission());
+    },
+  );
 
   test('inactive employee does not register', () async {
     final container = makeContainer(const {
@@ -102,6 +129,30 @@ void main() {
 
     await container.read(pushRegistrationControllerProvider).sync();
 
+    verifyNever(() => service.authorizationStatus());
+    verifyNever(() => service.requestPermission());
+    verifyNever(() => employees.findUserByUid(any()));
+  });
+
+  test('a loading account doc does not register yet', () async {
+    final docs = StreamController<Map<String, dynamic>>();
+    final container = ProviderContainer(
+      overrides: [
+        currentUserDocProvider.overrideWith((ref) => docs.stream),
+        pushNotificationServiceProvider.overrideWithValue(service),
+        employeesRepositoryProvider.overrideWithValue(employees),
+        fcmTokenRepositoryProvider.overrideWithValue(fcm),
+        pushRegistrationControllerProvider.overrideWith(
+          (ref) => PushRegistrationController(ref, auth: auth),
+        ),
+      ],
+    );
+    addTearDown(docs.close);
+    addTearDown(container.dispose);
+
+    await container.read(pushRegistrationControllerProvider).sync();
+
+    verifyNever(() => service.authorizationStatus());
     verifyNever(() => service.requestPermission());
     verifyNever(() => employees.findUserByUid(any()));
   });
@@ -116,8 +167,8 @@ void main() {
 
     final controller = container.read(pushRegistrationControllerProvider);
     await controller.sync();
-    // Same uid + locale + live refresh subscription → the second sync must
-    // skip the findUserByUid query and the token upsert entirely.
+    // Same uid + locale + live refresh subscription → the second sync must skip
+    // the findUserByUid query and the token upsert entirely.
     await controller.sync();
 
     verify(() => employees.findUserByUid('uid-1')).called(1);
@@ -130,5 +181,109 @@ void main() {
         uid: 'uid-1',
       ),
     ).called(1);
+  });
+
+  group('unregisterCurrentDevice', () {
+    setUp(() {
+      when(
+        () => fcm.deleteToken(
+          userDocId: any(named: 'userDocId'),
+          token: any(named: 'token'),
+        ),
+      ).thenAnswer((_) async {});
+      when(() => service.deleteToken()).thenAnswer((_) async {});
+    });
+
+    test(
+      'a session that never registered still deletes the stale row',
+      () async {
+        // `_registeredDocId`/`_registeredToken` are set only on a
+        // fully-successful sync, so an incomplete session left one `fcmTokens`
+        // row per device that the server keeps pushing to - `syncUsersByUid`
+        // purges those on DISABLE, not on sign-out, so they just accumulate.
+        when(
+          () => service.authorizationStatus(),
+        ).thenAnswer((_) async => AuthorizationStatus.denied);
+        final container = makeContainer(const {
+          'role': 'employee',
+          'status': 'active',
+        });
+        addTearDown(container.dispose);
+        await settleDoc(container);
+        final controller = container.read(pushRegistrationControllerProvider);
+        await controller.sync();
+
+        await controller.unregisterCurrentDevice();
+
+        verifyNever(() => service.requestPermission());
+        verify(
+          () => fcm.deleteToken(userDocId: 'doc-1', token: 'tok-1'),
+        ).called(1);
+        verify(() => service.deleteToken()).called(1);
+      },
+    );
+
+    test('deletes nothing when the device has no token at all', () async {
+      when(() => service.currentToken()).thenAnswer((_) async => null);
+      when(() => auth.currentUser).thenReturn(null);
+      final container = makeContainer(const {});
+      addTearDown(container.dispose);
+      await settleDoc(container);
+
+      await container
+          .read(pushRegistrationControllerProvider)
+          .unregisterCurrentDevice();
+
+      verifyNever(
+        () => fcm.deleteToken(
+          userDocId: any(named: 'userDocId'),
+          token: any(named: 'token'),
+        ),
+      );
+    });
+
+    test('a sync resuming mid-teardown does not re-register the device', () async {
+      // Teardown runs BEFORE signOut(), so the resumed body still holds a valid
+      // credential: FCM would mint a fresh token (the old one just invalidated)
+      // and this would upsert it, leaving a signed-out device registered and
+      // still receiving that account's pushes - and the write SUCCEEDS, so
+      // nothing logs an error.
+      final release = Completer<UserUidMatch?>();
+      var call = 0;
+      when(() => employees.findUserByUid(any())).thenAnswer((_) {
+        call++;
+        return call == 1
+            ? release.future
+            : Future<UserUidMatch?>.value(
+                const UserUidMatch(id: 'doc-1', data: {}),
+              );
+      });
+
+      final container = makeContainer(const {
+        'role': 'employee',
+        'status': 'active',
+      });
+      addTearDown(container.dispose);
+      await settleDoc(container);
+      final controller = container.read(pushRegistrationControllerProvider);
+
+      final inFlight = controller.sync();
+      await pumpEventQueue();
+
+      await controller.unregisterCurrentDevice();
+      release.complete(const UserUidMatch(id: 'doc-1', data: {}));
+      await inFlight;
+      await pumpEventQueue();
+
+      verifyNever(
+        () => fcm.upsertToken(
+          userDocId: any(named: 'userDocId'),
+          token: any(named: 'token'),
+          platform: any(named: 'platform'),
+          locale: any(named: 'locale'),
+          uid: any(named: 'uid'),
+        ),
+      );
+    });
   });
 }

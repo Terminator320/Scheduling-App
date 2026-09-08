@@ -1,14 +1,10 @@
 import 'package:flutter/painting.dart' show Color;
 
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 
 /// One assignee as an appointment surface renders them.
-///
-/// [color] is the **stored** light-theme crew colour — a widget resolves it
-/// through `crewColorOf(theme, color.toARGB32())` before painting. A null
-/// colour means the assignee no longer resolves to an employee record; the
-/// call site substitutes a neutral.
 class AppointmentCrew {
   const AppointmentCrew({required this.name, required this.color});
 
@@ -17,12 +13,6 @@ class AppointmentCrew {
 }
 
 /// Resolves an appointment's assignees to render-ready crew entries.
-///
-/// [nameMap] is the live employee name map when the caller has one (the
-/// calendar agenda); without it the record's denormalized [AppointmentRecord
-/// .employeeNames] are matched positionally, which is what the history and
-/// client surfaces use. An assignee with no resolvable name is dropped — a
-/// nameless chip is noise.
 List<AppointmentCrew> crewFor(
   AppointmentRecord appointment, {
   required Map<String, Color> colorMap,
@@ -40,20 +30,19 @@ List<AppointmentCrew> crewFor(
   return crew;
 }
 
-/// The month grid's per-day dots: **one per job** that day, in list order,
-/// capped at [max] (owner call, 2026-08-04 — the dots read as "how busy is this
-/// day", so they count jobs, not the distinct people working them).
-///
-/// Each entry is the job's FIRST assignee with a resolvable stored crew colour.
-/// A **null** entry means that job has no such assignee; the cell paints it with
-/// the same neutral an unassigned card uses, so a job is never silently dotless.
+/// Jobs that should contribute to a day's calendar dots.
+Iterable<AppointmentRecord> dottedJobsOn(
+  Iterable<AppointmentRecord> dayAppointments,
+) => dayAppointments.where(countsAsWork);
+
+/// Per-day dot colors, capped at [max] jobs.
 List<Color?> dayJobDotColors(
   Iterable<AppointmentRecord> dayAppointments,
   Map<String, Color> colorMap, {
   int max = 3,
 }) {
   final colors = <Color?>[];
-  for (final appointment in dayAppointments) {
+  for (final appointment in dottedJobsOn(dayAppointments)) {
     colors.add(_leadCrewColor(appointment, colorMap));
     if (colors.length == max) break;
   }

@@ -11,6 +11,7 @@ import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/features/maps/domain/models/address_suggestion.dart';
 import 'package:scheduling/features/maps/domain/places_repository.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/fields/attached_dropdown.dart';
 import 'package:scheduling/shared/widgets/fields/clear_text_button.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:uuid/uuid.dart';
@@ -42,9 +43,10 @@ class AddressAutocompleteField extends ConsumerStatefulWidget {
 
 class _AddressAutocompleteFieldState
     extends ConsumerState<AddressAutocompleteField> {
-  late final PlacesRepository _service = ref.read(placesRepositoryProvider);
+  late final PlacesRepository _service;
+  late final AppLogger _logger;
   static const _uuid = Uuid();
-  final Debouncer _debounce = Debouncer(_debounceDelay);
+  late final Debouncer _debounce;
   List<AddressSuggestion> _suggestions = [];
   bool _isLoading = false;
   String? _serviceError;
@@ -57,7 +59,23 @@ class _AddressAutocompleteFieldState
   int _requestId = 0;
 
   static const _minQueryLength = 3;
-  static const _debounceDelay = Duration(milliseconds: 700);
+
+  @override
+  void initState() {
+    super.initState();
+    // Both eager, not lazy `late final`s: the debounce error handler and the
+    // two post-await catches all run after this field can be gone, and
+    // `ref.read` on an unmounted consumer throws under Riverpod 3. A lazy
+    // initializer is one moved line away from being first touched below an
+    // await.
+    _logger = ref.read(loggerProvider);
+    _service = ref.read(placesRepositoryProvider);
+    _debounce = Debouncer.tagged(
+      kAddressLookupDebounce,
+      logger: _logger,
+      tag: 'ADDR-AUTO debounced action failed',
+    );
+  }
 
   @override
   void dispose() {
@@ -104,6 +122,13 @@ class _AddressAutocompleteFieldState
     // failed fetch will still retry.
     if (query == _lastFetched) return;
     final requestId = ++_requestId;
+    // Resolved BEFORE the await, not inside the catch. `AppLogger` is
+    // context-free and the log must survive unmount — but `ref.read` is not:
+    // under Riverpod 3 it THROWS a StateError once the consumer is unmounted.
+    // This method runs from a Debouncer timer with no error handler, so that
+    // throw escaped to the zone handler as a FATAL — on the most-used field in
+    // the app, whenever a lookup failed after the sheet was dismissed. Holding
+    // the logger keeps both properties.
     setState(() {
       _isLoading = true;
       _serviceError = null;
@@ -121,8 +146,9 @@ class _AddressAutocompleteFieldState
         _isLoading = false;
       });
     } catch (e, st) {
-      // Logged before the mounted guard so it reaches Crashlytics even if the field is gone by then.
-      ref.read(loggerProvider).warn('ADDR-AUTO autocomplete failed', e, st);
+      // Logged before the mounted guard so it reaches Crashlytics even if the
+      // field is gone by then — through the logger captured above.
+      _logger.warn('ADDR-AUTO autocomplete failed', e, st);
       if (!mounted || requestId != _requestId) return;
       setState(() {
         _suggestions = [];
@@ -155,6 +181,9 @@ class _AddressAutocompleteFieldState
   }
 
   Future<void> _selectSuggestion(AddressSuggestion s) async {
+    // Resolved BEFORE the await for the same reason as _fetch above — this is
+    // fired from onTap, so the sheet being dismissed before Places responds is
+    // routine, and `ref.read` on an unmounted consumer throws.
     // Invalidate any pending debounce/in-flight request so a late response can't resurface suggestions.
     _debounce.cancel();
     _requestId++;
@@ -182,9 +211,7 @@ class _AddressAutocompleteFieldState
       setState(() => _isLoading = false);
       widget.onAddressSelected?.call(widget.controller.text);
     } catch (e, st) {
-      ref
-          .read(loggerProvider)
-          .warn('ADDR-DETAILS getPlaceDetails failed', e, st);
+      _logger.warn('ADDR-DETAILS getPlaceDetails failed', e, st);
       if (!mounted) return;
       setState(() {
         _isLoading = false;
@@ -238,12 +265,7 @@ class _AddressAutocompleteFieldState
                 ),
         ),
         if (_suggestions.isNotEmpty)
-          Container(
-            margin: const EdgeInsets.only(top: AppSpacing.sp4),
-            decoration: BoxDecoration(
-              border: Border.all(color: scheme.outlineVariant),
-              borderRadius: BorderRadius.circular(AppRadius.r12),
-            ),
+          AttachedDropdown(
             child: Column(
               children: _suggestions
                   .map(

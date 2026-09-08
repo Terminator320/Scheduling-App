@@ -12,6 +12,9 @@ AppointmentRecord _appt({
   required List<String> ids,
   List<String> names = const [],
   int hour = 9,
+  String status = 'pending',
+  bool isPersonal = false,
+  bool isDayOff = false,
 }) => AppointmentRecord(
   id: 'a$hour${ids.join()}',
   title: 'Job',
@@ -19,6 +22,9 @@ AppointmentRecord _appt({
   endTime: DateTime(2026, 5, 16, hour + 1),
   employeeIds: ids,
   employeeNames: names,
+  status: status,
+  isPersonal: isPersonal,
+  isDayOff: isDayOff,
 );
 
 void main() {
@@ -123,5 +129,75 @@ void main() {
 
   test('dayJobDotColors returns empty for an empty day', () {
     expect(dayJobDotColors(const [], const {'e1': _blue}), isEmpty);
+  });
+
+  test('dayJobDotColors drops a cancelled job', () {
+    // A day whose only visit was called off has to read as free.
+    final colors = dayJobDotColors(
+      [
+        _appt(ids: ['e1'], status: 'cancelled'),
+      ],
+      const {'e1': _blue},
+    );
+    expect(colors, isEmpty);
+  });
+
+  test('dayJobDotColors still dots a completed job', () {
+    // `done` is work that HAPPENED — the day was busy, so it keeps its dot.
+    final colors = dayJobDotColors(
+      [
+        _appt(ids: ['e1'], status: 'done'),
+        _appt(ids: ['e2'], hour: 11, status: 'completed'),
+      ],
+      const {'e1': _blue, 'e2': _green},
+    );
+    expect(colors, [_blue, _green]);
+  });
+
+  test('the cap counts the jobs that survive the cancelled filter', () {
+    // Cancelled jobs are dropped BEFORE the cap, so a cancellation early in
+    // the day cannot cost a live job its dot.
+    final colors = dayJobDotColors(
+      [
+        _appt(ids: ['e1'], hour: 8, status: 'cancelled'),
+        _appt(ids: ['e2']),
+        _appt(ids: ['e3'], hour: 10),
+        _appt(ids: ['e4'], hour: 11),
+      ],
+      const {'e1': _blue, 'e2': _green, 'e3': _amber, 'e4': _red},
+    );
+    expect(colors, [_green, _amber, _red]);
+  });
+
+  test('dottedJobsOn is what the semantics count reads', () {
+    // The cell speaks this count as the dots' meaning, so it must agree with
+    // them about a cancelled visit — and it is UNCAPPED, unlike the dots.
+    final day = [
+      _appt(ids: ['e1'], hour: 8, status: 'cancelled'),
+      _appt(ids: ['e2']),
+      _appt(ids: ['e3'], hour: 10),
+      _appt(ids: ['e4'], hour: 11),
+      _appt(ids: ['e1'], hour: 12),
+    ];
+    expect(dottedJobsOn(day), hasLength(4));
+  });
+
+  test('a day off gets no dot — it is not work', () {
+    final day = [
+      _appt(ids: ['e1'], isPersonal: true, isDayOff: true),
+      _appt(ids: ['e2'], hour: 10),
+    ];
+    expect(dottedJobsOn(day), hasLength(1));
+    expect(
+      dayJobDotColors(day, const {'e1': _blue, 'e2': _green}),
+      [_green],
+    );
+  });
+
+  test('a stray isDayOff on a CLIENT visit still dots', () {
+    // isTimeOff is `isPersonal && isDayOff`: a console edit or an import must
+    // not be able to hide real work from the day's dots.
+    final day = [_appt(ids: ['e1'], isDayOff: true)];
+    expect(dottedJobsOn(day), hasLength(1));
   });
 }

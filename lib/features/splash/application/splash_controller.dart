@@ -6,6 +6,7 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
+import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -39,6 +40,19 @@ class SplashGoToAccountSetup extends SplashDestination {
   final String lastName;
 }
 
+Future<SplashDestination> _signOutToLogin(
+  Ref ref,
+  AppLogger logger, {
+  required String logContext,
+}) async {
+  try {
+    await ref.read(authServiceProvider).signOut();
+  } catch (e, st) {
+    logger.warn(logContext, e, st);
+  }
+  return const SplashGoToLogin();
+}
+
 final splashDestinationProvider = FutureProvider<SplashDestination>((
   ref,
 ) async {
@@ -52,27 +66,29 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
   try {
     match = await retryAsync(
       () => employeesRepo.findUserByUid(user.uid),
-      delays: const [Duration(milliseconds: 500), Duration(milliseconds: 1500)],
       onRetry: (attempt, e, st) =>
-          logger.warn('splash findUserByUid retry $attempt', e, st),
+          logger.warn('SPLASH findUserByUid retry $attempt', e, st),
     );
   } catch (e, st) {
-    logger.warn('splash findUserByUid failed after retries', e, st);
+    logger.warn('SPLASH findUserByUid failed after retries', e, st);
     rethrow;
   }
   if (match == null) {
-    await auth.signOut();
-    return const SplashGoToLogin();
+    return await _signOutToLogin(
+      ref,
+      logger,
+      logContext: 'SPLASH signOut failed after missing employee record',
+    );
   }
 
   final authCache = ref.read(authCacheProvider);
   final employee = EmployeeRecord.fromMap(match.id, match.data);
   // An `invited` account is mid-setup, not unauthorized: the admin created it
-  // with the shared starting password and this person is signing in for the
-  // first time. Signing them out here would make setup unreachable — the
-  // credential is exactly the one they need. Everything else non-active is
-  // still booted, so `isDisabled` is deliberately NOT the test: a doc with an
-  // empty or unknown status keeps the old sign-out.
+  // and handed over the generated starting password, and this person is
+  // signing in for the first time. Signing them out here would make setup
+  // unreachable — the credential is exactly the one they need. Everything
+  // else non-active is still booted, so `isDisabled` is deliberately NOT the
+  // test: a doc with an empty or unknown status keeps the old sign-out.
   if (employee.isInvited) {
     return SplashGoToAccountSetup(
       firstName: employee.firstName,
@@ -80,13 +96,15 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
     );
   }
   if (!employee.isActive) {
-    await auth.signOut();
-    await authCache.clear();
-    return const SplashGoToLogin();
+    return await _signOutToLogin(
+      ref,
+      logger,
+      logContext: 'SPLASH signOut failed for non-active employee',
+    );
   }
   unawaited(
     authCache.save(employee).catchError((Object e, StackTrace st) {
-      logger.warn('splash.auth_cache_save', e, st);
+      logger.warn('SPLASH auth cache save failed', e, st);
     }),
   );
   return SplashGoToCalendar(isAdmin: employee.isAdmin, employeeId: employee.id);

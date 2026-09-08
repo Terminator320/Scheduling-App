@@ -14,6 +14,12 @@ const MONTH_MS = 30 * DAY_MS;
 /** The only accepted `importSchedule` wire values. */
 const SCHEDULE_VALUES = ["off", "weekly", "monthly"];
 
+// Membership form of the list above, owned here beside it: the callable
+// validates an incoming cadence against it and every connection read coerces
+// an unknown stored value through it, and two `new Set(SCHEDULE_VALUES)` are
+// two chances for those answers to drift.
+const SCHEDULE_SET = new Set(SCHEDULE_VALUES);
+
 /**
  * Decides whether a scheduled Wave import should run now.
  * @param {string} schedule One of `off` | `weekly` | `monthly`. Anything
@@ -115,9 +121,9 @@ function watermarkPatch({startedAtMs, wasFull}) {
 module.exports = {
   isImportDue,
   SCHEDULE_VALUES,
+  SCHEDULE_SET,
   resolveImportWindow,
   watermarkPatch,
-  DELTA_OVERLAP_MS,
   FULL_RESYNC_INTERVAL_MS,
   WEEK_MS,
   MONTH_MS,

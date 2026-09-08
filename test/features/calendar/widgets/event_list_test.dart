@@ -32,6 +32,9 @@ Widget _wrap({
           nameMap: nameMap,
           colorMap: const {},
           isAdmin: isAdmin,
+          // An ordinary February day, so no holiday row joins the rows
+          // under test.
+          day: DateTime(2026, 2, 10),
         ),
       ],
     ),

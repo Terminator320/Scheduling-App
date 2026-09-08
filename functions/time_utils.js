@@ -5,7 +5,6 @@
  * pure payload module. It deliberately requires nothing else, so it can sit
  * under `notification_utils` -> `live_activity_dispatch` ->
  * `live_activity_utils` without closing a require cycle.
- *
  * @module time_utils
  */
 
@@ -15,30 +14,75 @@
 const BUSINESS_TIME_ZONE = "America/Toronto";
 
 /**
- * The longest span a job may be booked for, in days.
- *
- * HAND-MIRRORED from `maxAppointmentSpanDays` in
- * `lib/features/calendar/domain/appointment_day_slice.dart` — the cap is
- * enforced client-side only (firestore.rules constrains neither instant), so
- * this copy exists purely to size the backend's query windows. Every sweep
- * that filters on `startTime` must reach at least this far back, or a job
- * already under way is invisible to it. Raise both together.
+ * Hoisted because both take CONSTANT options and both sit in a hot loop:
+ * `day_slice_utils.js` reaches them ~18 times per `sliceForDay`, and the widget
+ * payload probes every record against every day.
  */
+const YMD_FORMAT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BUSINESS_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+const OFFSET_FORMAT = new Intl.DateTimeFormat("en-US", {
+  timeZone: BUSINESS_TIME_ZONE,
+  hourCycle: "h23",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+});
+
+/** The longest span a job may be booked for, in days. */
 const MAX_APPOINTMENT_SPAN_DAYS = 14;
 
-/**
- * The same cap in milliseconds — the usual form for widening a query floor.
- */
+/** The same cap in milliseconds — the usual form for widening a query floor. */
 const MAX_APPOINTMENT_SPAN_MS = MAX_APPOINTMENT_SPAN_DAYS * 24 * 60 * 60 * 1000;
+
+/** A job in one of these is finished with, so it no longer occupies anyone. */
+const TERMINAL_STATUSES = new Set(["done", "completed", "cancelled"]);
+
+/**
+ * Lower-cased status of a raw appointment field, or "".
+ * @param {*} status Raw stored value.
+ * @return {string}
+ */
+function normalizedStatus(status) {
+  return String(status || "").toLowerCase();
+}
+
+/**
+ * True when a status means the job is finished with, in either sense.
+ * @param {*} status Raw stored value.
+ * @return {boolean}
+ */
+function isTerminalStatus(status) {
+  return TERMINAL_STATUSES.has(normalizedStatus(status));
+}
+
+/**
+ * True when a status means the visit was called off.
+ * @param {*} status Raw stored value.
+ * @return {boolean}
+ */
+function isCancelledStatus(status) {
+  return normalizedStatus(status) === "cancelled";
+}
+
+/**
+ * True when a status means the job was seen through to the end.
+ * @param {*} status Raw stored value.
+ * @return {boolean}
+ */
+function isCompletedStatus(status) {
+  return isTerminalStatus(status) && !isCancelledStatus(status);
+}
 
 /**
  * Minutes past business-local midnight for an instant, or null.
- *
- * The ordering key for anything listing a DAY's jobs. A multi-day run's stored
- * `startTime` is the first morning of the run, so sorting a day's list by the
- * absolute instant floats that run to the front however late in the day it
- * actually works — the two stored times are a daily WINDOW, and this is the
- * clock time inside it.
  * @param {*} value Timestamp/Date/number.
  * @return {?number}
  */
@@ -66,9 +110,16 @@ function toMillis(value) {
     const ms = value.getTime();
     return Number.isFinite(ms) ? ms : null;
   }
+  // A DocumentSnapshot field read through some admin-SDK paths exposes
+  // `toDate()` without `toMillis()`.
+  if (typeof value.toDate === "function") {
+    const d = value.toDate();
+    const ms = d instanceof Date ? d.getTime() : NaN;
+    return Number.isFinite(ms) ? ms : null;
+  }
   // Finite-checked so NaN/Infinity degrade to "" like every other bad input
-  // here, instead of throwing RangeError out of Intl/new Date() and taking
-  // down a notification build in a best-effort consumer.
+  // here, instead of throwing RangeError out of Intl/new Date() and taking down
+  // a notification build in a best-effort consumer.
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   return null;
 }
@@ -76,18 +127,6 @@ function toMillis(value) {
 /**
  * True when an appointment still has work left at `nowMs` — NOT "does it start
  * in the future".
- *
- * Under the daily-window model a run can be days past its `startTime` and
- * still have a week of work left, so every sweep asking "is this job still
- * live?" must test the END. Gating on the start meant cancelling or deleting a
- * job mid-run pushed NOTHING to the crew (who turned up the next morning), and
- * a client's corrected suite number never reached a tech already on site.
- * Falls back to the start when `endTime` is missing.
- *
- * This is the ONE owner: it was a per-module closure in `notification_policy`
- * and `client_propagation`, which is the drift shape that bit `displayStatusAt`
- * and `_who` — a future carve-out patched into one copy and missed in the
- * other. Route any new "is this job still live?" test through it.
  * @param {*} record Appointment data; null/undefined reads as no work left.
  * @param {number} nowMs Reference instant, ms since epoch.
  * @return {boolean}
@@ -115,8 +154,8 @@ function formatBusinessTime(locale, value, opts) {
 }
 
 /**
- * Localized time of day ("7:54"), the one form the card and the push must
- * agree on.
+ * Localized time of day ("7:54"), the one form the card and the push must agree
+ * on.
  * @param {string} locale 'en' | 'fr'.
  * @param {*} value
  * @return {string}
@@ -134,12 +173,7 @@ function formatTimeOfDay(locale, value) {
  * @return {!Array<number>} `[year, month, day]` (month is 1-based).
  */
 function businessYmd(date) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: BUSINESS_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  })
+  return YMD_FORMAT
       .format(date)
       .split("-")
       .map(Number);
@@ -152,16 +186,7 @@ function businessYmd(date) {
  * @return {number}
  */
 function businessOffsetMs(date) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: BUSINESS_TIME_ZONE,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(date).reduce((acc, p) => {
+  const parts = OFFSET_FORMAT.formatToParts(date).reduce((acc, p) => {
     acc[p.type] = p.value;
     return acc;
   }, {});
@@ -177,8 +202,7 @@ function businessOffsetMs(date) {
 }
 
 /**
- * Business-local midnight of a calendar date as a UTC Date. This stays
- * stable because DST shifts happen at 02:00, not midnight.
+ * Business-local midnight of a calendar date as a UTC Date.
  * @param {number} year
  * @param {number} month 1-based.
  * @param {number} day May overflow (day + 1 rolls the month).
@@ -189,16 +213,45 @@ function businessMidnight(year, month, day) {
   return new Date(guess - businessOffsetMs(new Date(guess)));
 }
 
+/**
+ * Business-local midnight `offsetDays` days from the day containing `instant`,
+ * as epoch ms.
+ * @param {(Date|number)} instant Any instant inside the reference day.
+ * @param {number} [offsetDays] Whole days to move; defaults to 0.
+ * @return {number} Epoch ms of that Toronto midnight.
+ */
+function businessDayStartMs(instant, offsetDays = 0) {
+  const date = instant instanceof Date ? instant : new Date(Number(instant));
+  const [y, m, d] = businessYmd(date);
+  return businessMidnight(y, m, d + offsetDays).getTime();
+}
+
+/**
+ * Epoch ms for a `now` that may be a Date, a number or a Firestore Timestamp.
+ * @param {(Date|number|Object)} now
+ * @return {number}
+ */
+function nowMillis(now) {
+  return toMillis(now) ?? NaN;
+}
+
 module.exports = {
   BUSINESS_TIME_ZONE,
   MAX_APPOINTMENT_SPAN_DAYS,
   MAX_APPOINTMENT_SPAN_MS,
+  TERMINAL_STATUSES,
+  normalizedStatus,
+  isTerminalStatus,
+  isCancelledStatus,
+  isCompletedStatus,
   businessMinutesOfDay,
   toMillis,
+  nowMillis,
   hasWorkLeft,
   formatBusinessTime,
   formatTimeOfDay,
   businessYmd,
   businessOffsetMs,
   businessMidnight,
+  businessDayStartMs,
 };

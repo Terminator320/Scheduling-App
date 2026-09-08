@@ -21,6 +21,44 @@ void main() {
       );
     });
 
+    test('HEALS a street that already carries the apt twice', () {
+      // Three prod docs look like this. `splitApt` peels exactly one prefix,
+      // so the leftover survived every round trip — the card rendered
+      // "210-4450 Prom. Paton #210" and re-saving in the app did not repair
+      // it. This is the doc healing on its next ordinary save.
+      expect(
+        AddressParser.canonicalFrom(
+          street: '210-210-4450 Prom. Paton',
+          apt: '210',
+        ),
+        '210-4450 Prom. Paton',
+      );
+    });
+
+    test('heals however many times the apt was repeated', () {
+      expect(
+        AddressParser.canonicalFrom(street: '7-7-7-90 Rue Peel', apt: '7'),
+        '7-90 Rue Peel',
+      );
+    });
+
+    test('takes only an EXACT repeat, never a leading number', () {
+      // A different number in front is data, not a duplicated unit.
+      expect(
+        AddressParser.canonicalFrom(street: '12-4450 Prom. Paton', apt: '210'),
+        '210-4450 Prom. Paton',
+      );
+    });
+
+    test('the peel stops before it empties the street', () {
+      // The loop's length guard: "7-7" reduces to a bare "7" and stops there,
+      // rather than eating the street and leaving the apt alone.
+      expect(
+        AddressParser.canonicalFrom(street: '7-7', apt: '7'),
+        '7-7',
+      );
+    });
+
     test('a blank apt keeps the one embedded in the street', () {
       // Not "clears it" — clearing here would silently drop an apt number the
       // user never touched.

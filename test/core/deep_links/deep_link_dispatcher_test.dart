@@ -10,7 +10,7 @@ void main() {
     logger: AppLogger(),
     openAppointment: (id) async {
       final override = openAppointmentOverride;
-      if (override != null) return override(id);
+      if (override != null) return await override(id);
       openedAppointments.add(id);
     },
   );

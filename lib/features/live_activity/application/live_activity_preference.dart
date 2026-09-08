@@ -11,6 +11,8 @@ const _keyLiveActivityEnabled = 'live_activity_enabled';
 /// by default). Turning this off must call `unregister()`, since the server
 /// push-starts cards from whatever tokens are registered.
 class LiveActivityPreferenceController extends Notifier<bool> {
+  int _revision = 0;
+
   /// Resolves once the disk read completes. Callers that act on the
   /// preference must await this first, or a cold start sees the default value
   /// and re-registers a device that had opted out.
@@ -23,23 +25,30 @@ class LiveActivityPreferenceController extends Notifier<bool> {
   }
 
   Future<void> _load() async {
+    final logger = ref.read(loggerProvider);
+    final revision = _revision;
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (revision != _revision) return;
       state = prefs.getBool(_keyLiveActivityEnabled) ?? true;
     } catch (e, st) {
       // Default to enabled, same as a fresh install — an uncaught throw here
       // from the unawaited `ready` future would be fatal.
-      ref.read(loggerProvider).warn('LIVE-ACT read preference failed', e, st);
+      logger.warn('LIVE-ACT read preference failed', e, st);
     }
   }
 
   Future<void> setEnabled({required bool value}) async {
+    final logger = ref.read(loggerProvider);
+    final previous = state;
+    final revision = ++_revision;
     state = value;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_keyLiveActivityEnabled, value);
     } catch (e, st) {
-      ref.read(loggerProvider).warn('LIVE-ACT write preference failed', e, st);
+      if (revision == _revision) state = previous;
+      logger.warn('LIVE-ACT write preference failed', e, st);
     }
   }
 }
@@ -48,3 +57,11 @@ final liveActivityEnabledProvider =
     NotifierProvider<LiveActivityPreferenceController, bool>(
       LiveActivityPreferenceController.new,
     );
+
+/// Completes once the stored Live Activity preference has been read.
+///
+/// UI surfaces that must not render the optimistic default can watch this and
+/// wait for it to settle before showing a switch.
+final liveActivityPreferenceReadyProvider = FutureProvider<void>(
+  (ref) => ref.watch(liveActivityEnabledProvider.notifier).ready,
+);

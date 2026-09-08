@@ -16,7 +16,7 @@ final connectivityResultsProvider = StreamProvider<List<ConnectivityResult>>((
 /// as online, so the offline banner never flashes without a real signal.
 final isOfflineProvider = Provider<bool>((ref) {
   final results = ref.watch(connectivityResultsProvider).value;
-  if (results == null) return false;
-  return results.isEmpty ||
-      results.every((result) => result == ConnectivityResult.none);
+  return results != null &&
+      (results.isEmpty ||
+          results.every((result) => result == ConnectivityResult.none));
 });

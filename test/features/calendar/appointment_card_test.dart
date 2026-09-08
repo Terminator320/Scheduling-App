@@ -53,6 +53,19 @@ AppointmentRecord _appt({
   );
 }
 
+/// A day off: a personal block flagged `isDayOff`, which is what [
+/// AppointmentRecord.isTimeOff] tests for.
+AppointmentRecord _dayOff({required String title}) =>
+    _appt(title: title).copyWith(isPersonal: true, isDayOff: true);
+
+/// The same visit with one photo attached.
+///
+/// Photos live in the `images` subcollection, so the card reads the
+/// denormalized counter — it renders on every range-query surface and cannot
+/// afford a subcollection read each.
+AppointmentRecord _withPhoto({String status = 'pending'}) =>
+    _appt(status: status).copyWith(pictureCount: 1);
+
 AppointmentRecord _multiDay({
   required DateTime start,
   required DateTime end,
@@ -117,6 +130,141 @@ void main() {
     // The crew is the avatar stack now, so the meta line is the client alone.
     expect(find.text('Marchetti Residence'), findsOneWidget);
     expect(find.byType(AppAvatar), findsOneWidget);
+  });
+
+  testWidgets('a day off renders the strip, not the card', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentCard(
+          appointment: _dayOff(title: 'Vacation'),
+          crew: _theo,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The typed reason leads and the sentence drops to the caption — both
+    // slots, never the same string in each.
+    expect(find.text('Vacation'), findsOneWidget);
+    expect(find.text('Theo Bell is off'), findsOneWidget);
+    // No status chip and no crew colour bar: it is not a job.
+    expect(find.byType(StatusChip), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an untitled day off keeps the sentence as its headline', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      // What the add sheet actually stores for an unnamed personal block —
+      // the localized placeholder, NOT an empty string. Promoting it would
+      // make every untitled day off read "Personal".
+      _wrap(
+        AppointmentCard(
+          appointment: _dayOff(title: 'Personal'),
+          crew: _theo,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Theo Bell is off'), findsOneWidget);
+    expect(find.text('Personal'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a day off with no assignee never doubles its own title', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentCard(
+          appointment: _dayOff(title: 'Vacation'),
+          crew: const [],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // With nobody to name, the title IS the sentence's subject, so it must
+    // not also lead as the reason.
+    expect(find.text('Vacation is off'), findsOneWidget);
+    expect(find.text('Vacation'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the day off wears a dashed rail, and none without a crew', (
+    tester,
+  ) async {
+    // The rail is what lets two stacked absences be told apart before any
+    // text is read, so its presence is the point — and it has nothing to
+    // colour itself with when nobody is assigned.
+    bool hasRail(WidgetTester t) => t
+        .widgetList<CustomPaint>(find.byType(CustomPaint))
+        .any((p) => p.painter.runtimeType.toString() == '_DashedRailPainter');
+
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentCard(
+          appointment: _dayOff(title: 'Vacation'),
+          crew: _theo,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(hasRail(tester), isTrue);
+
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentCard(
+          appointment: _dayOff(title: 'Vacation'),
+          crew: const [],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(hasRail(tester), isFalse);
+  });
+
+  testWidgets('the day-off strip survives a small phone at 2x text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(260, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _wrap(
+        MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+          child: AppointmentCard(
+            appointment: _dayOff(title: 'Dentist — root canal follow-up'),
+            crew: _theo,
+          ),
+        ),
+        width: 260,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a day off that has passed reads as complete', (tester) async {
+    final today = DateTime.now();
+    final finished = _dayOff(title: 'Vacation').copyWith(
+      startTime: DateTime(today.year, today.month, today.day - 3),
+      endTime: DateTime(today.year, today.month, today.day - 3, 23, 59),
+    );
+    await tester.pumpWidget(
+      _wrap(AppointmentCard(appointment: finished, crew: _theo)),
+    );
+    await tester.pumpAndSettle();
+
+    // Derived from the clock — nothing was written and no button was pressed.
+    expect(find.text('Theo Bell was off'), findsOneWidget);
+    expect(find.byType(StatusChip), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('every assignee gets an avatar, the text stays the client', (
@@ -224,6 +372,47 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.warning_amber_rounded), findsNothing);
+  });
+
+  testWidgets('shows a photo glyph only when the job carries pictures', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(AppointmentCard(appointment: _appt(), crew: _theo)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.photo_outlined), findsNothing);
+
+    await tester.pumpWidget(
+      _wrap(AppointmentCard(appointment: _withPhoto(), crew: _theo)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.photo_outlined), findsOneWidget);
+
+    // It rides the title line, not the time line below it — the placement is
+    // the point, so pin it rather than just its presence.
+    expect(
+      tester.getTopLeft(find.byIcon(Icons.photo_outlined)).dy,
+      lessThan(tester.getTopLeft(find.textContaining('–')).dy),
+    );
+  });
+
+  testWidgets('a collapsed closed job keeps the photo glyph', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentCard(
+          appointment: _withPhoto(status: 'done'),
+          crew: _theo,
+          collapseWhenClosed: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The collapsed row drops the avatars, so the glyph is the only thing left
+    // saying there is something to look at.
+    expect(find.byType(AppAvatar), findsNothing);
+    expect(find.byIcon(Icons.photo_outlined), findsOneWidget);
   });
 
   testWidgets('cancelled strikes the title through when dimming is on', (

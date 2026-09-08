@@ -2,12 +2,11 @@ import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
@@ -17,9 +16,9 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/security/biometric_auth_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
-import 'package:scheduling/features/auth/domain/auth_failure.dart';
+import 'package:scheduling/features/auth/application/is_active_admin_provider.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
-import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/feature_tour/application/tour_seen_store.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
@@ -32,6 +31,8 @@ import 'package:scheduling/features/notifications/application/push_registration_
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/features/settings/application/app_info_provider.dart';
 import 'package:scheduling/features/settings/application/app_lock_provider.dart';
+import 'package:scheduling/features/settings/application/my_details_providers.dart';
+import 'package:scheduling/features/settings/screens/location_sharing_screen.dart';
 import 'package:scheduling/features/settings/screens/text_size_screen.dart';
 import 'package:scheduling/features/settings/widgets/cards/account_settings_card.dart';
 import 'package:scheduling/features/settings/widgets/cards/appearance_settings_card.dart';
@@ -39,17 +40,17 @@ import 'package:scheduling/features/settings/widgets/cards/legal_settings_card.d
 import 'package:scheduling/features/settings/widgets/cards/notifications_settings_card.dart';
 import 'package:scheduling/features/settings/widgets/cards/security_settings_card.dart';
 import 'package:scheduling/features/settings/widgets/cards/settings_tiles.dart';
-import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dialog.dart';
+import 'package:scheduling/features/settings/widgets/views/delete_account_flow.dart';
+import 'package:scheduling/features/settings/widgets/views/location_sharing_view.dart';
 import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
 import 'package:scheduling/features/wave/widgets/wave_settings_section.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
-import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 
-enum _SettingsDetail { textSize }
+enum _SettingsDetail { textSize, locationSharing }
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({
@@ -72,17 +73,19 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen>
-    with WidgetsBindingObserver {
-  late final AccountDeletionService _deletionService =
+    with WidgetsBindingObserver, DeleteAccountFlow<SettingsScreen> {
+  @override
+  late final AccountDeletionService deletionService =
       widget.accountDeletionService ?? ref.read(accountDeletionServiceProvider);
 
+  @override
+  bool get isAdminAccount => _isAdmin;
+
   _SettingsDetail? _selectedDetail;
-  bool _isSigningOut = false;
-  bool _isDeletingAccount = false;
 
   late final _tour = TourSteps(
     const DestinationTour(PushedDestination.settings),
-    isAdmin: widget.role == 'admin',
+    isAdmin: _isAdminArg,
   );
 
   @override
@@ -121,9 +124,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       ? widget.email
       : FirebaseAuth.instance.currentUser?.email ?? '';
 
-  bool get _isAdmin => widget.role == 'admin';
+  /// Push-time argument. Tour wiring keys on it: `TourSteps` owns GlobalKeys
+  /// that must stay stable across rebuilds.
+  bool get _isAdminArg => widget.role == 'admin';
+
+  /// Live gate for the admin-only surfaces — the route argument is a snapshot,
+  /// so this asks Firestore. Fails CLOSED while the user doc is unsettled.
+  ///
+  /// Resolved ONCE per build into a field, never read as `ref.watch` from a
+  /// getter: `isAdminAccount` and the two detail pushes read it from callbacks,
+  /// and a `ref` touched outside `build` on an unmounted consumer throws.
+  bool _isAdmin = false;
+  bool? _pendingAppLockValue;
+  bool? _pendingLiveActivityValue;
+  bool? _pendingTravelAlertsValue;
+  bool? _pendingLocationSharingValue;
 
   Future<void> _toggleAppLock({required bool value}) async {
+    if (_pendingAppLockValue != null) return;
+    // Captured before the first await: `ref.read` throws once this consumer is
+    // unmounted (Riverpod 3), and the catch below deliberately logs before its
+    // mounted guard so the failure still reaches Crashlytics.
+    final logger = ref.read(loggerProvider);
+    final analytics = ref.read(analyticsServiceProvider);
     if (value) {
       final available = await ref
           .read(biometricAuthServiceProvider)
@@ -136,14 +159,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         return;
       }
     }
+    setState(() => _pendingAppLockValue = value);
     try {
       await ref.read(appLockEnabledProvider.notifier).setEnabled(value: value);
+      // After the write lands, never on the optimistic flip — a keychain fault
+      // reverts the switch, and reporting the intent would count a setting the
+      // person does not actually have.
+      analytics.logSettingsChanged(
+        settingName: 'app_lock',
+        settingValue: value ? 'on' : 'off',
+      );
     } catch (e, st) {
       // flutter_secure_storage throws on an iOS keychain fault, including the
       // pre-first-unlock -25308 window AppLockController._load() documents by
       // name. Uncaught, that reached the zone handler as a FATAL and the
       // switch reverted silently. Same shape as OnboardingGate._finish.
-      ref.read(loggerProvider).warn('APPLOCK setEnabled failed', e, st);
+      logger.warn('APPLOCK setEnabled failed', e, st);
       if (!mounted) return;
       ref
           .read(noticeServiceProvider)
@@ -154,6 +185,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               error: e,
             ),
           );
+    } finally {
+      if (mounted) setState(() => _pendingAppLockValue = null);
     }
   }
 
@@ -165,7 +198,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     await Navigator.push<void>(
       context,
       MaterialPageRoute(
-        builder: (_) => TextSizeScreen(
+        builder: (_) =>
+            TextSizeScreen(isAdmin: _isAdmin, employeeId: widget.employeeId),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _onLocationSharingTap() async {
+    if (context.isTwoPane) {
+      setState(() => _selectedDetail = _SettingsDetail.locationSharing);
+      return;
+    }
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationSharingScreen(
           isAdmin: _isAdmin,
           employeeId: widget.employeeId,
         ),
@@ -204,14 +252,83 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   /// Turning this off unregisters the device, which ends any live card;
   /// turning it back on re-registers. Best effort — it never throws.
   Future<void> _toggleLiveActivity({required bool value}) async {
-    await ref
-        .read(liveActivityEnabledProvider.notifier)
-        .setEnabled(value: value);
+    if (_pendingLiveActivityValue != null) return;
+    // Both providers are resolved up front. This runs unawaited from
+    // `Switch.onChanged`, so backing out of Settings mid-flight unmounts the
+    // consumer — and under Riverpod 3 the second `ref.read` would then throw a
+    // StateError into the void. This was the only async handler in this file
+    // with no guard at all.
+    final enabled = ref.read(liveActivityEnabledProvider.notifier);
     final controller = ref.read(liveActivityRegistrationControllerProvider);
-    if (value) {
-      await controller.sync();
-    } else {
-      await controller.unregister();
+    final analytics = ref.read(analyticsServiceProvider);
+    setState(() => _pendingLiveActivityValue = value);
+    try {
+      await enabled.setEnabled(value: value);
+      analytics.logSettingsChanged(
+        settingName: 'live_activity',
+        settingValue: value ? 'on' : 'off',
+      );
+      if (value) {
+        await controller.sync();
+      } else {
+        await controller.unregister();
+      }
+    } finally {
+      if (mounted) setState(() => _pendingLiveActivityValue = null);
+    }
+  }
+
+  /// The traffic-aware departure push, per person.
+  ///
+  /// A SERVER-side flag, unlike the Live Activity toggle beside it: the sweep
+  /// decides the push kind, so a device-local preference could not reach it.
+  /// Turning it off degrades to the fixed 30-minute reminder rather than
+  /// dropping the notification — see `wantsTravelAlerts` in
+  /// `functions/travel_utils.js`.
+  Future<void> _toggleTravelAlerts({required bool value}) async {
+    if (_pendingTravelAlertsValue != null) return;
+    final record = ref.read(myEmployeeRecordProvider);
+    if (record == null) return;
+
+    final l10n = context.l10n;
+    final notices = ref.read(noticeServiceProvider);
+    // Before the await: the catch logs above its `mounted` guard, and
+    // `ref.read` on an unmounted consumer throws under Riverpod 3.
+    final logger = ref.read(loggerProvider);
+    if (guardedOffline(context, ref, intro: l10n.error_introSaveTravelAlerts)) {
+      return;
+    }
+
+    setState(() => _pendingTravelAlertsValue = value);
+    try {
+      await ref
+          .read(employeesRepositoryProvider)
+          .updateSelfDetails(record.copyWith(travelAlertsEnabled: value));
+    } catch (error, stackTrace) {
+      logger.warn('ME-SAVE travel alerts failed', error, stackTrace);
+      if (!mounted) return;
+      notices.error(
+        composeErrorNotice(
+          context,
+          intro: l10n.error_introSaveTravelAlerts,
+          error: error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _pendingTravelAlertsValue = null);
+    }
+  }
+
+  Future<void> _toggleLocationSharing({required bool value}) async {
+    if (_pendingLocationSharingValue != null) return;
+    final record = ref.read(myEmployeeRecordProvider);
+    if (record == null) return;
+
+    setState(() => _pendingLocationSharingValue = value);
+    try {
+      await saveLocationSharing(context, ref, record, enabled: value);
+    } finally {
+      if (mounted) setState(() => _pendingLocationSharingValue = null);
     }
   }
 
@@ -237,7 +354,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           icon: Icons.tour_rounded,
           iconColor: scheme.primary,
           label: context.l10n.settings_replayTour,
-          isLast: true,
           onTap: _onReplayTour,
         ),
       ),
@@ -276,6 +392,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             if (mounted) setState(() => _selectedDetail = null);
           },
         );
+      case _SettingsDetail.locationSharing:
+        return LocationSharingView(
+          key: const ValueKey('settings-location-sharing-pane'),
+          onApplied: () {
+            if (mounted) setState(() {});
+          },
+        );
       case null:
         return null;
     }
@@ -288,9 +411,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   @override
   Widget build(BuildContext context) {
+    _isAdmin = _isAdminArg && ref.watch(isActiveAdminProvider);
     return FeatureTourHost(
       scope: _tour.scope,
-      isAdmin: _isAdmin,
+      isAdmin: _isAdminArg,
       stepKeys: _tour.keys,
       autoScroll: true,
       child: Stack(
@@ -317,111 +441,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             ),
           ),
           // Blocks the UI during the irreversible account deletion.
-          if (_isDeletingAccount)
+          if (isDeletingAccount)
             _BlockingProgressOverlay(
               label: context.l10n.settings_deletingAccount,
             ),
         ],
       ),
     );
-  }
-
-  Future<void> _signOut() async {
-    if (_isSigningOut) return;
-    setState(() => _isSigningOut = true);
-    try {
-      // Clean up this device's push token, presence, and Live Activity state
-      // — best effort, so a failure here doesn't block sign-out.
-      await ref
-          .read(pushRegistrationControllerProvider)
-          .unregisterCurrentDevice();
-      await ref.read(presenceSyncControllerProvider).unregister();
-      await ref.read(liveActivityRegistrationControllerProvider).unregister();
-      await ref.read(authServiceProvider).signOut();
-    } catch (e, st) {
-      // Log but still route to login so the user isn't stuck signed in.
-      ref.read(loggerProvider).warn('ACCT-SIGNOUT signOut failed', e, st);
-    }
-    if (!mounted) return;
-    await Navigator.pushNamedAndRemoveUntil(
-      context,
-      AppRoutes.login,
-      (_) => false,
-    );
-  }
-
-  Future<void> _confirmDeleteAccount() async {
-    if (_isDeletingAccount) return;
-    // Bail out early if we're offline — otherwise the call just hangs for ~30s.
-    if (guardedOffline(
-      context,
-      ref,
-      intro: context.l10n.error_introDeleteAccount,
-    )) {
-      return;
-    }
-    final result = await showConfirmDialog(
-      context,
-      title: context.l10n.settings_deleteAccountConfirmTitle,
-      confirmLabel: context.l10n.settings_deletePermanently,
-      content: DeleteAccountWarningContent(isAdmin: _isAdmin),
-    );
-    if (!result || !mounted) return;
-
-    // Match the platform presentation of the adaptive confirm dialog shown before this.
-    final password = context.isCupertino
-        ? await showCupertinoDialog<String>(
-            context: context,
-            builder: (dialogContext) => const DeleteAccountReauthDialog(),
-          )
-        : await showDialog<String>(
-            context: context,
-            builder: (dialogContext) => const DeleteAccountReauthDialog(),
-          );
-    if (password == null || password.isEmpty || !mounted) return;
-
-    await _runDeletion(password);
-  }
-
-  Future<void> _runDeletion(String password) async {
-    setState(() => _isDeletingAccount = true);
-    final notices = ref.read(noticeServiceProvider);
-    final logger = ref.read(loggerProvider);
-    try {
-      await _deletionService.reauthenticateWithPassword(password);
-      // Drop this device's push token while still authenticated, before deleteAccount revokes access.
-      await ref
-          .read(pushRegistrationControllerProvider)
-          .unregisterCurrentDevice();
-      await ref.read(presenceSyncControllerProvider).unregister();
-      await ref.read(liveActivityRegistrationControllerProvider).unregister();
-      await _deletionService.deleteAccount();
-    } on AuthFailure catch (e) {
-      if (!mounted) return;
-      setState(() => _isDeletingAccount = false);
-      notices.error(e.toLocalizedMessage(context));
-      return;
-    } catch (e, st) {
-      logger.warn('ACCT-DEL settings.delete_account', e, st);
-      if (!mounted) return;
-      setState(() => _isDeletingAccount = false);
-      notices.error(
-        composeErrorNotice(
-          context,
-          intro: context.l10n.error_introDeleteAccount,
-          error: e,
-        ),
-      );
-      return;
-    }
-    if (!mounted) return;
-    final message = context.l10n.settings_accountDeleted;
-    await Navigator.pushNamedAndRemoveUntil(
-      context,
-      AppRoutes.login,
-      (_) => false,
-    );
-    notices.success(message);
   }
 
   /// Appearance, account, security, notifications and (admin-only) Wave.
@@ -434,29 +460,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       child: AppearanceSettingsCard(onTextSizeTap: _onTextSizeTap),
     ),
     const SizedBox(height: AppSpacing.sp24),
-    SettingsSectionHeader(
-      label: context.l10n.settings_account.toUpperCase(),
-    ),
+    SettingsSectionHeader(label: context.l10n.settings_account.toUpperCase()),
     SettingsSectionCard(
       child: SettingsTile(
         iconBg: scheme.primaryContainer,
         icon: Icons.badge_outlined,
         iconColor: scheme.primary,
         label: context.l10n.settings_myDetails,
-        isLast: true,
         onTap: () => Navigator.pushNamed(context, AppRoutes.myDetails),
       ),
     ),
     const SizedBox(height: AppSpacing.sp12),
     AccountSettingsCard(
-      onSignOut: _signOut,
-      onDeleteAccount: _confirmDeleteAccount,
+      isBusy: isAccountExitBusy,
+      onSignOut: signOut,
+      onDeleteAccount: confirmDeleteAccount,
     ),
     const SizedBox(height: AppSpacing.sp24),
-    SettingsSectionHeader(
-      label: context.l10n.settings_security.toUpperCase(),
+    SettingsSectionHeader(label: context.l10n.settings_security.toUpperCase()),
+    SecuritySettingsCard(
+      enabled: _pendingAppLockValue ?? ref.watch(appLockEnabledProvider),
+      isBusy: _pendingAppLockValue != null,
+      onToggleAppLock: _toggleAppLock,
     ),
-    SecuritySettingsCard(onToggleAppLock: _toggleAppLock),
     const SizedBox(height: AppSpacing.sp24),
     SettingsSectionHeader(
       label: context.l10n.settings_notifications.toUpperCase(),
@@ -465,7 +491,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       TourStepId.settingsNotifications,
       child: NotificationsSettingsCard(
         onNotificationsTap: _onNotificationsTap,
+        liveActivityEnabled:
+            _pendingLiveActivityValue ?? ref.watch(liveActivityEnabledProvider),
         onToggleLiveActivity: _toggleLiveActivity,
+        isTogglingLiveActivity: _pendingLiveActivityValue != null,
+        // Null hides the row until the person's own record has loaded —
+        // rendering the switch against a guessed default would show a state
+        // that may be wrong and then flip under them.
+        travelAlertsEnabled:
+            _pendingTravelAlertsValue ??
+            ref.watch(myEmployeeRecordProvider)?.travelAlertsEnabled,
+        onToggleTravelAlerts: _toggleTravelAlerts,
+        isTogglingTravelAlerts: _pendingTravelAlertsValue != null,
+        locationSharingEnabled:
+            _pendingLocationSharingValue ??
+            ref.watch(myEmployeeRecordProvider)?.locationSharingEnabled,
+        onLocationSharingTap: _onLocationSharingTap,
+        onToggleLocationSharing: _toggleLocationSharing,
+        isTogglingLocationSharing: _pendingLocationSharingValue != null,
+        tourWrap: _tour.stepIf,
       ),
     ),
     if (_isAdmin) ...[
@@ -484,14 +528,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   ];
 
   List<Widget> _legalAndHelpCards(ColorScheme scheme) => [
-    SettingsSectionHeader(
-      label: context.l10n.settings_legal.toUpperCase(),
-    ),
+    SettingsSectionHeader(label: context.l10n.settings_legal.toUpperCase()),
     const LegalSettingsCard(),
     const SizedBox(height: AppSpacing.sp24),
-    SettingsSectionHeader(
-      label: context.l10n.settings_help.toUpperCase(),
-    ),
+    SettingsSectionHeader(label: context.l10n.settings_help.toUpperCase()),
     _helpCard(scheme),
     const SizedBox(height: AppSpacing.sp24),
   ];

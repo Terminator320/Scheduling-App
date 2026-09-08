@@ -5,9 +5,10 @@ Loaded when working under `ios/`. Root context: `../CLAUDE.md`.
 iOS notes (Phase 0 of clean-architecture restructure):
 - iOS native build, run, and Crashlytics dSYM upload require a Mac. **Do NOT
   re-run `flutterfire configure`** — `lib/firebase_options.dart` already builds
-  the iOS options from `dev/.env` (`IOS_API_KEY`, `IOS_APP_ID`,
+  the iOS options from `--dart-define` values (`IOS_API_KEY`, `IOS_APP_ID`,
+  `MESSAGING_SENDER_ID`, `PROJECT_ID`, `STORAGE_BUCKET`,
   `iosBundleId: net.vogas.scheduling`); re-running it rewrites the file into the
-  literal-values style and breaks the env-based setup. Carry
+  literal-values style and breaks the define-based setup. Carry
   `ios/GoogleService-Info.plist` (gitignored) to the Mac out-of-band; it lives
   at the `ios/` **root**, not `ios/Runner/`.
 - **The project uses Swift Package Manager — there is no Podfile and never will
@@ -44,6 +45,21 @@ iOS notes (Phase 0 of clean-architecture restructure):
   App Check → the iOS app — no `.p8` key required, unlike DeviceCheck). The
   console provider MUST match the code provider or attestation is rejected.
   App Attest fails on the iOS Simulator — verify on real hardware.
+- **`AppDelegate` registers the native-config channel from
+  `didInitializeImplicitFlutterEngine`, NOT from
+  `application(_:didFinishLaunchingWithOptions:)`** (2026-09-06). It conforms to
+  `FlutterImplicitEngineDelegate` and takes the messenger from
+  `engineBridge.applicationRegistrar.messenger()`. The old shape reached for
+  `window?.rootViewController as? FlutterViewController`, which under the
+  implicit engine runs BEFORE the window has a root — so that guard takes its
+  failure branch, logs "Native config channel unavailable" and never registers
+  a handler, and the Maps key then never reaches `GMSServices`, leaving the
+  live map blank with only that one log line to say why. Don't "restore" a `didFinishLaunchingWithOptions` override to
+  register a channel; take the messenger the bridge hands you. The Dart half is
+  unchanged — `main()` still awaits the send before `runApp`.
+  `ios/Flutter/AppFrameworkInfo.plist` no longer pins `MinimumOSVersion`; the
+  18.0 floor lives on the Xcode targets, which is the only place it was ever
+  enforced.
 - `Info.plist` already declares `NSCameraUsageDescription`,
   `NSPhotoLibraryUsageDescription`, and `LSApplicationQueriesSchemes`.
 - **`NSLocationAlwaysAndWhenInUseUsageDescription` is declared on purpose even
@@ -81,3 +97,14 @@ iOS notes (Phase 0 of clean-architecture restructure):
   together with the `home_widget` tap channel, when the P4b `app_links`
   dispatcher lands (docs/plans/2026-07-29-redesign-program.md). Swift-side, so
   Mac-only verification: widget row / Live Activity tap → appointment sheet.
+
+App Check simulator setup: debug builds use `AppleDebugProvider` (App Attest is
+Release-only and fails on the Simulator), so run the app once → take the debug
+token from the Xcode console, or read `GACAppCheckDebugToken` out of the
+simulator app's preferences plist → register it in Firebase Console → App Check
+→ the iOS app → Manage debug tokens. The token is per-install: re-register after
+a full reinstall or a fresh simulator. An unregistered token causes all Firestore
+writes and non-cached reads to fail with `permission-denied` while cached reads
+still succeed, making the failure appear collection-specific. Full walkthrough:
+`docs/IOS_MAC_BUILD.md` Phase E.
+

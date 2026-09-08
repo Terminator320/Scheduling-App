@@ -110,6 +110,64 @@ void main() {
       expect(restored.seriesId, 'series-1');
     });
 
+    test('toMap → fromMap roundtrip preserves the day-off flag', () {
+      final original = AppointmentRecord(
+        id: 'a1',
+        startTime: start,
+        endTime: end,
+        isPersonal: true,
+        isDayOff: true,
+      );
+      final restored = AppointmentRecord.fromMap('a1', original.toMap());
+      expect(restored.isDayOff, isTrue);
+      expect(restored.isTimeOff, isTrue);
+    });
+
+    test('a day off completes itself once its last day has passed', () {
+      // Derived, never stored — there is no Complete button on a day off, so
+      // the end of the span is what closes it.
+      final dayOff = AppointmentRecord(
+        id: 'a1',
+        startTime: DateTime(2026, 5, 10),
+        endTime: DateTime(2026, 5, 10, 23, 59),
+        isPersonal: true,
+        isDayOff: true,
+      );
+      expect(dayOff.displayStatusAt(DateTime(2026, 5, 10, 12)), 'pending');
+      expect(dayOff.displayStatusAt(DateTime(2026, 5, 11)), 'done');
+      // The STORED status never moves.
+      expect(dayOff.status, 'pending');
+    });
+
+    test('an ordinary personal block still never derives a status', () {
+      // The day-off branch must not swallow the isPersonal carve-out beneath
+      // it: a dentist appointment past its end is not "done", and asking
+      // "job finished?" about one is the wrong question.
+      final personal = AppointmentRecord(
+        id: 'a1',
+        startTime: DateTime(2026, 5, 10, 9),
+        endTime: DateTime(2026, 5, 10, 10),
+        isPersonal: true,
+      );
+      expect(personal.displayStatusAt(DateTime(2026, 5, 11)), 'pending');
+    });
+
+    test('isTimeOff needs BOTH flags', () {
+      // A client visit carrying a stray isDayOff — a console edit, an import —
+      // must not vanish from the job counts with nothing on screen saying why.
+      final strayFlag = AppointmentRecord(
+        id: 'a1',
+        startTime: start,
+        endTime: end,
+        isDayOff: true,
+      );
+      expect(strayFlag.isTimeOff, isFalse);
+      expect(
+        strayFlag.copyWith(isPersonal: true, isDayOff: false).isTimeOff,
+        isFalse,
+      );
+    });
+
     test('fromMap defaults missing or unknown repeat to none', () {
       expect(
         AppointmentRecord.fromMap('a1', const {}).repeat,
@@ -130,24 +188,88 @@ void main() {
       expect(r.status, 'pending');
       expect(r.employeeIds, isEmpty);
     });
+
+    group('run day fields', () {
+      test('defaults to zero when the document carries neither', () {
+        final record = AppointmentRecord.fromMap('a1', {
+          'startTime': start,
+          'endTime': end,
+        });
+        expect(record.dayIndex, 0);
+        expect(record.dayCount, 0);
+      });
+
+      test('reads a stored pair', () {
+        final record = AppointmentRecord.fromMap('a1', {
+          'startTime': start,
+          'endTime': end,
+          'dayIndex': 3,
+          'dayCount': 5,
+        });
+        expect(record.dayIndex, 3);
+        expect(record.dayCount, 5);
+      });
+
+      test('a negative or unparseable value reads as zero, never throws', () {
+        final record = AppointmentRecord.fromMap('a1', {
+          'startTime': start,
+          'endTime': end,
+          'dayIndex': -2,
+          'dayCount': 'five',
+        });
+        expect(record.dayIndex, 0);
+        expect(record.dayCount, 0);
+      });
+
+      test('toMap emits the pair only for a run member', () {
+        final single = AppointmentRecord(startTime: start, endTime: end);
+        expect(single.toMap().containsKey('dayIndex'), isFalse);
+        expect(single.toMap().containsKey('dayCount'), isFalse);
+
+        final member = single.copyWith(dayIndex: 3, dayCount: 5);
+        expect(member.toMap()['dayIndex'], 3);
+        expect(member.toMap()['dayCount'], 5);
+      });
+
+      test(
+        'toMap drops an INCOHERENT pair rather than writing a rejected one',
+        () {
+          // A console-written doc can carry dayCount with no dayIndex, which
+          // parses to 0. The rules bound dayIndex at >= 1, so emitting it would
+          // make every later edit — including the cancel that would clear it —
+          // fail as an opaque permission-denied. Dropping the labels repairs the
+          // doc instead of stranding it.
+          final base = AppointmentRecord(startTime: start, endTime: end);
+
+          final noIndex = base.copyWith(dayCount: 5);
+          expect(noIndex.toMap().containsKey('dayIndex'), isFalse);
+          expect(noIndex.toMap().containsKey('dayCount'), isFalse);
+
+          final pastEnd = base.copyWith(dayIndex: 9, dayCount: 5);
+          expect(pastEnd.toMap().containsKey('dayIndex'), isFalse);
+          expect(pastEnd.toMap().containsKey('dayCount'), isFalse);
+        },
+      );
+    });
   });
 
   group('AppointmentDateRange.visibleMonth', () {
-    test('starts two weeks before the 1st of the month', () {
+    test('starts a week before the 1st of the month', () {
       final focus = DateTime(2026, 5, 9);
       final range = AppointmentDateRange.visibleMonth(focus);
-      expect(range.start, DateTime(2026, 4, 17));
+      expect(range.start, DateTime(2026, 4, 24));
     });
 
-    test('ends two weeks after the 1st of the next month', () {
+    test('ends a week after the 1st of the next month', () {
       final focus = DateTime(2026, 5, 9);
       final range = AppointmentDateRange.visibleMonth(focus);
-      expect(range.end, DateTime(2026, 6, 15));
+      expect(range.end, DateTime(2026, 6, 8));
     });
 
-    test('covers well past the maximum trail the grid can show', () {
-      // The grid renders only the weeks the month occupies, so the real worst
-      // trail is 6 days; the ±14 window is a deliberate superset.
+    test('covers the maximum trail the grid can show', () {
+      // The grid renders only the weeks the month occupies, so the worst trail
+      // is 6 days and the ±7 window clears it by one. `month_grid_overscan_test`
+      // walks every month at every week start to keep that true.
       final range = AppointmentDateRange.visibleMonth(DateTime(2026, 2, 10));
       expect(range.end.isAfter(DateTime(2026, 3, 7)), isTrue);
     });
@@ -183,7 +305,7 @@ void main() {
         selectedDay: DateTime(2026, 5, 20),
       );
       expect(range.start, DateTime(2026, 5, 20));
-      expect(range.end, DateTime(2026, 9, 15));
+      expect(range.end, DateTime(2026, 9, 8));
     });
 
     test('stretches forward to a selection left behind by paging back', () {
@@ -191,7 +313,7 @@ void main() {
         focusedDay: DateTime(2026, 2),
         selectedDay: DateTime(2026, 5, 20),
       );
-      expect(range.start, DateTime(2026, 1, 18));
+      expect(range.start, DateTime(2026, 1, 25));
       expect(range.end, DateTime(2026, 5, 21));
     });
   });

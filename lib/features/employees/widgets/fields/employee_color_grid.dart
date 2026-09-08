@@ -194,18 +194,7 @@ class _CustomColorButton extends StatelessWidget {
                 padding: const EdgeInsets.all(3),
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: SweepGradient(
-                    // This spectrum is purely decorative, so it deliberately ignores the theme.
-                    colors: [
-                      Color(0xFFEF4444), // red
-                      Color(0xFFF59E0B), // amber
-                      Color(0xFF10B981), // emerald
-                      Color(0xFF06B6D4), // cyan
-                      Color(0xFF6366F1), // indigo
-                      Color(0xFFEC4899), // pink
-                      Color(0xFFEF4444), // back to red for a seamless ring
-                    ],
-                  ),
+                  gradient: SweepGradient(colors: AppColors.decorativeHueRing),
                 ),
                 child: Container(
                   decoration: BoxDecoration(

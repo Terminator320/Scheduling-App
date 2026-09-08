@@ -80,4 +80,51 @@ void main() {
       expect(result.text, '(514) 555-123');
     });
   });
+
+  group('bareNumber', () {
+    test('takes the punctuation off a stored number', () {
+      // `clients/{id}.name` is the Wave customer name, and the invoicing
+      // workflow there wants the number unpunctuated.
+      expect(bareNumber('(514) 555-1234'), '5145551234');
+      expect(bareNumber('514-555-1234'), '5145551234');
+    });
+
+    test('keeps a leading + so an international number stays dialable', () {
+      expect(bareNumber('+33 1 42 68 53 00'), '+33142685300');
+    });
+
+    test('keeps a leading country-code 1', () {
+      // Unlike the comparison-only digit normalizer inside ClientNamePolicy,
+      // this produces a value that gets STORED — dropping a digit the admin
+      // typed would change the number.
+      expect(bareNumber('1-514-555-1234'), '15145551234');
+    });
+
+    test('hands back anything it cannot reduce', () {
+      expect(bareNumber('  ext. only  '), 'ext. only');
+      expect(bareNumber(''), '');
+    });
+  });
+
+  group('extensions survive storage and validation', () {
+    test('an extension is kept as its own token, not folded into the number', () {
+      // `bareNumber` alone produced 51455512342 — a number nobody can dial,
+      // written silently on an ordinary save.
+      expect(
+        normalizePhoneForStorage('514-555-1234 poste 2'),
+        '5145551234 poste 2',
+      );
+      expect(normalizePhoneForStorage('(514) 555-1234 ext 12'),
+          '5145551234 ext 12');
+      expect(normalizePhoneForStorage('(514) 555-1234'), '5145551234');
+    });
+
+    test('both languages validate, and a word is still not a number', () {
+      expect(isUsablePhoneNumber('514-555-1234 poste 2'), isTrue);
+      expect(isUsablePhoneNumber('5145551234 x5'), isTrue);
+      expect(isUsablePhoneNumber('text'), isFalse);
+      expect(isUsablePhoneNumber('12345'), isFalse);
+      expect(isUsablePhoneNumber(''), isTrue);
+    });
+  });
 }

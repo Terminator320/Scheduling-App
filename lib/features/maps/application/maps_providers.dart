@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -35,18 +37,46 @@ class ReverseGeocodeQuery {
   int get hashCode => Object.hash(lat, lng, locale);
 }
 
+/// How long a FAILED cell is held before it may be looked up again.
+///
+/// "Retries later" is the intent; this is what makes *later* real. It has to
+/// outlast the roster's 30 s freshness tick (`liveMapTickProvider`), or a
+/// rebuild still lands on an expired cell and the retry loop returns.
+const Duration kReverseGeocodeFailureCooldown = Duration(minutes: 5);
+
 /// Resolves the display address for a rounded lat/lng cell (see
-/// [ReverseGeocodeQuery]). A successful lookup is kept alive for the session,
-/// while a failure stays autoDispose so it retries later. The widget should
-/// treat an [AsyncError] here as "no address available" rather than a notice.
+/// [ReverseGeocodeQuery]). A successful lookup is kept alive for the session;
+/// a failure is held for [kReverseGeocodeFailureCooldown] and then retried.
+/// The widget should treat an [AsyncError] here as "no address available"
+/// rather than a notice.
+///
+/// **A failure must be held, not merely re-thrown.** The live-map roster
+/// watches this per ROW inside a `ListView.separated` builder, so scrolling
+/// disposes off-screen rows and scrolling back re-creates them. Left plain
+/// autoDispose, every recycle was a fresh BILLED geocode against a 120/hour
+/// per-uid budget — and because the client abandons the callable at 10 s
+/// while the function keeps running, an abandoned lookup still spent both the
+/// upstream call and its rate-limit slot. Production showed ten failing
+/// together, once per staff row.
 final reverseGeocodeProvider = FutureProvider.autoDispose
     .family<String?, ReverseGeocodeQuery>((ref, key) async {
       final repo = ref.watch(placesRepositoryProvider);
-      final address = await repo.reverseGeocode(
-        lat: key.lat,
-        lng: key.lng,
-        locale: key.locale,
-      );
-      ref.keepAlive();
-      return address;
+      try {
+        final address = await repo.reverseGeocode(
+          lat: key.lat,
+          lng: key.lng,
+          locale: key.locale,
+        );
+        ref.keepAlive();
+        return address;
+      } on Object {
+        // Held, then released — so the error still reaches the widget (the
+        // row renders "No location" off it) but the cell is not re-requested
+        // until the cooldown expires. A cache-eviction keep-alive is one of
+        // the sanctioned raw-`Timer` uses; this is not a debounce.
+        final link = ref.keepAlive();
+        final timer = Timer(kReverseGeocodeFailureCooldown, link.close);
+        ref.onDispose(timer.cancel);
+        rethrow;
+      }
     });

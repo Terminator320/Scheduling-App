@@ -4,7 +4,8 @@ import 'package:scheduling/core/animations/app_animation_constants.dart';
 
 class TapScale extends StatefulWidget {
   const TapScale({
-    required this.child, super.key,
+    required this.child,
+    super.key,
     this.enabled = true,
     this.pressedScale = 0.97,
   });
@@ -19,6 +20,14 @@ class TapScale extends StatefulWidget {
 
 class _TapScaleState extends State<TapScale> {
   bool _pressed = false;
+
+  @override
+  void didUpdateWidget(covariant TapScale oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_pressed && !widget.enabled) {
+      _pressed = false;
+    }
+  }
 
   void _setPressed(bool pressed) {
     if (!mounted || !widget.enabled) return;

@@ -3,25 +3,81 @@
 Loaded when working under `functions/`. Root context: `../CLAUDE.md`.
 
 Functions live in `functions/` (project `schedulingapp-88727`, region
-`us-central1`). `index.js` is now a thin wiring surface that re-exports all 25
-functions under their original names — the implementations are split into
+`us-central1`). `index.js` is now a thin wiring surface that re-exports all 29
+functions under their original names (25 until 2026-09-04, when
+`indexed_search.js` and `appointment_actions.js` added four —
+`docs/DEPLOYMENT.md` uses this count as a deploy abort check, so it is
+operational rather than cosmetic) — the implementations are split into
 domain modules: `security.js` (shared callable guards — `assertPayloadShape`,
 `requireString`, `optionalString` (same trim/length/control-char checks but
 allows absent-or-empty; it lived as a private copy in `invites.js` and was
 carried verbatim into `employee_accounts.js`, which is why it now sits here),
 `requireNumberInRange` (finite number in `[min,max]`; rejects
-`NaN`/`Infinity`), `readSessionToken`, `enforceDurableRateLimit`, `assertAdmin`),
-`bridge.js` (`syncUsersByUid`), `client_propagation.js`
-(`propagateClientEdits`), `client_job_count.js` (`recountClientJobs`, backed by
-the pure `clientsToRecount`), `clients.js` (`deleteClient` — admin-only, the
+`NaN`/`Infinity`), **`requireDocId`** (a required id ≤128 chars carrying no
+`/` — the callable-side owner of `isValidDocIdField` in `firestore.rules`,
+which was restated at three call sites, two byte-identical down to the
+comment; the slash half is load-bearing, since `.doc()` throws SYNCHRONOUSLY
+on one and would reach the caller as an opaque `internal`. It throws
+`invalid-<key>`, so each call site keeps its own error code.
+`notification_policy.js`'s `toIdList` deliberately does NOT use it — that one
+FILTERS a list rather than throwing, and the policy module must stay free of
+firebase-functions/admin),
+`readSessionToken`, `enforceDurableRateLimit`, `assertAdmin`, `hasControlChar`,
+`isReauthStale`, **`assertFreshReauth`** — the guard
+`.claude/rules/security.md` holds up as *the shape to copy* for failing closed
+on missing input, and all three were missing from this list — plus the two
+COMPOSED openings every new callable is required to use:
+**`assertAdminCall(req, allowedKeys)`** (auth -> `assertAdmin` ->
+`assertPayloadShape`, returning the uid the rate limiter needs) and
+**`assertActiveCall(req, allowedKeys)`** (auth -> `assertPayloadShape` -> the
+`usersByUid/{uid}` bridge row, refusing anyone not `active` and returning the
+profile, because every self-service site needs `role`/`docId` next to scope
+what it may reach). They exist because a hand-written gate silently loses a
+clause; `assertActiveCall` proves the caller is a LIVE ACCOUNT and never that
+they may touch a particular document, so per-doc scoping stays at the call
+site),
+`bridge.js` (`syncUsersByUid`), `client_address_utils.js` (pure, no trigger —
+`streetFromAddress` / `composeFullAddress`, the JS half of a pair hand-mirrored
+as `AddressParser.streetOnly` / `composeFull`. `clients/{id}.address` is the
+STREET LINE and the four locality fields are their own, so anything showing a
+whole address composes it back. It lived in `wave/mappers.js`, where the rule
+was first needed, and moved out when `client_propagation.js` needed the same
+answer — that module must not import from `wave/`, and a second copy of a rule
+this sharp is how two answers drift apart), `client_propagation.js`
+(`propagateClientEdits` — **compares the COMPOSED address, never the stored
+field**: an appointment holds one address string and no locality fields of its
+own, so fanning a raw street line onto it strips the city off a live job with
+nothing left to rebuild from. It is also what keeps normalizing the client
+field a no-op, and it fixed a matching bug that predated the split — the app
+books the composed address while the doc stores the canonical `4-1234 …`, so
+an apt-bearing client silently never took an address correction at all), `client_job_count.js` (`recountClientJobs`, backed by
+the pure `clientsToRecount`), `recount_claim.js` (the ONE owner of the
+claim-ledger protocol that collapses a batch's N recount triggers into one
+aggregate — `claimRecount`/`releaseRecount`/`debounceRecount`, `db` injected
+like `maintenance_policy.js`. **Both counters route through it**:
+`recountClientJobs` for client `jobCount` and `appointment_images.js`'s
+`debouncedRecountPictures` for appointment `pictureCount`, which carried a
+byte-identical second copy of all six bodies until 2026-08-28 — the drift the
+module exists to prevent, live in the module's own sibling. Its
+release-BEFORE-aggregate ORDER is the whole design and is silent when wrong;
+never re-spell it at a call site. Do NOT fold in `claimSeriesNotice`
+(`notification_utils.js`, a third ledger): it claims-and-HOLDS for dedupe
+rather than releasing before an aggregate, and looks similar precisely because
+it is deliberately different. The two adapters differ in one place on purpose:
+the client counter GATES the debounce on `mayShareABatch` — a multi-day run
+day-document or a repeat-series member — because the 2 s settle plus a claim
+create AND delete doubles the writes on the overwhelmingly common single
+create/delete, where a photo write is always part of a batch), `clients.js` (`deleteClient` — admin-only, the
 ONLY client-delete path now that `allow delete` on `/clients` is withdrawn;
 refuses `client-has-history` on a **live `count()` aggregate**, deliberately not
 the lazily-backfilled `jobCount`, since deleting on a stale zero orphans the
 visits this gate exists to protect; pure `performDeleteClient` exported for
 jest), `places.js`, `account.js`,
 `employee_accounts.js` (the whole employee-account lifecycle, P4c 2026-08-02 —
-`createEmployeeAccount` (admin-only: mints the Firebase Auth account on the
-shared `DEFAULT_PASSWORD` and the `invited` `users` doc carrying its real
+`createEmployeeAccount` (admin-only: mints the Firebase Auth account on a
+random per-account starting password (`generateStartingPassword`, 12
+unambiguous chars, `crypto.randomInt`, never persisted) and the `invited`
+`users` doc carrying its real
 `uid`, rolls the Auth account back if the Firestore write fails, and refuses
 `email-exists` for an email that has already finished setup. **That refusal
 resolves the target by `uid`, not by email** — `users.email` is admin-editable
@@ -34,8 +90,9 @@ an existing account; `resetProvisionedPassword` runs after
 — which NARROWS the window in which a setup committing mid-call has its chosen
 password reverted, but does not close it: the Auth call is outside both
 transactions, so a `completeEmployeeSetup` landing between the commit and the
-rotation still leaves an `active` employee on the shared default. Auth is not
-transactional; don't record this as fixed.
+rotation still leaves an `active` employee on a password the admin was handed
+rather than the one they chose. Auth is not transactional; don't record this as
+fixed.
 The transaction additionally refuses when the uid already belongs to another
 doc — without that, a second doc carrying a live employee's uid made
 `syncUsersByUid` delete their `usersByUid` bridge and locked them out.
@@ -50,7 +107,8 @@ never restore a bare `.catch(() => {})` on either),
 `setup-not-pending` on a replay, and stamps the consent timestamps only when
 the flags are actually `true`), `deleteEmployeeAccount` (admin-only, and
 only while `invited` — doc first, Auth second, so a partial run converges)
-and `changeEmployeeEmail` (admin-only, 2026-08-04 — the ONLY thing that joins
+and `changeEmployeeEmail` (admin **or self** — the `self` branch landed with P5
+on 2026-08-10; the ONLY thing that joins
 the two stores on an email edit, and the reason
 `edit_person_sheet.dart`'s email field is editable again. **Auth FIRST,
 Firestore second, with a revert**: Auth owns sign-in and is the only store that
@@ -61,7 +119,36 @@ are PII**. The transaction re-checks both the previous email and uniqueness,
 raising `email-changed` on a concurrent edit. Refuses
 `account-has-no-auth` for a doc with no `uid`: nothing to join there, and the
 client writes that email directly under the rules.
-**It then pushes the person a `kind:"emailChanged"` notice naming the new
+**The identity guard is the pure `resolveEmailChangeCaller`, not
+`assertAdmin`** — it has to tell an admin from a person editing their own row.
+An active admin may move any doc, an active employee may move their OWN, and
+nothing else gets through: disabled (whose Auth credential outlives the status
+flip), invited, unknown role, missing bridge doc, or an employee naming another
+docId. **Widening this callable past admins must never widen WHICH doc a caller
+can reach** — that function exists to make the mistake hard to write. Guard
+order is FIVE, not four: auth → payload → identity → **`assertFreshReauth`**
+→ rate limit → work (`employee_accounts.js:509-511` spells it out in its own
+comment). The re-auth step sits between identity and the limiter and is keyed on
+ROLE, not on `isSelf`: a valid ID token alone must not let an EMPLOYEE move
+their own sign-in address, while every ADMIN call arrives through `updateEmployee`,
+which has no re-auth step to satisfy it — gating on self-ness rejected an admin
+editing their own roster row as an opaque `stale-auth`.
+**Who is notified depends on who acted**, and `isSelf` reports whether the
+caller IS the target independent of role, so an admin editing their own row is a
+self change. A self edit pushes the ACTIVE ADMINS instead
+(`notifyAdminsOfSelfEmailChange` → **`sendToActiveAdmins`**, the shared fan-out
+beside `sendToEmployee` — build a new admin fan-out on it rather than inlining
+the role/status query. (It was justified here as the fan-out P6's time-off
+requests would reuse; **P6 was cancelled 2026-09-06**, so it has one caller
+today. The rule stands on its own — a second inlined role/status query is the
+thing to avoid, not the absent second caller.) It is bounded
+by `ADMIN_FANOUT_MAX` (100) with the warn-at-cap posture the sweep ceilings
+use — it was the last unbounded collection query in the push stack — and it
+seeds `sendToEmployee`'s recipient `cache` from the docs it just read, so
+`_loadRecipient` no longer re-`get()`s a users doc already in hand). It carries the
+NAME, never the address: it reaches every admin's Lock Screen and an email is
+PII. An admin edit instead
+**pushes the person a `kind:"emailChanged"` notice naming the new
 address** (`notifyEmailChanged` → the shared `sendToEmployee`, now exported
 from `notification_utils.js` — never re-derive the token fetch, the role/active
 gate or stale-token pruning). It runs AFTER the commit and swallows everything:
@@ -103,15 +190,104 @@ new pure rules to the policy module and re-export, rather than growing the
 orchestration file back), the Live Activity stack (`apns_client.js`,
 `live_activity_utils.js`, `live_activity_registry.js`,
 `live_activity_dispatch.js` — see the Live Activities bullet below), and
-`wave/callables.js`. Instant + business-time-zone primitives (`toMillis`,
+`indexed_search.js` (the three server-side search callables added 2026-09-04 —
+`searchClients`, `searchHistory` and `findAppointmentConflicts`; the token hit
+is a PREFILTER and `recordMatchesQuery` re-verifies, `mayReadHistoryDoc`
+re-verifies a non-admin against `employeeIds` rather than trusting the
+client-written scope, and `blocksProposedWindow` applies the DAILY-window
+overlap rule), `appointment_actions.js` (`restoreAppointmentStatus`, the
+mark-complete Undo — a callable rather than a rules grant because reopening a
+closed job is the one status move the employee disjuncts deliberately
+exclude), `search_tokens.js` (pure, no trigger — the HAND-MIRROR of
+`lib/core/search/search_tokens.dart`: the app writes `clients.searchTokens`
+and `appointments.historySearchScopes`, the server tokenizes the typed query
+and queries them, so a divergence is a search that silently returns nothing.
+Its `normalize` fold table and the two suites' worked examples are shared
+value-for-value), and
+the Wave stack — `wave/callables.js` (the admin callables only),
+`wave/triggers.js` (`waveUpsertCustomer` + the `runWaveDaily` rider — neither
+is a callable, which is why they no longer sit in the file named for them),
+`wave/sync_run.js` (the ONE owner of `importWithWatermark`/`drainForSync`/
+`readWaveBusinessIdCached`), `wave/customers.js` (the App → Wave PUSH half),
+`wave/customers_import.js` (the Wave → App PULL half — `importCustomers`,
+`importOneCustomer`, `buildWaveIdIndex`, `BATCH_LIMIT`; `customers.js`
+re-exports `importCustomers`, so no call site changed),
+`wave/customer_queries.js` (the LEAF both halves require at module scope —
+`readBusinessId` plus the `LIST_CUSTOMERS`/`LIST_CUSTOMERS_SINCE` documents; it
+requires nothing, which is what keeps the pair acyclic without a lazy
+require-back) and the pure `wave/retry_policy.js` (the dead-letter taxonomy,
+`deps`-free like `notification_policy.js`).
+Instant + business-time-zone primitives (`toMillis`,
 `formatBusinessTime`/`formatTimeOfDay`, `businessYmd`/`businessOffsetMs`/
-`businessMidnight`, `BUSINESS_TIME_ZONE`) live in `time_utils.js` and are shared
+`businessMidnight`/`businessDayStartMs`, `BUSINESS_TIME_ZONE`) live in
+`time_utils.js` and are shared
 by `notification_utils.js`, `live_activity_utils.js`, and
 `widget_payload_utils.js` — so a push and the Live Activity card can't drift on
 how they render the same instant. It must stay **dependency-free**: those three
 consumers sit on a `notification_utils` → `live_activity_dispatch` →
 `live_activity_utils` require chain, and any require here would close a cycle.
 Never re-inline a local `toMillis` or a bare `timeZone: "America/Toronto"`.
+**`businessDayStartMs(instant, offsetDays)` is the one owner of the
+"business-local midnight, n days out" composition** — the
+`businessMidnight(...businessYmd(x), d + n)` spelling was written out at four
+sites (`day_slice_utils` twice, `widget_payload_utils`, `notification_policy`)
+and is the same shape that produced the documented DST bug: the offset must be
+applied as a CALENDAR day and the zone offset re-resolved, never added as
+`n * 86400000`, or a shift day comes out an hour wrong. Its jest cases pin the
+23-hour and 25-hour days.
+**`businessYmd`/`businessOffsetMs` read HOISTED module-scope
+`Intl.DateTimeFormat`s (`YMD_FORMAT`/`OFFSET_FORMAT`), and that is a
+performance invariant, not tidiness** — both take constant options, and
+constructing an `Intl.DateTimeFormat` costs ~100x a `.format()` on an existing
+one. Nothing called them in a loop until `day_slice_utils.js` existed; it
+reaches them ~18 times per `sliceForDay`, and `buildWidgetPayload` probes every
+record against every day, so a busy tech's 200-doc window was paying about a
+second of pure CPU per push. Never move a formatter back inside one of these
+functions, and add a new constant-options formatter at module scope beside
+them.
+**`day_slice_utils.js` sits one level above it** — the pure hand-mirror of
+`lib/features/calendar/domain/appointment_day_slice.dart`, dependency-free
+apart from `time_utils.js`, so it is a leaf too and `widget_payload_utils.js` /
+`notification_messages.js` can both require it without closing a cycle. It owns
+`sliceForDay`/`dayCountOf`/`lastWorkDayMs`/`calendarDaysBetween` and the 14-day
+clamp; it **re-exports** `MAX_APPOINTMENT_SPAN_DAYS` rather than restating a
+third copy of the Dart constant. Its jest cases reuse the Dart suite's worked
+examples on purpose — a divergence between the two implementations fails a
+test rather than shipping, so change both together.
+**Its internals thread an already-resolved window** —
+`lastWorkDayOfWindow(w)` / `dayCountOfWindow(w)` are the real bodies and the
+record-taking `lastWorkDayMs`/`dayCountOf` are thin wrappers. `resolveWindow`
+runs `businessMinutesOfDay` twice and each of those formats through `Intl`, so
+the obvious record-taking chain (`sliceForDay` → `dayCountOf` →
+`lastWorkDayMs`) resolved the SAME window three times on every probe. Keep new
+internals on the window-taking form. For the same reason `travel_utils.js`
+asks `dayCountOf(c)` LAST in its Live-Activity condition
+(`kind === "leaveNow" && delivered > 0 && dayCountOf(c) <= 1`) — hoisted into a
+local, every reminder-only and undelivered candidate paid for a value it
+discards.
+**Three more shared leaves, each extracted from copies that had already
+drifted** (2026-08-22): `admin_firestore.js` (`adminFirestore()` — the lazy
+`require("firebase-admin/firestore")` that keeps a module `require`-able from
+jest; four modules carried a byte-identical private copy and their JSDocs had
+already diverged on whether `Timestamp` came with it), `appointment_scan.js`
+(`scanAppointmentWindow(db, {...})` — the status-`in` + two range `where`s +
+`orderBy` + `limit` + warn-at-cap + map that all three scheduled sweeps spell
+out; each caller keeps its own cap, status set and CONSEQUENCE sentence, and
+`travel_utils.js` had re-spelled the record mapper inline TWICE rather than
+using `recordOf`. The ORDERING argument is the reason it takes `descending`
+explicitly: the overdue and digest sweeps look BACKWARD and must keep the
+newest, the travel sweep looks FORWARD and must keep the soonest, and getting
+it wrong silently spends the cap on the wrong jobs. **NOTHING in its options
+bag is optional, and it THROWS on a missing one** — `descending`/`loOp`/`hiOp`
+had defaults and `logger`/`label`/`consequence` were merely read, so a caller
+could omit the ordering and get the wrong jobs, or omit the logger and lose
+the truncation warn entirely, which is the silent-truncation failure the
+module exists to prevent. Same enforcement as `pageToCap`'s required
+`onCapReached` on the Dart side; prose could not hold it), and `wave/retry_policy.js`'s
+`reclaimDecision` (the lease-expiry retry-or-dead-letter call, moved out of
+`worker.js`'s `runTransaction` closure — all three of its outcomes destroy
+something, and a decision reachable only through a Firestore-transaction mock
+is one nobody re-reads).
 Shared `defineSecret` params live
 in `params.js` (`GOOGLE_MAP_API_KEY`, `APNS_AUTH_KEY`, `APNS_KEY_ID`,
 `APNS_TEAM_ID`), imported by every consumer — a secret
@@ -120,197 +296,92 @@ feature module. Full per-function reference: `docs/CLOUD_FUNCTIONS.md`.
 Add a new function to its domain module and re-export it from `index.js`; put
 shared guards in `security.js` and shared secrets in `params.js`, not back in
 `index.js` or a feature module.
-**Unit-testing trigger logic:** `onObjectFinalized`/`onSchedule` modules eagerly
-resolve a Storage bucket at load, so a jest test can't `require()` them (throws
-"Missing bucket name"). Extract the pure logic into a plain sibling module
+**Unit-testing trigger logic:** `onObjectFinalized`/`onSchedule` modules resolve
+a Storage bucket at load, so a jest test can't `require()` them (throws "Missing
+bucket name"). The resolution is the **trigger registration's**, in
+`firebase-functions/lib/v2/providers/storage.js` — it fires as the module is
+evaluated, not from any admin `getStorage()` handle in the module itself
+(`maintenance.js`'s two are both lazy, inside the function bodies), so making
+the handles lazier does not make the module requirable. Extract the pure logic into a plain sibling module
 (`image_magic.js`, `notification_utils.js`) and test
 that; `onCall`/`onDocument*` modules load lazily and are safe to `require`
 directly. Jest tests live in **`functions/__tests__/` only** — the parallel
 `functions/test/` directory was merged away 2026-07-19; don't recreate it.
-- `syncUsersByUid` — Firestore trigger: mirrors `users/{id}` into `usersByUid/{uid}` bridge collection so security rules can resolve roles from auth UID alone. **It also owns deactivation:** on `active` → anything else it disables the Firebase Auth account + `revokeRefreshTokens` and purges every delivery artifact (`presence/location`, `fcmTokens`, `liveActivityTokens` via `recursiveDelete`, and the `liveActivityCards` marker); `→ active` symmetrically re-enables the account. This is load-bearing, not cleanup — the rules gates below assume a *live* status check can't be reached with a stale credential, and `deactivateEmployee` only flips the Firestore field. All of it runs AFTER the auth-critical bridge write and is idempotent (`retry: true`; `auth/user-not-found` is swallowed so the delete-account ordering converges).
+
+**An operator script's whole preamble has ONE owner: `bootstrapScript(argv,
+{assertFlags})`** (`scripts/_project.js`, 2026-08-31). `_flags.js` owns
+rejecting an unknown argument and `printTargetBanner` owns the banner, but
+nothing owned the six lines WIRING them together — resolve `dryRun` once and
+hand the same value to both. Thirteen scripts spelled that sequence out by
+hand, which is thirteen chances to print a banner that disagrees with the run:
+commit `3059ac0a` is exactly that drift, and repo history has a backfill whose
+`--dry-run` wrote everything anyway. These scripts touch prod, so the banner
+must be printed BEFORE the first read — `applicationDefault()` resolves
+whatever credentials are ambient and nothing on the command line says which
+project that is. Pass the script's OWN `assertFlags` wrapper rather than a
+flag list: the lists legitimately differ per script and each wrapper is
+separately pinned by jest, so re-passing the lists here would create a second
+spelling free to drift from the one the tests check. A script with no
+`--dry-run` in its allowlist (the `audit-*`/`count-*` trio) can never see one
+in `argv`, so `dryRun` is structurally false for it and it needs no special
+case. `scripts/backfill.js` deliberately does NOT use it — it branches on
+`FIRESTORE_EMULATOR_HOST` and hard-fails on missing credentials, a different
+preamble rather than this one with a flag.
+
+**The document-id paging loop is the fourth such owner: `scanByName`
+(`scripts/_scan.js`).** It was hand-written six times before it was extracted,
+and `backfill-client-sort-fields.js` immediately wrote a seventh copy
+(2026-09-04, folded back 2026-09-05) — a script that already imported
+`_flags`, `_batch` and `_project` and missed this one. Every chance to omit
+the cursor advance (re-scanning page one forever) or the short-page break is
+worth removing, because these scripts produce the numbers this project makes
+decisions on. `for await (const doc of scanByName(collection, {pageSize}))`.
+
+**A script that is also a module must guard `main()` behind
+`require.main === module`.** `audit-wave-contract.js` fired its whole audit at
+REQUIRE time against whatever credentials were ambient, so no test could load
+it; its `audit` already took an injected `db`, and the guard was the only thing
+standing between it and being testable.
+- `syncUsersByUid` — Firestore trigger: mirrors `users/{id}` into `usersByUid/{uid}` bridge collection so security rules can resolve roles from auth UID alone. **It also owns deactivation:** on `active` → anything else it disables the Firebase Auth account + `revokeRefreshTokens` and purges every delivery artifact (`presence/location`, `fcmTokens`, `liveActivityTokens` via `recursiveDelete`, and the `liveActivityCards` marker); `→ active` symmetrically re-enables the account. This is load-bearing, not cleanup — the rules gates below assume a *live* status check can't be reached with a stale credential, and `deactivateEmployee` only flips the Firestore field. All of it runs AFTER the auth-critical bridge write and is idempotent (`retry: true`; `auth/user-not-found` is swallowed so the delete-account ordering converges). **Deactivation used to also ROTATE the Storage download tokens on that person's job photos** (`rotateAssignedImageTokens`, `appointment_image_tokens.js`) — that module, its trigger's raised `timeoutSeconds`, and the `(employeeIds CONTAINS, endTime DESC)` composite it needed were all **deleted at the photo-subcollection CONTRACT step**, which is what it was always scheduled to retire with. It existed because `ImageStorageService.uploadImage` minted a `getDownloadURL()` link per photo and persisted it into `pictures[]`: that link's `firebaseStorageDownloadTokens` value is stable per object, never expires and is served with no auth and NO `storage.rules` evaluation, so every assigned device held permanent rules-free copies that revoking the credential did not reach. **The app no longer mints or stores one**, so no NEW photo carries such a link — those are fetched through the SDK against `storage.rules`, which this branch's status flip already answers. **That is not the same as "nothing is left to invalidate", and this bullet used to claim it was:** legacy `appointments/*/images` rows with a `url` and no `storagePath` still exist (the backfill keeps them on purpose, the rules still accept the field, the client fallback is permanent), and those strings stay live after deactivation with nothing rotating them. Closing it needs a prod count of exactly those rows first — see `.claude/rules/images.md`. Don't reintroduce a broad rotation pass without first reintroducing the write that made one necessary; a scoped one over just those legacy objects is the open option. Two things it taught, worth keeping: a `deps` field resolved after entry is a branch no test can reach (the resolved bucket landed in a local while the callee read `deps.bucket`, so the control reported "nothing rotated" while rotating nothing, 2026-08-16); and a per-appointment parent write fans out to `notifyAppointmentChanges`, which stays a genuine no-op only because `diffAppointmentForNotifications` emits nothing for a photo-only diff — pinned by "a pictures-only rewrite emits nothing" in `notification_utils.test.js`.
+**The bridge's pure rules moved to `bridge_policy.js`** — `shouldHaveBridge`, `bridgeBody`, `bridgeMatches` and `classifyBridgeRow` — shared with `scripts/backfill.js`, which repairs the same collection and had byte-identical copies of the first three under a comment claiming the duplication was deliberate (its stated reason, folding the role check in up front, stopped being a difference once this trigger gained the same check). `classifyBridgeRow` is the three-way decision guarding that script's `--prune-orphans` delete: `current` / `retained` (a uid claimed by a users doc the run SKIPPED — deleting it locks a live employee out of everything) / `orphan`. It was the only script here that deletes and the only one with no test.
 - **Disabled employees must not read their old jobs.** `isAssignedEmployee` (`firestore.rules`) and `isAssignedToAppointment` (`storage.rules`) both gate on `status == 'active'`, NOT on bridge-doc existence — the bridge doc is deliberately retained for `disabled` users, so an existence-only check leaves a terminated tech reading client PII and job photos indefinitely. Keep the two helpers in lockstep.
+- **`cascadeDeleteAppointmentImages` + `recountAppointmentPictures`** — see
+  `.claude/rules/images.md` (moved 2026-08-19), which loads for
+  `functions/appointment_image*.js` alongside the Dart image pipeline. Since
+  the CONTRACT step the cascade deletes the Storage BYTES as well as the photo
+  documents, and it is the only thing that does: the client used to enumerate
+  `appointment.pictures` to know which objects to remove, and that array no
+  longer exists.
 - `placesAutocomplete` — proxies Google Places API (New) autocomplete. Requires App Check + auth + `assertAdmin` (address autocomplete is only surfaced on the admin-only appointment form, so gating on admin keeps a non-admin from scripting the billable API). Key in Secret Manager (`GOOGLE_MAP_API_KEY`).
 - `placesGetDetails` — proxies Google Places API (New) place details. Same guards (App Check + auth + `assertAdmin`).
 - `placesReverseGeocode` — proxies Google Geocoding API to convert a staff member's coordinates into a street address for the admin-only live staff map. Requires App Check + auth + `assertAdmin` + durable rate limit; returns only the top `formatted_address`; coordinates are never logged. Key in Secret Manager (`GOOGLE_MAP_API_KEY`).
 - `validateUploadedImage` — Storage trigger: validates JPEG/PNG magic bytes for `appointments/*/images/*` uploads; deletes non-conforming files server-side.
 - `propagateClientEdits` — Firestore `clients/{id}` update trigger: fans a client's name/phone/address edit onto that client's FUTURE appointments (the denormalized `clientName`/`clientPhone`/`address` copies). Per-appointment custom addresses (stored address ≠ client's previous address) and past/history visits are left untouched. Idempotent (absolute writes, `retry: true`); needs the `(clientId ASC, startTime ASC)` composite index. Pure helpers (`relevantClientChange`/`buildAppointmentPatch`) exported for unit tests.
-- **Push notifications** (`notifications.js` + jest-testable `notification_utils.js`; functions + rules **deployed to prod 2026-07-11**; iOS-native APNs key + Push/App-Groups entitlements wired on the Mac 2026-07-11; the two ledger collections' Firestore **TTL policies were enabled 2026-07-11** — on-device verify is the only push item still pending; see the archived push-notifications plan): `notifyAppointmentChanges` (appointment write trigger → assignment/reschedule/cancel/unassign pushes; deliberately no `retry` — a duplicate push is worse than a missed one. **Repeat series are collapsed to ONE push per (employee, kind)**: a "this and all future" edit writes up to ~15 sibling docs in one client batch and each fires this trigger, which used to mean ~15 pushes and ~15× the reads for a single user action. The differ's anchor rule (`id === seriesId`) handles CREATE only — delete/cancel/reschedule batches often start partway through a series, so the anchor doc is frequently absent and an anchor-only rule would suppress *every* notification. Hence the `appointmentSeriesNotices/{seriesId}_{kind}_{employeeDocId}` claim ledger (`claimSeriesNotice`, Admin-SDK-only). It **fails OPEN** everywhere — any claim error (and, in the delete fallback, a claim with no readable `createdAt`) sends anyway; degrading to the old one-push-per-sibling behavior beats risking a dropped cancellation for a tech already driving to the job. **Two keying modes.** WRITES (create/update — after present) carry a fresh **`seriesOpId`** stamped by `_newSeriesOpId()` in `firebase_appointments_repository.dart`: one uuid per write operation, shared by every doc that operation touches and reused by no other, so an `op_<opId>_<kind>_<emp>` claim collision is DEFINITIVE (same batch) and needs **no time window** — two separate actions get different op-ids and both notify, even back-to-back. That is what fixed the "cancel Tuesday then Thursday of the same series → second push dropped" bug. DELETES have no `after`, so `before.seriesOpId` is stale (minted at the doc's last write, shared by every future delete of the series) — the call site passes `""` for a delete, routing it to the fallback `(seriesId, kind, employee)` + `SERIES_CLAIM_WINDOW_MS` (45 s, keep in seconds) + stale-takeover. **`updateAppointmentStatus` stamps `seriesOpId` ONLY on `cancelled`, never on `done`** — the employee mark-done rule is `affectedKeys().hasOnly(['status','updatedAt'])`, so a stray field there is `permission-denied`; cancel is admin-only. `seriesOpId` is write metadata, NOT on `AppointmentRecord`. Build the claim's `.doc()` ref INSIDE the try — `.doc()` throws synchronously on an id containing `/`, and an escape here would kill every push for the write instead of degrading), `sendUpcomingJobReminders` (every 5 min, **travel-aware "time to leave" reminder** — `runTravelAwareReminderSweep` in `travel_utils.js`; per (job, assignee) it decides an origin [intervening job's address → fresh background-GPS presence ≤25 min → recently-ended job's address ≤4h → none], calls Google Routes API `computeRoutes` with `TRAFFIC_AWARE`, and fires at `startTime − driveTime − 10min`; **every failure path — no origin, empty address, any Routes error — degrades to the fixed 30-min `reminder` kind**, so it never regresses below the old behavior; `leaveNow` kind sets APNs `interruption-level: time-sensitive`. Reuses the existing `appointmentReminders/{id}_{startMs}_{employeeDocId}` ledger and key format, so claims from before the upgrade stay honored. The per-employee origin-context read is bounded by `CONTEXT_QUERY_MAX` (`travel_utils.js`), ordered `endTime` ASC so the cap keeps the just-ended/imminent jobs `decideOrigin` actually uses — don't remove the `.limit()` or the query re-reads every future appointment each sweep. Its `endTime` upper bound is `TRAVEL_WINDOW_MS + MAX_BOOKING_MS`, **not** the travel window: an intervening job can start inside the window and still run a full day longer, and narrowing the bound to the window silently drops it from `decideOrigin`'s first prong. The sweep also memoizes drive-time estimates per (job, assignee) for `ESTIMATE_TTL_MS` so a job sitting in the 90-min window isn't re-priced ~18 times to fire once — a cached estimate may only ever DEFER a Routes call (by `SKIP_MARGIN_MS`), never trigger a send; the fire decision is always made against a fresh response. Needs the Routes API enabled + added to the `GOOGLE_MAP_API_KEY` restriction), `sendDailyJobDigest` (18:00 Toronto), and `sendOverdueJobPrompts` (every 15 min, "job finished?" nudge for jobs past `endTime` but still open — server mirror of the display-only `overdue` state, keep in sync with `AppointmentRecord.displayStatus`). Recipients always filtered to active employees; tokens in `users/{docId}/fcmTokens/{token}` (per-device `locale` drives EN/FR text). Idempotency via Admin-SDK-only **per-recipient** ledgers `appointmentReminders/{id}_{startMs}_{employeeDocId}` and `appointmentOverduePrompts/{id}_{endMs}_{employeeDocId}` (create()-fails-if-exists; any claim — reminder OR overdue — with zero delivered pushes is released for retry, keyed per assignee so a late-registering token is retried without re-notifying an already-delivered assignee; both write `expiresAt` +7d for a console-enabled Firestore TTL — see the TTL-offset rule under Cloud Functions). The overdue sweep queries `startTime` over 48h (24h eligibility + <24h max booking) **ordered `startTime` DESC** (existing `(status, startTime DESC)` index) so the `OVERDUE_SWEEP_MAX` cap keeps the newest-overdue jobs, not the oldest — don't drop the `orderBy` or "simplify" it to an `endTime` query without adding an index. (Travel-aware sweep + audit hardening **deployed to prod 2026-07-18**.)
-  - **Client side:** `PushRegistrationController` (`features/notifications`) registers this device's FCM token for active employees AND admins (`shouldRegisterPush` — admins register only for the timed nudges; the server withholds change-driven pushes from them), keyed by the users-doc id at `users/{docId}/fcmTokens/{token}`; `AppSyncListeners` (`core/app/app_sync_listeners.dart`, registered from `main.dart`) drives `sync()` on every account-doc emission + on language change (re-upserts `locale`). A notification tap AND an iOS home-screen widget tap both deep-link to the appointment detail sheet.
-  - **Live-location presence** (`features/presence`, `geolocator`, backs the travel-time reminders): `PresenceSyncController` mirrors `PushRegistrationController` (provider + `main.dart`-driven `sync()` on every account-doc emission; both — and the Live Activity registration controller — get their coalesce-not-drop reentrancy from the shared `ReentrantSync` mixin (`core/utils/reentrant_sync.dart`), so `sync()` sets the guard synchronously before its first await and a concurrent call re-runs exactly once with the latest state; don't re-inline `_busy`/`_pendingResync`) and owns a **foreground-only** `getPositionStream` for active employees AND admins (`shouldTrackPresence` **delegates to** `shouldRegisterPush`, so the presence audience can't drift from the push audience — never re-inline the predicate body). **The `location` UIBackgroundModes entry was REMOVED 2026-07-27 after an App Store rejection under guideline 2.5.4** ("using the location background mode for the sole purpose of tracking employees is not appropriate") — iOS now suspends the stream whenever the app is backgrounded, and that is intended. **Never re-add `location` to `UIBackgroundModes`, never re-add `NSLocationAlwaysAndWhenInUseUsageDescription`, and never request an Always upgrade** (`LocationPermissionService.ensureLocation` deliberately issues exactly ONE prompt — the second, escalating `requestPermission()` call was removed; a pre-existing Always grant is still honored, we just never ask). `AppleSettings.showBackgroundLocationIndicator` was dropped for the same reason: it only means anything for a stream that survives backgrounding. `geolocator` gates `allowsBackgroundLocationUpdates` on the Info.plist key itself (`GeolocationHandler.shouldEnableBackgroundLocationUpdates`), so the removal degrades cleanly instead of throwing. It writes `users/{docId}/presence/location` (`{lat, lng, uid, updatedAt: serverTimestamp()}`, self-only rules, `updatedAt == request.time` so freshness can't be spoofed) throttled to 250 m of movement / ≥2 min per write, plus a 10-min heartbeat re-upsert so a *stationary* tracker stays fresh (server staleness window is `PRESENCE_STALE_MINUTES = 25` in `travel_utils.js` — a live heartbeat sits well inside it). A *failed* write rolls the throttle clock back (`upsertLocation` returns `PresenceWriteResult.ok/failed/denied`) so a dropped write can't suppress the next fix and let the doc drift toward the staleness window; a **`denied`** result additionally calls `_stop()` — the rules gate presence on an active account, so a deactivated user's background stream would otherwise log a denied write every heartbeat until the app is killed (the 11-event Crashlytics spam of 1.32.0; next `sync()` on resume/account-emission re-runs the gate). Expected stream deaths (permission revoked / Location Services off, incl. the iOS `kCLErrorDomain error 1` surfaced as `PositionUpdateException`) are classified by `_isExpectedLocationLoss` and logged WITHOUT a Crashlytics error record. OS location permission is the only switch: a denial degrades silently (server falls through its address→30-min chain). **Because presence is now foreground-only, a backgrounded device's doc goes stale within `PRESENCE_STALE_MINUTES` and the travel-aware sweep routinely falls back to the intervening/recent job address, or to the fixed 30-min `reminder` kind — that fallback is the normal path now, not an error case.** `decideOrigin`'s presence prong still fires whenever a tech has the app open (the common case while reviewing the day's route), so keep it. Torn down + presence doc deleted on sign-out/delete (beside `unregisterCurrentDevice`). The position stream is **device-only** verification (no geolocator channel tests). iOS needs only `NSLocationWhenInUseUsageDescription` in `Info.plist`; the Time Sensitive Notifications entitlement (for `leaveNow`) is Mac-side. **Admin live staff map read path:** admins read ALL presence via a collection-group rule (`match /{path=**}/presence/{presenceId}` read if `isAdmin()`; the wildcard reserves the subcollection name `presence`); the client joins `collectionGroup('presence')` to `watchAllUsers()` on the admin-only Live map hub tab; `presenceStaleAfter` (Dart, `lib/features/presence/domain/live_map_aggregator.dart`, 25 min) must stay in sync with `PRESENCE_STALE_MINUTES` in `functions/travel_utils.js`. **Staleness is surfaced as TEXT only** — the freshness labels in the info card + roster (`LiveMapAggregator.isStale`/`freshnessOf`); the **map marker itself is never dimmed/greyed** (the `staleDocIdsProvider` + marker-dimming path was removed 2026-07-19, and `StaffMarkerIconRenderer` has no `stale` param), so don't reintroduce pin greying. Presence docs are server-purged by `syncUsersByUid` (`functions/bridge.js`) when a user doc is deleted or status leaves `'active'` (purge runs AFTER the auth-critical bridge write, isolated try/catch) — see the deactivation invariant under Cloud Functions for the rest of that purge. The map's **staff roster sheet** (`staff_roster_sheet.dart`) lists everyone sharing location; ordering, haversine distance, and nearest-city parsing are pure functions on `LiveMapAggregator` (`sortedByProximity`/`distanceMeters`/`cityFromAddress` — self row leads, rest nearest-first) so they test without the geolocator/Maps plugins. Location permission is gated by `LocationPermissionService` (`core/permissions`, `geolocator`; `whileInUse`/`always` both count as granted).
-  - **iOS home-screen widget** (`features/home_widget` + `ios/ScheduleWidget`, `home_widget` package, iOS-only): `WidgetSyncService` writes a **two-day** payload into the App Group `group.net.vogas.scheduling` — `todayJobs` (remaining, non-terminal), `tomorrowJobs`, and a `rolloverAt` instant so WidgetKit flips today→tomorrow on-device with no app run (set only once today has no incomplete job left). The widget payload's `startTime` MUST be an absolute UTC instant (`toUtc().toIso8601String()`, …Z) — a bare local `toIso8601String()` has no zone designator and the Swift `ISO8601DateFormatter` can't parse it. The Dart builder (`buildWidgetPayload`, `widget_sync_service.dart`) and the server builder (`functions/widget_payload_utils.js`) are hand-mirrored — keep them and the Swift decoder in lockstep. **Known divergence:** the server resolves day boundaries in `America/Toronto`; the Dart mirror uses device-local midnight — harmless for this single-timezone (Quebec) business, but on an off-Toronto device the app-written and push-written payloads can disagree on which day a job is "today". **All-day blocks narrow that margin to zero:** a timed 2 p.m. job needs a ~10 h offset to change days, but an all-day block starts *at* midnight, so any westward device offset flips its bucket and the widget's contents depend on which writer went last. Still accepted (single-timezone business) — but this is the first thing to fix if the app ever ships outside Quebec. Widget/notification taps use the `esproschedule://appointment?id=…` deep link.
-  - **Widget refresh while the app is closed:** change-driven pushes carry a fresh `widgetPayload` + APNs `content-available`, so `firebaseMessagingBackgroundHandler` (`core/notifications/fcm_background_handler.dart`, registered via `FirebaseMessaging.onBackgroundMessage` in `main()`) rewrites the widget in a fresh OS-spawned isolate — without it the widget only updated while the app ran. It MUST stay a top-level `@pragma('vm:entry-point')` function, iOS-gated, and dependency-light (only the `home_widget` channel after `WidgetsFlutterBinding.ensureInitialized()`; NO `Firebase.initializeApp`/Firestore/Riverpod in the isolate).
-  - **iOS Live Activities — "time to leave" card** (`features/live_activity` + `ios/ScheduleWidget/JobLiveActivity.swift`, `live_activities` package, iOS 17.2+, **built 2026-07-19; DEPLOYED to prod + on-device card-start VERIFIED on real hardware 2026-07-20. The Lock Screen card renders and is started by the `leaveNow` sweep end-to-end; the Dynamic Island presentation is still unverified — the test device is a base iPhone 14, which has no Dynamic Island (Pro-only hardware)**): a Lock Screen / Dynamic Island card started by the travel-aware `leaveNow` sweep and ended when the job completes. **FCM cannot send Live Activity pushes** (they need `apns-push-type: liveactivity` on topic `net.vogas.scheduling.push-type.liveactivity`), so this is the one path with a **direct APNs HTTP/2 client** (`apns_client.js`, ES256 provider JWT cached and re-minted at 50 min; secrets `APNS_AUTH_KEY`/`APNS_KEY_ID`/`APNS_TEAM_ID`). **APNs environment: `sendLiveActivityPush` tries the PRODUCTION host, then retries the SANDBOX host on a `BadDeviceToken` response** (added 2026-07-20). This is load-bearing for *any* dev-signed build: a `flutter run` build ships an `aps-environment: development` provisioning profile, so its push-to-start token is a SANDBOX token that the production host rejects with `BadDeviceToken` → the card would never start (the plain `leaveNow` push still works because FCM auto-routes APNs environments; the direct client does not). The retry only fires when the production push did NOT deliver, so a production (TestFlight/App Store) token that succeeds on the first host is never re-sent — no duplicate-card risk. Don't remove the sandbox fallback thinking "prod only." **Every Live Activity path is additive and best-effort** — no token, no secrets, iOS < 17.2, Live Activities disabled, or any APNs failure all degrade to the existing `leaveNow` push, which fires independently and is unchanged; nothing in the reminder pipeline gains a new way to fail. Keep it that way. The start hangs off `deliverRecipientOnce`'s **return value** (`kind === 'leaveNow' && delivered > 0`) so it inherits that ledger's exactly-once claim — a start placed before the claim double-fires on a collision. **`liveActivityCards/{employeeDocId}` (Admin-SDK-only) is load-bearing, not a convenience:** a push-*started* activity's id is minted by ActivityKit and its attributes can't be read back, so the device physically cannot stamp `appointmentId` on its own token row — the server owns that association, and update/end resolve through the marker (resolving by employee alone would let a cancel on next week's job kill the card for the job the tech is driving to). The travel→on-site flip is **clock-derived on both sides** (mirrors `AppointmentRecord.displayStatus`); **no `markInProgress` write path exists or should be added**. Both the flip and the end are **server-owned**: `runOnSiteFlipPass` must run on every sweep — not only when there are travel candidates, since a tech whose job already started is by definition no longer a candidate — and **every terminal transition ends the card via `endCardOnTerminal` in the appointment write trigger: done, cancelled, DELETED, and unassigned, deliberately UNCONDITIONAL on the job's start time** (generalized from done-only `endCardOnCompletion` 2026-07-21; the notification diff suppresses events for past-start jobs via `notPast`, which is exactly when a live card exists — riding the diff left a deleted/cancelled started job's card stuck on the Lock Screen). `runOnSiteFlipPass` is the backstop for the same bug: a marker whose appointment is deleted/terminal must END the on-device card (`endLiveActivity`), never just clear the marker — the card outlives the Firestore doc. Keep the explicit `clearCardMarker` after that backstop end: `endLiveActivity` returns before clearing the marker when no token rows remain. The client must never end cards off its own status write (`endAllActivities()` is device-wide, so completing job B would kill the card for job A). "Complete" is a **deep link** into the appointment sheet, never a new authenticated write surface in the extension. Card text is built server-side in EN/FR from the `_MESSAGES`-shaped table in `live_activity_utils.js` — never `NSLocalizedString` in Swift, which would fork translations outside the ARBs. `buildContentState`/`buildAttributes` and `ios/ScheduleWidget/LiveActivitiesAppAttributes.swift` are hand-mirrored — the content state carries `endTime` (added 2026-07-21) so the on-site card counts DOWN the remaining booked time to the scheduled end (`Text(timerInterval:countsDown:true)`, a live system timer that ticks without pushes); past the end — or on a payload with no `endTime` — it falls back to the elapsed count-up from the start, which honestly signals the overrun. Thread `endTime` through every dispatch `ctx` (sweep candidate, on-site flip, reschedule update) or the next update push silently drops the countdown. **A travel-phase card with no known `leaveAt` must NEVER label the job's own `startTime` as "Leave at"** — `buildContentState` renders the `startsAt` string ("Starts at" / "Débute à") in that case. The old fallback silently presented the appointment time as the departure time, so a rescheduled job told the tech to leave exactly when they were due to arrive (fixed 2026-07-27). Only the sweep knows a real lead, so `writeCardMarker` persists `leadMinutes`/`travelMinutes` on `liveActivityCards/{employeeDocId}` at card start and `updateLiveActivity` rebuilds `leaveAt = newStart − leadMinutes` from the marker (`_withLeaveAt`) — that's why the reschedule hook can pass `leaveAt: null` and still render a correct departure time. `setCardStart` merges, so it must never overwrite those two fields. `_liveRowsFor` returns `{rows, marker}` (not a bare array) to feed that rebuild without a second marker read. Note `live_activity_dispatch.js` defines its own `MINUTE_MS` rather than importing it from `travel_utils.js` — that module requires this one, so reaching back would close a cycle. **The on-site backstop (`listCardsDueForOnSite`) keys the flip off `marker.startTime`, so `updateLiveActivity` must refresh it via `setCardStart` (merge start+phase) on EVERY update, not just the flip** — a reschedule that left the stale start flipped a job moved earlier past the tech's real arrival and re-pushed a travel update every sweep for a job moved later (the old `setCardPhase` wrote phase only; don't reintroduce it). **The reschedule card refresh runs per-occurrence, ABOVE the series-claim gate** in `handleAppointmentWrite` (unlike the push): the claim collapses an "all future" reschedule to one push per (employee, kind) and which sibling wins is nondeterministic, but the card is per-occurrence, so each sibling's own trigger must refresh its own card — `updateLiveActivity` is a cheap marker-read no-op for any occurrence that isn't the live card, and a deactivated employee has no marker/tokens so it can't resurrect a card (no `delivered > 0` guard needed there). **The ActivityAttributes type MUST be named exactly `LiveActivitiesAppAttributes`** (renamed from `JobActivityAttributes` 2026-07-19): the `live_activities` Flutter plugin registers the push-to-start AND per-activity update-token streams against `Activity<LiveActivitiesAppAttributes>` — a type of that exact name — so the device token the server pushes to only resolves when the name agrees in three places: the widget struct, the widget's `ActivityConfiguration(for:)`, and the server's `ATTRIBUTES_TYPE` (`live_activity_utils.js`). Rename any one and every push-to-start/update/end fails silently (degrades to the plain `leaveNow` push). Because the plugin (linked into Runner) owns token observation against its own copy of that type, the widget's `LiveActivitiesAppAttributes.swift` lives ONLY in the ScheduleWidget extension target — **do NOT add it to the Runner target** (the plugin, not app-native code, drives `pushToStartTokenUpdates`). **Xcode integration landed 2026-07-19** — the `WidgetBundle` `@main` hosts `JobLiveActivity` and the whole `ios/ScheduleWidget/` group builds clean at the new iOS 18.0 floor (the earlier "stay at 15.0, no bump" plan was superseded — the Directions button's returnable `OpenURLIntent` is iOS 18+, so the app moved to 18; every Live Activity path is still `@available(iOS 17.2, *)`-gated internally). `APNS_AUTH_KEY`/`APNS_KEY_ID`/`APNS_TEAM_ID` now exist in Secret Manager (created 2026-07-19), so a deploy no longer fails at secret binding. **Deployed to prod + card-start verified on device 2026-07-20** (via the sandbox fallback above; the missing `firestore:indexes` — see below — were the reason the first attempts produced only the push and no card, exactly as this file warned). **Only the two functions that bind `APNS_SECRETS` may read them** — `notifications.js` splits `liveDeps()` (no `apnsAuth`) from `liveActivityDeps()` (with it), because reading a secret param a function didn't bind logs a "No value found for secret parameter" warning on *every* invocation; the digest and overdue sweeps are Firestore-only and must keep using `liveDeps()`. Device-side capability (iOS 17.2+, ActivityKit available, Live Activities not switched off in iOS Settings) is probed in exactly one place — `LiveActivityRegistrationController.canHostCards()`, which never throws — and backs both `_ensurePlugin()` and the Settings row's `liveActivitySupportedProvider`; don't re-probe the plugin anywhere else. **The user's opt-out cannot be a local flag alone:** the card is *push-started* by the server, so `liveActivityEnabledProvider` (SharedPreferences, device-local, **default on**) only stops a later `sync()` from re-registering — the Settings toggle itself must call `unregister()` to end the live card and delete this device's token rows. `unregister()` deletes the push-to-start row **by kind, via query** (`deleteTokensOfKind`) and re-resolves the users-doc id when `_docId` is unset — the row's doc id IS a token this session may never have seen, and a cold start with the preference already off returns from `_syncGuarded` before `_docId` is set. A cold-start `sync()` MUST `await` the preference's `ready` future before acting on it, or the optimistic `true` default silently re-registers an opted-out device. Two **composite indexes are what make the feature work at all** — `liveActivityTokens` `(kind, employeeDocId)` at COLLECTION_GROUP scope and `liveActivityCards` `(phase, startTime)`; without them every registry query fails `FAILED_PRECONDITION`, the best-effort catch swallows it, and the card silently never appears. Deploy `firestore:indexes` with the functions. Mac runbook + device checklist: `ios/ScheduleWidget/LIVE_ACTIVITY_README.md`.
-  - **Siri App Intents snapshot** (`features/siri` + `ios/SiriIntents`, iOS-only, **Phases 1–3: Dart + Swift landed 2026-07-19; the `SiriIntents` App Intents extension target was created + embedded in Runner 2026-07-19 and builds clean (bundle id `net.vogas.scheduling.SiriIntents`, entitlements `SiriIntentsExtension.entitlements` sharing the App Group, iOS 18.0). Phase-1 read intents (count / today / next), Phase-2 date intents (`TomorrowScheduleIntent` deterministic, `DayScheduleIntent` for any in-window day), and the Phase-3 `NthAppointmentIntent` ("read a specific appointment" → Siri prompts for a position) are all code-complete and pass the App Intents metadata compiler; on-device Siri phrase verification still pending — see `ios/SiriIntents/README.md`. Phases 2–3 added NO Dart/schema change (the snapshot already carries all 8 buckets). Note: a `Date` OR `Int` parameter cannot be interpolated into a spoken App Shortcut phrase (Siri only allows AppEnum/AppEntity there), so `DayScheduleIntent` and `NthAppointmentIntent` carry no such value in their phrases and Siri resolves it via its own locale-aware follow-up prompt ("For what day?" / "Which appointment?") — this prompt→answer is the only in-session multi-turn App Intents supports (there is no free-form "and tomorrow?" session), so don't "fix" it into a phrase parameter. A new `.swift` in `ios/SiriIntents/` must be hand-added to the target in `project.pbxproj` (all four sections)**): `ScheduleSnapshotService` writes a **today + 7 days** payload into the *same* App Group `group.net.vogas.scheduling` under a **separate key `schedule_snapshot`** (the widget's `schedulePayload` is untouched; the snapshot deliberately does NOT call `HomeWidget.updateWidget` — nothing renders it). Role-aware: employees get `myAppointmentsProvider`, admins the business-wide `appointmentsInRangeProvider`. Both off-screen schedule mirrors (this and the home-screen widget) resolve *who* they're for through the single `activeUserIdentityProvider` (`features/auth/application/active_user_identity_provider.dart` — active-status gate, employee-or-admin, `retryAsync(findUserByUid)` for the post-sign-in token lag); it returns `(role, docId)` and returning null is what wipes both mirrors on sign-out. Route any new mirror through it rather than re-deriving the identity. **Both fetch the SAME window, `AppointmentDateRange.forMirrors(today)`** (2026-08-08): they ask the same `myAppointmentsProvider` family, which is keyed by range VALUE, and both are held open for the whole session by `AppSyncListeners` — so two different windows meant two permanent Firestore listeners per signed-in employee, one a strict subset of the other. `buildWidgetPayload` re-scopes to today/tomorrow in Dart regardless, so the wider list feeds it unchanged; never narrow one mirror's range on its own. `mirrorLookaheadDays` owns the length and `scheduleSnapshotLookaheadDays` is that value. Both must also `ref.watch(currentDayProvider)` (`core/utils/`) for their day bucketing instead of a bare `DateTime.now()` — their appointment streams only re-emit on a write, so an app resident across midnight otherwise keeps publishing yesterday's buckets and Siri answers "no appointments today" while jobs exist. `buildScheduleSnapshot` (`siri/domain/schedule_snapshot.dart`) and the Swift `ScheduleSnapshot.swift` decoder are hand-mirrored — change one, change both, and bump `version` on both sides of a schema change. Cancelled visits and **records with a null/empty `id` are dropped at build** (Phase-4 write actions resolve their target by that id). **Sign-out wipes the snapshot implicitly** — `scheduleSnapshotProvider` emits `data(null)` and `AppSyncListeners._snapshotSync` (`core/app/app_sync_listeners.dart`) calls `clearSnapshot()`; don't add an explicit sign-out clear (same contract as the widget). The App Group stays readable while the device is locked, so the payload carries **only the fields the intents speak** (client name, times, address, status) — never notes, phone, or pictures. **Phases 1–3 keep the extension Firebase-free and network-free**; Phase 4 breaks that deliberately as its own reviewed increment (it's also blocked on App Attest's bundle-ID binding — see the implementation plan).
-  - **Notification permission recovery:** Settings has a Notifications row (`notificationAuthStatusProvider`, read WITHOUT prompting) — `notDetermined` re-shows the one-time OS prompt; any other non-granted state (or a granted tap) opens system Settings, since iOS never re-shows the dialog once answered. On return (app-lifecycle `resumed`) it invalidates the status provider and re-runs `PushRegistrationController.sync()` so a just-enabled device actually stores its token.
-- **Wave Accounting** (`functions/wave/*`): admin callables (`waveBootstrap`,
-  `waveImportCustomers` — App Check + `assertAdmin` + `enforceDurableRateLimit`).
-  **`waveImportCustomers` is a TWO-WAY sync despite its name** (2026-08-04): it
-  drains the outbox to Wave via `drainForSync` and only then imports. The name
-  is historical and **stays** — renaming a deployed callable deletes the one
-  every shipped build calls, so the cost of the accurate name is a broken
-  "Sync with Wave" button on every phone until it updates. This outlived the
-  `#compat-1.37.1` shim it was first tagged with: the constraint was never
-  specific to 1.37.1.
-  **AN IMPORT MUST NEVER TOUCH A CLIENT WITH AN UN-PUSHED OUTBOX JOB.** This is
-  the invariant, and push-before-pull is only half of it. `importCustomers`
-  overwrites every mapped field of a linked client with Wave's values AND
-  stamps `wave.lastSyncedHash` from them — so a queued edit isn't merely
-  overwritten, it is marked *synced*: the pending job then hashes the clobbered
-  doc, matches, returns `noop`, and the edit is gone with the row reading
-  "synced" and nothing logged. Ordering alone does not prevent it, because the
-  drain is bounded AND its query only takes jobs already due — a job backed off
-  after a transient Wave error is invisible to the drain and still live
-  milliseconds later. Every caller of `importCustomers` therefore passes
-  `skipClientIds` from **`listOutstandingClientIds`** (`worker.js`, covers
-  `queued` AND `inflight`); the param is injected rather than read inside
-  `customers.js` because `worker.js` already requires that module and reaching
-  back would close a cycle. Both callers need it — the daily
-  `waveScheduledImport` most of all, since it runs unattended.
-  **The import is hash-gated, and `updated` counts REAL changes only.** It
-  skips any linked client whose stored `wave.lastSyncedHash` already equals
-  `mappedFieldsHash(fromWaveCustomer(node))` (counted as `skippedUnchanged`).
-  That equality is exact, not a heuristic — both sides hash the same
-  `toWaveCustomerInput` projection, which is the identity
-  `shouldEnqueueClientWrite`'s Rule 2 already depends on to stop an import
-  feeding every client back into the outbox. Without the gate the import
-  re-wrote all ~650 clients every run: ~650 writes AND ~650
-  `waveUpsertCustomer` invocations per press that all conclude "nothing to
-  do", and the app reported "650 clients updated in the app" after a sync that
-  changed nothing. **The `hasCreatedAt` half of the condition is
-  load-bearing** — the update branch is the only thing that backfills a missing
-  `createdAt`, and the clients list orders by it, so skipping a doc without one
-  hides it from the list forever.
-  **The import is also a DELTA when `since` is supplied** (2026-08-04): Wave
-  filters `modifiedAtAfter` server-side, so it returns only changed customers.
-  `LIST_CUSTOMERS_SINCE` is a **separate document** from `LIST_CUSTOMERS`, not
-  one query with a nullable variable — a server reading an omitted variable as
-  `modifiedAtAfter: null` would give a full import that imports nothing and
-  reports success. **`importCustomers` stays stateless about the watermark; the
-  whole read → decide → import → advance sequence has ONE owner,
-  `importWithWatermark` (`wave/callables.js`)**, called by both the interactive
-  sync and the unattended daily import. It was hand-copied in both before, and
-  each omission fails silently in its own direction; the unattended copy — the
-  one where a mistake is invisible — was the untested one. The decisions
-  themselves are the pure `resolveImportWindow` / `watermarkPatch`, in
-  `wave/import_schedule.js` beside `isImportDue` because the two cadences
-  interact.
-  **THE WATERMARK ADVANCES ONLY OVER A WINDOW THAT WAS FULLY COVERED.** Three
-  things break it, all silent, all handled: a throw (leaves both stamps, next
-  run redoes the window), a run with `skippedPending > 0` (those clients were
-  deliberately protected from the clobber, so their Wave-side change would be
-  invisible to every later delta — the watermark is HELD), and an unknown
-  `skippedPending` (treated as not-covered, since holding is free and advancing
-  wrongly loses data). It is the run's START minus an overlap, never its end.
-  **A delta-only failure retries once as a FULL import** — without that, a bad
-  `modifiedAtAfter` makes every interactive sync fail identically until the
-  7-day resync ages the window out, and only the admin-facing path breaks. **A
-  failed watermark WRITE is logged, not thrown**: the import already committed,
-  and failing there would report a successful sync as an error and discard the
-  push counts with it.
-  A periodic full pass runs every 7 days: not for deletes
-  (the import never deletes a local client) but as the backstop for `modifiedAt`
-  itself, which we trust Wave to bump and cannot verify. That interval is
-  shorter than both cadences, so the SCHEDULED import normally goes full every
-  time and the delta mostly benefits the interactive sync — accepted, since a
-  weekly job paying 7 Wave pages costs nothing. `buildWaveIdIndex` is
-  built lazily so a no-op delta costs zero Firestore reads. Full detail:
-  `docs/CLOUD_FUNCTIONS.md`.
-  **Wave rejects INLINE STRING ARGUMENTS — every string must travel as a
-  GraphQL variable** (`GRAPHQL_VALIDATION_FAILED: Inline argument of type
-  String is not allowed`). Confirmed against the live API 2026-08-04. Inline
-  `Int`/`Boolean` are accepted; only `String` is refused. Every query in
-  `wave/customers.js` already parameterises, so this only bites a query
-  written by hand — write the variable in from the start rather than
-  discovering it as a 400.
-  The push is best-effort (bounded by `SYNC_PUSH_BATCH_LIMIT` /
-  `SYNC_PUSH_BUDGET_MS`, with `waveSyncWorker` finishing the rest) and its
-  failure must never fail the import. Those two bounds are sized against
-  `kWaveSyncTimeoutSeconds` (`wave_service.dart`, hand-mirrored) and NOT
-  against the 300 s function timeout: a callable cannot be cancelled, so past
-  the client's deadline the admin has already been told the sync failed and
-  will tap again.
-  **A zero counter must never be reported as success.** The response carries
-  `pushedPending` (a `count()` taken AFTER the drain), `pushedFailed`
-  (`drained.dead` — dead-lettered jobs are not `queued`, so the pending count
-  misses them and they never retry) and `pushIncomplete` (the drain or the
-  count threw). Without all three, a broken push, a bounded push and an empty
-  queue produce identical zeros, and the app says "everything was already up to
-  date" while edits sit undelivered. Response fields are additive only.
-  `drainQueue`'s `created`/`updated`
-  counters come from `tallyUpsert`, folded from each `upsertCustomer` status
-  and incremented only where `done` is (a committed outcome), so a superseded
-  job can't be counted in two drains; `linked` counts as an **update**, since
-  that path patches a customer a crashed attempt already created.
-  the read-only `waveGetConnection` (admin + App Check; **no secret, no rate
-  limit** — it only reads the `wave/connection` doc), `waveSetImportSchedule`
-  (admin + App Check, no secret/rate limit — writes the `importSchedule` field
-  on `wave/connection`), the `waveUpsertCustomer`
-  `clients` trigger that enqueues an outbox job, the scheduled
-  `waveSyncWorker` that drains the `waveSyncQueue` collection, and the daily
-  `waveScheduledImport` (server-triggered `onSchedule`, so no App Check/rate
-  limit) which re-runs `importCustomers` only when the configured cadence is due.
-  **Auto-import cadence:** `importSchedule` on `wave/connection` is one of
-  `off`/`weekly`/`monthly` (`WaveImportSchedule` enum client-side; `SCHEDULE_VALUES`
-  server-side). The `isImportDue` helper (`wave/import_schedule.js`, pure/jest-testable)
-  treats **off or any unknown value as never-run**; a due import stamps
-  `lastAutoImportAt` and a failed one leaves it unchanged (retried next day). The full-access
-  Wave token lives in Secret Manager (`WAVE_FULL_ACCESS_TOKEN`) only — **no
-  OAuth**. The Connect target is chosen **server-side**: `waveBootstrap` resolves
-  the business from the `WAVE_BUSINESS_NAME` secret when the client sends no
-  `businessId`/`businessName`, so the business name never ships in the app and
-  `_connect()` passes no selector. (Business resolution is fully server-side via
-  the internal `listBusinesses` helper — there is no `waveListBusinesses`
-  callable; the in-app business picker was removed.) The app
-  cannot read the rules-locked `wave` collection directly, so the Settings Wave
-  section calls `waveGetConnection` on mount to show persistent "Connected to X"
-  status — this is the **only** Wave read path; never read the collection
-  client-side. **Import invariant:** `importCustomers` MUST write
-  `createdAt`/`updatedAt` on every client doc (new docs get both; re-runs backfill
-  `createdAt` only when missing) — the clients list/search order by `createdAt`
-  and Firestore **excludes any doc missing the orderBy field**, so a timestampless
-  import is silently invisible in-app. **Outbox invariant:** the job claim AND the
-  outcome write are both transactional — `commitOutcome` writes
-  `done`/`queued`/`dead` only while the job is still `inflight` with the same
-  `claimedAt`, so a client edit that re-enqueues mid-dispatch isn't clobbered.
-  The reclaim pass enforces the same rule with a single read+write transaction
-  (it has no Wave call to span), so neither path may ever do an unconditional
-  `update`.
+- **Push, presence, the home-screen widget, Live Activities and Siri** live in
+  `.claude/rules/notifications.md` (moved 2026-08-19) — the sweep and its
+  policy split, `wantsTravelAlerts`, the widget window OVERLAP rule, the
+  push-to-start token lifecycle, and the Siri snapshot schema. They span JS,
+  Dart and Swift, so that rule is scoped across all three rather than living
+  here. Modules: `notifications.js`, `notification_utils.js`,
+  `notification_policy.js`, `travel_utils.js`, `live_activity*.js`,
+  `widget_payload_utils.js`.
+- **Wave Accounting** (`functions/wave/*`) lives in `.claude/rules/wave.md`
+  (moved 2026-08-19) — the callables, the outbox/worker model and its inline
+  drain, `mappedFieldsHash` and `shouldEnqueueClientWrite`, `healSyncState`,
+  the import caps, and the dead-letter behaviour. Loads for `functions/wave/**`
+  and the Settings UI that drives it.
 
-**Firestore TTL policies are declared in `firestore.indexes.json`**, as
-`fieldOverrides` entries with `"ttl": true` on `expiresAt`. They are NOT
-console-only state: `firebase deploy --only firestore:indexes` treats any prod
-field override missing from that file as drift and DELETES it (this removed all
-5 live TTL policies once, on 2026-07-21 — never pass `--force` to a deploy).
-Keep real single-field indexes on those entries rather than the Firebase docs'
-`"indexes": []` example — `live_activity_registry.js` `_pruneExpired` queries
-`.where("expiresAt", "<=", now)`, and the token sweep is a **collection-group**
-query, so `liveActivityTokens.expiresAt` needs a `COLLECTION_GROUP`-scoped index
-or the reaper fails `FAILED_PRECONDITION` into a swallowed no-op.
-
-**A TTL policy only deletes docs that HAVE the field**, exactly like the
-`where("expiresAt", ...)` sweeps — Firestore excludes documents missing the
-filter field. So any client-writable TTL field must be **required** in the
-rules, not merely bounded when present, or a modified client can mint rows no
-reaper can ever reach (see the `liveActivityTokens` rule).
-
-**Firestore TTL policies must use expiration offset `0`.** Every collection that
-writes an `expiresAt` (`appointmentReminders`, `appointmentOverduePrompts`,
-`appointmentSeriesNotices`, `liveActivityTokens`, `liveActivityCards`,
-`rateLimits`) stores
-the *absolute* deletion instant — the lifetime is already baked in by
-`LEDGER_TTL_MS` / `CARD_TTL_MS` / the limiter window. The
-console's "expiration offset" ADDS to that value, so any non-zero offset
-silently multiplies retention (the ledgers ran at ~14 days instead of 7 until
-2026-07-20). An offset is **immutable once set**: correcting one means delete →
-wait for the policy to disappear from the list → recreate, or the create fails
-`400: Cannot modify TTL offset`. A policy can only be created for a collection
-group that already holds documents. TTL is housekeeping only — every one of
-these is also swept in-code, so a missing policy is never a correctness bug.
-
+**Firestore TTL policies and single-field index exemptions** are in
+`.claude/rules/firestore-indexes.md` (moved 2026-08-19) — including the
+never-`--force` reason and the expiration-offset-`0` rule. It is scoped to
+`firestore.indexes.json` and `firestore.rules`, which this file does not cover:
+editing that JSON at the repo root never loaded `functions/CLAUDE.md`.
 Release runbook (ordering, old-build compatibility, rollback, deploy log):
 `docs/DEPLOYMENT.md`.
 
 Deploy: `firebase deploy --only functions,firestore:rules,firestore:indexes,storage`
+(clear `AI_AGENT`/`CLAUDECODE`/`CLAUDE_CODE` in the shell first, or the CLI
+stamps `agent-name/claude_code` into the audit log — see `docs/DEPLOYMENT.md` §5.)
 (drop `firestore:indexes` only when `firestore.indexes.json` is unchanged — a
 query whose index is missing fails `FAILED_PRECONDITION`, which best-effort
 callers swallow into a silent no-op.)

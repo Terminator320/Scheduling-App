@@ -7,17 +7,35 @@ import 'package:scheduling/core/notices/app_notice.dart';
 class NoticeService {
   final StreamController<AppNotice> _controller =
       StreamController<AppNotice>.broadcast();
+  bool _disposed = false;
 
   Stream<AppNotice> get stream => _controller.stream;
 
-  void success(String message) =>
-      _controller.add(AppNotice.success(message));
+  void success(String message) => _emit(AppNotice.success(message));
 
-  void info(String message) => _controller.add(AppNotice.info(message));
+  void successWithAction(
+    String message, {
+    required String actionLabel,
+    required FutureOr<void> Function() onAction,
+  }) => _emit(
+    AppNotice.success(
+      message,
+      action: NoticeAction(label: actionLabel, onPressed: onAction),
+    ),
+  );
 
-  void error(String message) => _controller.add(AppNotice.error(message));
+  void info(String message) => _emit(AppNotice.info(message));
+
+  void error(String message) => _emit(AppNotice.error(message));
+
+  void _emit(AppNotice notice) {
+    if (_disposed) return;
+    _controller.add(notice);
+  }
 
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
     _controller.close();
   }
 }

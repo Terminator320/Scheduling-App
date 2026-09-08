@@ -1,9 +1,11 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/features/calendar/domain/holidays.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
+import 'package:scheduling/features/calendar/widgets/views/calendar_day_circle.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 /// Design metrics (`03-screens-schedule.md`). Every one of these is a 1.0-scale
@@ -183,13 +185,15 @@ class CalendarDayCell extends StatelessWidget {
     final isSelected = inMonth && isSameDate(day, selectedDay);
     final isToday = isSameDate(day, today);
 
+    // Off-month cells never ring: a trailing "today" belongs to the month it
+    // is in, not to the one being read.
+    final showTodayRing = isToday && inMonth;
+
     final Color numberColor;
     if (!inMonth) {
       numberColor = theme.palette.textFaint;
     } else if (isSelected) {
       numberColor = scheme.onPrimary;
-    } else if (isToday) {
-      numberColor = theme.palette.primaryAccent;
     } else {
       numberColor = scheme.onSurface;
     }
@@ -200,62 +204,27 @@ class CalendarDayCell extends StatelessWidget {
       '${day.day.toString().padLeft(2, '0')}',
     );
 
+    // One lookup for both the marker hue and the label — the cell asks per
+    // rebuild, and `holidaysOn` is year-cached behind this.
+    final holidays = holidaysOn(day);
+
     final content = Column(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Container(
-          width: circleSize,
-          height: circleSize,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: isSelected ? scheme.primary : null,
-          ),
-          child: Text(
-            '${day.day}',
-            style: TextStyle(
-              fontFamily: kFontSans,
-              fontSize: 14,
-              fontWeight: isSelected || (isToday && inMonth)
-                  ? FontWeight.w700
-                  : FontWeight.w500,
-              color: numberColor,
-            ),
-          ),
+        _DayNumber(
+          day: day.day,
+          size: circleSize,
+          isSelected: isSelected,
+          showTodayRing: showTodayRing,
+          bold: isSelected || (isToday && inMonth),
+          color: numberColor,
+          // Off-month is the FAINT case, and for the construction shutdown it
+          // is the normal one — that run crosses July/August every year.
+          holidaySet: markerSetFrom(holidays),
+          isFaint: !inMonth,
         ),
-        SizedBox(
-          height: _kDotRowHeight,
-          // Kept on the selected day too (owner call, 2026-07-31). The
-          // selection circle only fills the number; the dot row sits below it
-          // on the plain cell background, so the crew colours stay legible —
-          // and hiding them made the day you were looking at the one day whose
-          // crew you couldn't see.
-          child: dotColors.isEmpty
-              ? null
-              : Padding(
-                  padding: const EdgeInsets.only(top: _kDotGap),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final stored in dotColors)
-                        Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 1.5),
-                          width: _kDotSize,
-                          height: _kDotSize,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            // Same neutral the card's crew bar uses for a job
-                            // with nobody on it.
-                            color: stored == null
-                                ? theme.palette.textFaint
-                                : crewColorOf(theme, stored.toARGB32()),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-        ),
+        _CrewDotRow(dotColors: dotColors),
       ],
     );
 
@@ -273,17 +242,127 @@ class CalendarDayCell extends StatelessWidget {
     return Semantics(
       button: true,
       selected: isSelected,
-      // The dots are colour-only, so the count carries their meaning instead.
-      label: count > 0
-          ? '$dateLabel, ${context.l10n.calendar_appointmentCount(count)}'
-          : dateLabel,
+      // The dots are colour-only, so the count carries their meaning instead —
+      // and the holiday rule is colour-only for the same reason, so its NAME
+      // goes here too. A coincidence day names both.
+      label: [
+        dateLabel,
+        if (count > 0) context.l10n.calendar_appointmentCount(count),
+        for (final holiday in holidays) holidayLabel(context.l10n, holiday.name),
+      ].join(', '),
       excludeSemantics: true,
       child: InkResponse(
         key: cellKey,
-        onTap: () => onTap(DateTime(day.year, day.month, day.day)),
+        onTap: () => onTap(day.dateOnly),
         radius: circleSize,
         child: Center(child: content),
       ),
+    );
+  }
+}
+
+/// The 32px number token: the selection fill and the today ring live HERE,
+/// not on the cell, so selection reads as a round token rather than a
+/// stretched oval.
+class _DayNumber extends StatelessWidget {
+  const _DayNumber({
+    required this.day,
+    required this.size,
+    required this.isSelected,
+    required this.showTodayRing,
+    required this.bold,
+    required this.color,
+    required this.holidaySet,
+    required this.isFaint,
+  });
+
+  final int day;
+  final double size;
+  final bool isSelected;
+  final bool showTodayRing;
+  final bool bold;
+  final Color color;
+
+  /// The set whose hue the holiday rule takes, or null on an ordinary day.
+  final HolidaySet? holidaySet;
+
+  /// An off-month cell, which fades the rule along with the number.
+  final bool isFaint;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return calendarDayTokenWithRule(
+      theme: theme,
+      set: holidaySet,
+      isSelected: isSelected,
+      isFaint: isFaint,
+      token: Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: calendarDayCircleDecoration(
+          scheme: theme.colorScheme,
+          isSelected: isSelected,
+          showTodayRing: showTodayRing,
+        ),
+        child: Text(
+          '$day',
+          style: TextStyle(
+            fontFamily: kFontSans,
+            fontSize: 14,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+            color: color,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One dot per job that day, in crew colour.
+///
+/// The row keeps its height whether or not there are dots, so a month of
+/// mixed days does not jitter. It is rendered on the selected day too (owner
+/// call, 2026-07-31): the selection circle only fills the number and the dots
+/// sit below it on the plain cell background, so the crew colours stay
+/// legible — hiding them made the day you were looking at the one day whose
+/// crew you could not see.
+class _CrewDotRow extends StatelessWidget {
+  const _CrewDotRow({required this.dotColors});
+
+  /// One entry per job; null paints the unassigned neutral.
+  final List<Color?> dotColors;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      height: _kDotRowHeight,
+      child: dotColors.isEmpty
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(top: _kDotGap),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final stored in dotColors)
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                      width: _kDotSize,
+                      height: _kDotSize,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        // Same neutral the card's crew bar uses for a job with
+                        // nobody on it.
+                        color: stored == null
+                            ? theme.palette.textFaint
+                            : crewColorOf(theme, stored.toARGB32()),
+                      ),
+                    ),
+                ],
+              ),
+            ),
     );
   }
 }

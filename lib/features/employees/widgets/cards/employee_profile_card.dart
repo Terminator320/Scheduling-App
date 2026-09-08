@@ -30,13 +30,14 @@ class EmployeeProfileCard extends StatelessWidget {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final title = jobTitleLabel(l10n, employee.jobTitle);
+    final name = employee.displayName;
 
     final identity = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          employee.name.isEmpty ? '—' : employee.name,
+          name,
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.w700,
           ),
@@ -85,7 +86,7 @@ class EmployeeProfileCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       AppAvatar(
-                        name: employee.name,
+                        name: name,
                         color: employee.color,
                         size: AvatarSize.lg,
                       ),
@@ -106,7 +107,7 @@ class EmployeeProfileCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   AppAvatar(
-                    name: employee.name,
+                    name: name,
                     color: employee.color,
                     size: AvatarSize.lg,
                   ),

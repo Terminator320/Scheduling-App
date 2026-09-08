@@ -1,11 +1,11 @@
 import 'dart:io';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
-import 'package:scheduling/core/images/appointment_image_url_resolver.dart';
+import 'package:scheduling/core/images/appointment_image_loader.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/image_viewer.dart';
@@ -13,11 +13,7 @@ import 'package:scheduling/features/calendar/widgets/views/appointment_image_car
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
-/// The appointment photo strip / carousel.
-///
-/// Stateful only because the existing photos' display URLs are resolved from
-/// their `storagePath` at render time rather than read off the record — see
-/// [AppointmentImageUrlResolver] for why the persisted URL is not used.
+/// The appointment photo strip and carousel.
 class PhotoPickerSection extends ConsumerStatefulWidget {
   const PhotoPickerSection({
     required this.existingImages,
@@ -28,6 +24,7 @@ class PhotoPickerSection extends ConsumerStatefulWidget {
     required this.onRemoveNew,
     super.key,
     this.failedCount = 0,
+    this.pendingCount = 0,
     this.tooLargeFileNames = const [],
     this.onRetry,
   });
@@ -38,6 +35,10 @@ class PhotoPickerSection extends ConsumerStatefulWidget {
   final void Function(int index) onRemoveExisting;
   final void Function(int index) onRemoveNew;
   final int failedCount;
+
+  /// Photos still in the offline upload queue for this appointment.
+  final int pendingCount;
+
   final List<String> tooLargeFileNames;
   final VoidCallback? onRetry;
 
@@ -46,74 +47,78 @@ class PhotoPickerSection extends ConsumerStatefulWidget {
 }
 
 class _PhotoPickerSectionState extends ConsumerState<PhotoPickerSection> {
-  List<String> _resolvedUrls = const [];
+  List<Uint8List> _loadedBytes = const [];
 
-  /// The exact list [_resolvedUrls] was resolved for. The URLs are positional,
-  /// so they are only meaningful against this list — after a removal the
-  /// widget rebuilds with a shorter `existingImages` while the old URLs are
-  /// still in hand, and index 0 would render the photo just deleted.
+  /// The image list [_loadedBytes] was loaded for.
   List<AppointmentImage> _resolvedFor = const [];
 
-  /// The existing photos' URLs, or empty while a resolve is outstanding.
-  ///
-  /// Empty rather than partial on purpose: every consumer indexes it
-  /// positionally beside `newImages`, so a short list silently shifts the new
-  /// photos' indices. Empty renders placeholders and is unambiguous.
-  List<String> get _existingUrls =>
-      listEquals(_resolvedFor, widget.existingImages)
-      ? _resolvedUrls
-      : const [];
+  /// The existing photos' bytes, or empty while stale/loading.
+  List<Uint8List> get _existingBytes =>
+      listEquals(_resolvedFor, widget.existingImages) ? _loadedBytes : const [];
 
   @override
   void initState() {
     super.initState();
-    _resolveUrls();
+    _loadBytes();
   }
 
   @override
   void didUpdateWidget(PhotoPickerSection oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!listEquals(oldWidget.existingImages, widget.existingImages)) {
-      _resolveUrls();
+      _loadBytes();
     }
   }
 
-  Future<void> _resolveUrls() async {
+  Future<void> _loadBytes() async {
     final images = widget.existingImages;
     if (images.isEmpty) {
-      if (_resolvedUrls.isNotEmpty) {
+      if (_loadedBytes.isNotEmpty) {
         setState(() {
-          _resolvedUrls = const [];
+          _loadedBytes = const [];
           _resolvedFor = const [];
         });
       }
       return;
     }
-    final urls = await ref
-        .read(appointmentImageUrlResolverProvider)
-        .resolveAll(images);
-    // The resolve outlives a fast edit-and-close, and the sheet is disposed
-    // under it more often than not.
+    // Both providers are read BEFORE the await: `ref.read` on an unmounted
+    // consumer throws under Riverpod 3, and this future is fired unawaited from
+    // `initState`, so a read in the catch below would throw exactly in the case
+    // the catch exists for.
+    final loader = ref.read(appointmentImageLoaderProvider);
+    final logger = ref.read(loggerProvider);
+
+    // `loadAll` swallows its own per-image failures today, so this catch is for
+    // the shapes it does not own — an OOM decoding a large batch, or a future
+    // refactor that lets one through.
+    final List<Uint8List> bytes;
+    try {
+      bytes = await loader.loadAll(images);
+    } catch (e, st) {
+      logger.warn('IMG-LOAD photo picker preload failed', e, st);
+      return;
+    }
+    // Ignore loads that finish after close or list changes.
     if (!mounted || !listEquals(images, widget.existingImages)) return;
     setState(() {
-      _resolvedUrls = urls;
+      _loadedBytes = bytes;
       _resolvedFor = images;
     });
   }
 
   void _openViewer(BuildContext context, int tappedIndex) {
     final providers = buildImageProviders(
-      urls: _existingUrls,
+      bytes: _existingBytes,
       files: widget.newImages,
     );
     if (providers.isEmpty) return;
     ImageViewer.open(context, images: providers, initialIndex: tappedIndex);
   }
 
-  // A read-only swipeable carousel. Returns an empty box when there are no real images, so the failure banner can stand alone.
+  // Empty lets the failure banner stand alone.
   Widget _readOnlyGallery() {
     final providers = buildImageProviders(
-      urls: _existingUrls,
+      bytes: _existingBytes,
       files: widget.newImages,
     );
     if (providers.isEmpty) return const SizedBox.shrink();
@@ -135,7 +140,7 @@ class _PhotoPickerSectionState extends ConsumerState<PhotoPickerSection> {
         else if (hasPhotos)
           _EditablePhotoStrip(
             existingImages: widget.existingImages,
-            existingUrls: _existingUrls,
+            existingBytes: _existingBytes,
             newImages: widget.newImages,
             failedCount: widget.failedCount,
             onOpenViewer: _openViewer,
@@ -147,6 +152,13 @@ class _PhotoPickerSectionState extends ConsumerState<PhotoPickerSection> {
           _EditableEmptyPhotoState(onPickImages: widget.onPickImages)
         else
           const _ReadOnlyEmptyPhotoState(),
+
+        // Waiting comes FIRST: it is the transient state, and a job with both
+        // should read "3 waiting, 1 failed" in that order.
+        if (widget.pendingCount > 0) ...[
+          const SizedBox(height: AppSpacing.sp8),
+          _UploadPendingRow(count: widget.pendingCount),
+        ],
 
         if (widget.failedCount > 0) ...[
           const SizedBox(height: AppSpacing.sp8),
@@ -165,7 +177,7 @@ class _PhotoPickerSectionState extends ConsumerState<PhotoPickerSection> {
 class _EditablePhotoStrip extends StatelessWidget {
   const _EditablePhotoStrip({
     required this.existingImages,
-    required this.existingUrls,
+    required this.existingBytes,
     required this.newImages,
     required this.failedCount,
     required this.onOpenViewer,
@@ -175,7 +187,7 @@ class _EditablePhotoStrip extends StatelessWidget {
   });
 
   final List<AppointmentImage> existingImages;
-  final List<String> existingUrls;
+  final List<Uint8List> existingBytes;
   final List<File> newImages;
   final int failedCount;
   final void Function(BuildContext context, int tappedIndex) onOpenViewer;
@@ -192,25 +204,35 @@ class _EditablePhotoStrip extends StatelessWidget {
     );
     final thumbCache = (90 * MediaQuery.devicePixelRatioOf(context)).round();
 
+    // Build only visible thumbnails and derive boundaries once.
+    final newStart = existingImages.length;
+    final failedStart = newStart + newImages.length;
+    final addButtonIndex = failedStart + failedCount;
+
     return SizedBox(
       height: 90,
-      child: ListView(
+      child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        children: [
-          ...existingImages.asMap().entries.map(
-            (entry) => _existingThumb(context, entry, thumbCache),
-          ),
-          ...newImages.asMap().entries.map(
-            (entry) => _newThumb(context, entry, thumbCache),
-          ),
-          ...List.generate(
-            failedCount,
-            (_) => const Padding(
+        itemCount: addButtonIndex + 1,
+        itemBuilder: (context, index) {
+          if (index < newStart) {
+            return _existingThumb(
+              context,
+              MapEntry(index, existingImages[index]),
+              thumbCache,
+            );
+          }
+          if (index < failedStart) {
+            final i = index - newStart;
+            return _newThumb(context, MapEntry(i, newImages[i]), thumbCache);
+          }
+          if (index < addButtonIndex) {
+            return const Padding(
               padding: EdgeInsets.only(right: AppSpacing.sp8),
               child: _FailedPhotoThumb(),
-            ),
-          ),
-          Material(
+            );
+          }
+          return Material(
             color: Colors.transparent,
             child: InkWell(
               onTap: onPickImages,
@@ -234,8 +256,8 @@ class _EditablePhotoStrip extends StatelessWidget {
                 ),
               ),
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -245,44 +267,51 @@ class _EditablePhotoStrip extends StatelessWidget {
     MapEntry<int, AppointmentImage> entry,
     int thumbCache,
   ) {
-    // Null until the URL has been resolved from storagePath — a placeholder,
-    // not an error. It is a Storage round-trip per photo, so this is a real
-    // window, not a frame or two: a placeholder must not be tappable, or the
-    // tap opens whatever provider happens to sit at this index (a NEW photo,
-    // since the viewer is only handed the files until the resolve lands).
-    final url = entry.key < existingUrls.length
-        ? existingUrls[entry.key]
+    // Loading placeholders are not tappable.
+    final bytes = entry.key < existingBytes.length
+        ? existingBytes[entry.key]
         : null;
+    // Empty bytes mean a refused photo.
+    final refused = bytes != null && bytes.isEmpty;
     return Stack(
       children: [
         Padding(
           padding: const EdgeInsets.only(right: AppSpacing.sp8),
           child: GestureDetector(
-            onTap: url == null ? null : () => onOpenViewer(context, entry.key),
+            onTap: bytes == null || refused
+                ? null
+                : () => onOpenViewer(context, entry.key),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.r8),
-              child: url == null
+              child: refused
+                  ? SizedBox(
+                      width: 90,
+                      height: 90,
+                      child: _photoErrorTile(context),
+                    )
+                  : bytes == null
                   ? SizedBox(
                       width: 90,
                       height: 90,
                       child: _photoPlaceholder(context),
                     )
-                  : CachedNetworkImage(
-                      imageUrl: url,
+                  : Image.memory(
+                      bytes,
                       width: 90,
                       height: 90,
-                      memCacheWidth: thumbCache,
-                      memCacheHeight: thumbCache,
+                      cacheWidth: thumbCache,
+                      cacheHeight: thumbCache,
                       fit: BoxFit.cover,
-                      placeholder: (ctx, _) => _photoPlaceholder(ctx),
-                      errorWidget: (ctx, _, _) => _photoErrorTile(ctx),
+                      errorBuilder: (ctx, _, _) => _photoErrorTile(ctx),
                     ),
             ),
           ),
         ),
+        // The 48x48 target is centred on its glyph, so the offsets shift by
+        // half the size growth to leave the glyph where it was.
         Positioned(
-          top: 4,
-          right: 12,
+          top: 0,
+          right: 4,
           child: formRemoveButton(
             context,
             onTap: () => onRemoveExisting(entry.key),
@@ -297,10 +326,10 @@ class _EditablePhotoStrip extends StatelessWidget {
     MapEntry<int, File> entry,
     int thumbCache,
   ) {
-    // Offset by the URLs the viewer will actually be handed, NOT by
-    // existingImages: while a resolve is outstanding `existingUrls` is empty,
-    // so counting the images would point past the end of the provider list.
-    final viewerIndex = existingUrls.length + entry.key;
+    // Offset by the entries the viewer will actually be handed, NOT by
+    // existingImages: while a load is outstanding `existingBytes` is empty, so
+    // counting the images would point past the end of the provider list.
+    final viewerIndex = existingBytes.length + entry.key;
     return Stack(
       children: [
         Padding(
@@ -321,8 +350,8 @@ class _EditablePhotoStrip extends StatelessWidget {
           ),
         ),
         Positioned(
-          top: 4,
-          right: 12,
+          top: 0,
+          right: 4,
           child: formRemoveButton(
             context,
             onTap: () => onRemoveNew(entry.key),
@@ -433,6 +462,41 @@ class _FailedPhotoThumb extends StatelessWidget {
           Text(context.l10n.calendar_photoFailedBadge, style: style),
         ],
       ),
+    );
+  }
+}
+
+/// "N photos waiting to upload" — the queue, made visible.
+class _UploadPendingRow extends StatelessWidget {
+  const _UploadPendingRow({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 3),
+          child: Icon(
+            Icons.cloud_upload_outlined,
+            size: 13,
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sp4),
+        Expanded(
+          child: Text(
+            context.l10n.calendar_nPhotosWaitingToUpload(count),
+            style: textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

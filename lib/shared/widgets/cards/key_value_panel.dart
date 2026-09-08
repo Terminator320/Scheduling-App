@@ -24,11 +24,7 @@ class KeyValueRow {
 }
 
 /// The detail sheets' info panel: a fixed mono key column beside its values
-/// (`06-sheets-and-dialogs.md`). Rows with an empty value are omitted by the
-/// caller — read-only detail bodies never render "None" placeholders.
-///
-/// Deliberately not a restyled `InfoCard`: that one is shared with the clients
-/// feature, which P3 redesigns on its own schedule.
+/// (`06-sheets-and-dialogs.md`).
 class KeyValuePanel extends StatelessWidget {
   const KeyValuePanel({required this.rows, super.key});
 
@@ -75,7 +71,15 @@ class _Row extends StatelessWidget {
       fontWeight: row.emphasize ? FontWeight.w600 : FontWeight.w500,
       color: row.emphasize ? theme.palette.primaryAccent : null,
     );
-    final label = Text(row.label, style: theme.monoType.fieldLabel);
+    // The key column is a fixed 70px, so a label that is wider has nowhere to
+    // go.
+    final label = Text(
+      row.label,
+      style: theme.monoType.fieldLabel,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
+    );
     final value = Text(row.value, style: valueStyle);
 
     final content = Padding(
@@ -96,7 +100,15 @@ class _Row extends StatelessWidget {
                   width: KeyValuePanel._keyColumnWidth,
                   child: Padding(
                     padding: const EdgeInsets.only(top: 3),
-                    child: label,
+                    // Scales the glyphs down rather than clipping the word: an
+                    // ellipsised "TELEPHO…" is a worse key than a slightly
+                    // smaller one, and the value beside it is what carries the
+                    // information.
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerStart,
+                      child: label,
+                    ),
                   ),
                 ),
                 Expanded(child: value),

@@ -5,6 +5,7 @@ import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
+import 'package:scheduling/features/auth/application/is_active_admin_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/employees/application/employee_schedule_providers.dart';
@@ -15,12 +16,11 @@ import 'package:scheduling/features/settings/application/app_info_provider.dart'
 import 'package:scheduling/features/settings/domain/role_label.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/branding/brand_logo.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 const double _kDrawerWidth = 284;
 
-/// The right-anchored navigation drawer — the app's only nav surface at
+/// The right-anchored navigation drawer - the app's only nav surface at
 /// every screen size. Rows are grouped by when you would reach for them.
 ///
 /// A closed drawer's child is never built (`_DrawerControllerState`
@@ -46,7 +46,11 @@ class AppNavDrawer extends ConsumerWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = context.l10n;
-    final groups = drawerGroups(isAdmin: isAdmin);
+    // The route argument is a push-time SNAPSHOT, so the admin rows ask
+    // Firestore too. Fails CLOSED while the user doc is unsettled, and is
+    // resolved ONCE so the rows, the header and the counts agree.
+    final isLiveAdmin = isAdmin && ref.watch(isActiveAdminProvider);
+    final groups = drawerGroups(isAdmin: isLiveAdmin);
 
     // The shadow wraps the drawer from OUTSIDE. A BoxShadow is painted from the
     // edges of its own box and its blur reaches inward as well as outward, so a
@@ -62,7 +66,7 @@ class AppNavDrawer extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _Header(isAdmin: isAdmin, userName: userName, email: email),
+            _Header(isAdmin: isLiveAdmin, userName: userName),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(12, 14, 12, 20),
@@ -83,7 +87,7 @@ class AppNavDrawer extends ConsumerWidget {
                         padding: const EdgeInsets.only(bottom: 2),
                         child: _NavRow(
                           destination: destination,
-                          isAdmin: isAdmin,
+                          isAdmin: isLiveAdmin,
                           employeeId: employeeId,
                           userName: userName,
                           email: email,
@@ -102,11 +106,10 @@ class AppNavDrawer extends ConsumerWidget {
 }
 
 class _Header extends ConsumerWidget {
-  const _Header({required this.isAdmin, this.userName, this.email});
+  const _Header({required this.isAdmin, this.userName});
 
   final bool isAdmin;
   final String? userName;
-  final String? email;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -149,7 +152,7 @@ class _Header extends ConsumerWidget {
                       ),
                     ),
                     Text(
-                      // brandName is a proper noun — never localized.
+                      // brandName is a proper noun and stays in English.
                       '${roleLabel(context.l10n, isAdmin: isAdmin)} · '
                       '$brandName',
                       maxLines: 1,
@@ -199,7 +202,7 @@ class _NavRow extends ConsumerWidget {
 
   void _go(BuildContext context) {
     Scaffold.of(context).closeEndDrawer();
-    // Calendar routes through goHome so it also collapses any pushed stack —
+    // Calendar routes through goHome so it also collapses any pushed stack -
     // no screen is a dead end.
     if (destination == HubTab.calendar) {
       goHomeToCalendar(context);
@@ -221,7 +224,7 @@ class _NavRow extends ConsumerWidget {
     final scheme = theme.colorScheme;
     final isActive = _isActive(context);
     final count = _countFor(ref);
-    // The stored hue lifted for the current theme — never paint the raw value.
+    // The stored hue lifted for the current theme - never paint the raw value.
     final tint = crewColorOf(theme, drawerDotColor(destination).toARGB32());
 
     return Material(
@@ -277,7 +280,7 @@ class _NavRow extends ConsumerWidget {
                     ),
                   ),
                 ),
-                // An absent count renders nothing — the empty-omitted rule.
+                // An absent count renders nothing - the empty-omitted rule.
                 if (count != null) ...[
                   const SizedBox(width: AppSpacing.sp8),
                   Text('$count', style: theme.monoType.data),
@@ -309,15 +312,10 @@ class _NavRow extends ConsumerWidget {
           );
     final today = jobs.value;
     if (today == null) return null;
-    // Re-scoped: the range stream is a 14-day superset — see runsOn. Cancelled
-    // visits aren't load, matching employeeJobsTodayProvider.
-    return today
-        .where(
-          (j) =>
-              !AppointmentStatus.fromRaw(j.status).isCancelled &&
-              runsOn(j, range.start),
-        )
-        .length;
+    // Re-scoped through the shared predicate: the range stream is a 14-day
+    // superset (see runsOn), and cancelled visits and time off are not load.
+    // Shared with employeeJobsTodayProvider rather than restated here.
+    return today.where((j) => countsAsLoadOn(j, range.start)).length;
   }
 
   int? _onTheClockCount(WidgetRef ref) {

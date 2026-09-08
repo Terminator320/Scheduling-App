@@ -1,26 +1,48 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
 
-/// Keeps a single live snapshot of the signed-in user's `users/{uid}` doc, covering
-/// their name, status, and role.
+final AppLogger _accountStatusLogger = AppLogger();
+
+/// Watches the signed-in user's account document.
 final currentUserDocProvider = StreamProvider<Map<String, dynamic>>((ref) {
-  final uid = ref.watch(authUidProvider).value;
-  if (uid == null) return Stream.value(const {});
   final repository = ref.watch(employeesRepositoryProvider);
-  // P10: this is the app's first Firestore listener, so we hold it until the
-  // deferred App Check activation finishes. Any failures there get logged
-  // elsewhere.
+  // Wait for deferred App Check before the first Firestore listener.
   final firebaseReady = ref
       .watch(firebaseReadyProvider.future)
       .catchError((Object _) {});
-  return Stream.fromFuture(
-    firebaseReady,
-  ).asyncExpand((_) => repository.watchUserDoc(uid));
+
+  Stream<Map<String, dynamic>> watchDoc(String? uid) {
+    if (uid == null) return Stream.value(const {});
+    return Stream.fromFuture(
+      firebaseReady,
+    ).asyncExpand((_) => repository.watchUserDoc(uid));
+  }
+
+  return streamForUid(ref, watchDoc);
 });
+
+/// Returns null while the account doc is unsettled.
+({bool signedIn, String role, String status, bool locationSharingEnabled})?
+readAccountGateInputs(
+  Ref ref,
+  FirebaseAuth auth,
+) {
+  final docState = ref.read(currentUserDocProvider);
+  if (docState.isLoading || docState.hasError) return null;
+  final doc = docState.value ?? const <String, dynamic>{};
+  return (
+    signedIn: auth.currentUser != null,
+    role: (doc['role'] ?? '').toString().trim(),
+    status: (doc['status'] ?? '').toString().trim(),
+    locationSharingEnabled: doc['locationSharingEnabled'] == true,
+  );
+}
 
 final accountDisabledProvider = Provider<AsyncValue<bool>>((ref) {
   return ref
@@ -35,9 +57,7 @@ final userRoleProvider = Provider<AsyncValue<String>>((ref) {
       .whenData((doc) => (doc['role'] ?? '').toString().trim());
 });
 
-/// True only when the doc goes from populated to empty. A first-seen empty doc
-/// (sign-in lag, or before activation) is just a bootstrap window, not a
-/// deletion — that's why we look at [previous] to tell the two apart.
+/// True only when the doc goes from populated to empty.
 bool isAccountDeletionSignal({
   required bool isSignedIn,
   required String? resolvedUid,
@@ -48,15 +68,12 @@ bool isAccountDeletionSignal({
   if (docState.isLoading) return false;
   final doc = docState.value;
   if (doc == null || doc.isNotEmpty) return false;
-  // Only a populated→empty transition counts here. `previous?.value` keeps the
-  // last known data across loading blips, which is what lets us tell the two apart.
+  // Previous data separates deletion from bootstrap lag.
   final previousDoc = previous?.value;
   return previousDoc != null && previousDoc.isNotEmpty;
 }
 
-/// True when there's a signed-in uid but the doc has settled empty and was never
-/// populated. That's ambiguous with pre-activation, so [confirmColdStartDeletion]
-/// resolves it using AuthCache.
+/// True for an empty first-settled doc that needs cache confirmation.
 bool isColdStartDeletionCandidate({
   required bool isSignedIn,
   required String? resolvedUid,
@@ -67,16 +84,12 @@ bool isColdStartDeletionCandidate({
   if (docState.isLoading || docState.hasError) return false;
   final doc = docState.value;
   if (doc == null || doc.isNotEmpty) return false;
-  // If the previous doc was populated, that's a live transition and
-  // isAccountDeletionSignal already owns it. This function only covers the
-  // cold-start case, where the doc was empty from the very start.
+  // Populated previous data is handled by isAccountDeletionSignal.
   final previousDoc = previous?.value;
   return previousDoc == null || previousDoc.isEmpty;
 }
 
-/// Confirms a cold-start deletion by checking for an empty doc plus a warm
-/// AuthCache match. The cache is written right after sign-in, cleared on
-/// sign-out, and never written on a fresh signup.
+/// Confirms a cold-start deletion against AuthCache.
 Future<bool> confirmColdStartDeletion({
   required bool isSignedIn,
   required String? resolvedUid,
@@ -96,9 +109,12 @@ Future<bool> confirmColdStartDeletion({
   try {
     return await loadWarmCache(resolvedUid!) != null;
   } catch (e, st) {
-    // If the keystore read fails, we fail safe but silently — this just
-    // disables the kick-out with no visible signal to the user.
-    (logger ?? AppLogger()).warn('ACCOUNT-EXIT warm cache read failed', e, st);
+    // Keystore failures disable the kick-out silently.
+    (logger ?? _accountStatusLogger).warn(
+      'ACCOUNT-EXIT warm cache read failed',
+      e,
+      st,
+    );
     return false;
   }
 }
@@ -106,5 +122,11 @@ Future<bool> confirmColdStartDeletion({
 /// The signed-in user's display name, empty until doc loads.
 final currentUserNameProvider = Provider<String>((ref) {
   final doc = ref.watch(currentUserDocProvider).value;
-  return (doc?['name'] ?? '').toString().trim();
+  if (doc == null) return '';
+  return displayEmployeeName(
+    firstName: (doc['firstName'] ?? '').toString(),
+    lastName: (doc['lastName'] ?? '').toString(),
+    name: (doc['name'] ?? '').toString(),
+    email: (doc['email'] ?? '').toString(),
+  );
 });

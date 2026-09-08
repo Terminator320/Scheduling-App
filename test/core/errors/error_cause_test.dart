@@ -3,8 +3,12 @@ import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
+import 'package:scheduling/core/notices/app_notice.dart';
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 FirebaseException _fb(String code) =>
@@ -144,6 +148,119 @@ void main() {
       final message = noticeFor(_fb('permission-denied'));
       expect(message, isNot(contains('permission-denied')));
       expect(message, isNot(contains('(')));
+    });
+  });
+
+  // I12: nine call sites, zero tests — while `composeErrorNotice` beside it is
+  // well covered.
+  group('guardedOffline', () {
+    Future<({bool fired, List<AppNotice> notices})> run(
+      WidgetTester tester, {
+      required bool offline,
+    }) async {
+      final notices = <AppNotice>[];
+      late bool fired;
+      final container = ProviderContainer(
+        overrides: [isOfflineProvider.overrideWithValue(offline)],
+      );
+      addTearDown(container.dispose);
+      container.read(noticeServiceProvider).stream.listen(notices.add);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Consumer(
+              builder: (context, ref, _) {
+                fired = guardedOffline(context, ref, intro: 'Intro');
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        ),
+      );
+      // The notice rides a broadcast stream, so let the event loop turn.
+      await tester.pump();
+      return (fired: fired, notices: notices);
+    }
+
+    testWidgets('returns false and stays silent when online', (tester) async {
+      final result = await run(tester, offline: false);
+      expect(result.fired, isFalse);
+      expect(result.notices, isEmpty);
+    });
+
+    testWidgets('returns true and pushes the offline cause', (tester) async {
+      final result = await run(tester, offline: true);
+      expect(result.fired, isTrue);
+      expect(result.notices, hasLength(1));
+      final notice = result.notices.single;
+      expect(notice, isA<NoticeError>());
+      // The caller's intro, then the shared offline cause — the same sentence
+      // composeErrorNotice builds for a real SocketException.
+      expect(
+        notice.message,
+        'Intro. ${l10n.error_causeOffline}',
+      );
+    });
+  });
+
+  // Zero tests, six call sites, and its own dartdoc says three of them
+  // previously spelled the distinction wrong.
+  group('isFirstAsyncError', () {
+    const data = AsyncData<int>(1);
+    const loading = AsyncLoading<int>();
+    final failed = AsyncError<int>(StateError('x'), StackTrace.empty);
+    test('data -> error is the first error', () {
+      expect(isFirstAsyncError(data, failed), isTrue);
+    });
+
+    test('a first-ever emission that is an error counts', () {
+      expect(isFirstAsyncError(null, failed), isTrue);
+    });
+
+    test('loading -> error counts', () {
+      expect(isFirstAsyncError(loading, failed), isTrue);
+    });
+
+    test('error -> error is NOT first', () {
+      expect(isFirstAsyncError(failed, failed), isFalse);
+    });
+
+    test('a REAL provider retry reports exactly once, not once per attempt', () {
+      // The whole reason the helper exists, driven through Riverpod rather than
+      // a hand-built AsyncValue: refreshing an already-errored provider emits
+      // an AsyncLoading that STILL CARRIES the error, so `hasError` is true
+      // while `is AsyncError` is false.
+      final provider = FutureProvider<int>((ref) async {
+        throw StateError('always');
+      });
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final reported = <AsyncValue<int>>[];
+      container
+        ..listen<AsyncValue<int>>(provider, (previous, next) {
+          if (isFirstAsyncError(previous, next)) reported.add(next);
+        }, fireImmediately: true)
+        // Settle the first failure, then retry it twice.
+        ..read(provider)
+        ..invalidate(provider)
+        ..read(provider)
+        ..invalidate(provider)
+        ..read(provider);
+
+      expect(reported, hasLength(lessThanOrEqualTo(1)));
+    });
+
+    test('error -> data reports nothing', () {
+      expect(isFirstAsyncError(failed, data), isFalse);
+    });
+
+    test('data -> data reports nothing', () {
+      expect(isFirstAsyncError(data, data), isFalse);
     });
   });
 }

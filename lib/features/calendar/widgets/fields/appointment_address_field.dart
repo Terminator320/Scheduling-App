@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
-import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
@@ -14,11 +13,18 @@ class AppointmentAddressField extends StatelessWidget {
     required this.onSwitchToCustom,
     required this.onUseClientAddress,
     super.key,
+    this.optional = false,
   });
 
   final ClientRecord? selectedClient;
   final bool useCustomAddress;
   final TextEditingController addressController;
+
+  /// Marks the field "(Optional)". Set on a personal job, which may name a
+  /// place but doesn't have to — a client visit always has one to show, either
+  /// the client's or a custom one.
+  final bool optional;
+
   final VoidCallback onSwitchToCustom;
   final VoidCallback onUseClientAddress;
 
@@ -34,7 +40,10 @@ class AppointmentAddressField extends StatelessWidget {
           _AddressPill(client: selectedClient!, onChange: onSwitchToCustom)
         else ...[
           SheetFocusScroll(
-            child: AddressAutocompleteField(controller: addressController),
+            child: AddressAutocompleteField(
+              controller: addressController,
+              optional: optional,
+            ),
           ),
           if (selectedClient != null &&
               useCustomAddress &&
@@ -67,7 +76,7 @@ class _AddressPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final address = client.address.isNotEmpty
-        ? AddressParser.canonicalToDisplay(client.address)
+        ? client.fullAddress
         : context.l10n.calendar_noAddress;
 
     return Container(

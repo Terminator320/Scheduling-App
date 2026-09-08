@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
-import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
-import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/list_item_tile.dart';
 import 'package:scheduling/shared/widgets/feedback/status_pill.dart';
@@ -39,22 +37,25 @@ class ClientTile extends StatelessWidget {
     // The address is what identifies a job site at a glance; phone is the
     // fallback for a client who has no address on file.
     final subtitle = client.address.trim().isNotEmpty
-        ? AddressParser.canonicalToDisplay(client.address)
+        ? client.fullAddress
         : client.phone;
     final count = client.jobCount;
-    final hasType = client.type != ClientType.unset;
     // Archived clients drop out of the list but stay in search results, so the
-    // row is the only place that can say why one looks "missing".
-    final badges = <Widget>[
-      if (client.archived) const _ArchivedPill(),
-      if (hasType) _TypeChip(type: client.type),
-    ];
+    // row is the only place that can say why one looks "missing". It is the ONE
+    // badge left: type moved to the filter sheet and the shared-address count
+    // to the client detail, because four signals competed under one name.
+    final badges = <Widget>[if (client.archived) const _ArchivedPill()];
+
+    // Resolved once: `displayName` is an uncached getter that runs `stripPhone`
+    // (two regex passes), and this rebuilds per row on the paginated list and
+    // per keystroke in the booking-flow picker.
+    final displayName = client.displayName;
 
     // No explicit label needed — ListItemTile's InkWell already exposes button
     // semantics and reads out the visible name and subtitle.
     return ListItemTile(
-      avatarName: client.displayName,
-      title: client.displayName,
+      avatarName: displayName,
+      title: displayName,
       subtitle: subtitle,
       subtitleExtra: badges.isEmpty
           ? null
@@ -72,10 +73,7 @@ class ClientTile extends StatelessWidget {
   }
 }
 
-/// "Archived", as a neutral pill under the address. Neutral rather than
-/// warning-tinted: archiving is a routine filing action, not a fault. Takes
-/// the same slot colours `UserStatusChip` gives a disabled account, which
-/// carries the same "out of the working set" meaning.
+/// "Archived", as a neutral pill under the address.
 class _ArchivedPill extends StatelessWidget {
   const _ArchivedPill();
 
@@ -86,24 +84,6 @@ class _ArchivedPill extends StatelessWidget {
       label: context.l10n.clients_filterArchived,
       background: scheme.surfaceContainerHighest,
       foreground: scheme.onSurfaceVariant,
-      radius: AppRadius.r8,
-    );
-  }
-}
-
-/// The client's type, as a tinted pill under the address.
-class _TypeChip extends StatelessWidget {
-  const _TypeChip({required this.type});
-
-  final ClientType type;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).palette.primaryAccent;
-    return StatusPill(
-      label: clientTypeLabel(context.l10n, type),
-      background: color.withValues(alpha: 0.10),
-      foreground: color,
       radius: AppRadius.r8,
     );
   }

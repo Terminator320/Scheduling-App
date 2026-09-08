@@ -9,11 +9,13 @@ class AccountSettingsCard extends StatelessWidget {
   const AccountSettingsCard({
     required this.onSignOut,
     required this.onDeleteAccount,
+    this.isBusy = false,
     super.key,
   });
 
   final VoidCallback onSignOut;
   final VoidCallback onDeleteAccount;
+  final bool isBusy;
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +29,7 @@ class AccountSettingsCard extends StatelessWidget {
             iconColor: scheme.error,
             label: context.l10n.settings_logOut,
             labelColor: scheme.error,
-            onTap: onSignOut,
+            onTap: isBusy ? null : onSignOut,
           ),
           const SettingsTileDivider(),
           SettingsTile(
@@ -36,8 +38,7 @@ class AccountSettingsCard extends StatelessWidget {
             iconColor: scheme.error,
             label: context.l10n.settings_deleteAccount,
             labelColor: scheme.error,
-            isLast: true,
-            onTap: onDeleteAccount,
+            onTap: isBusy ? null : onDeleteAccount,
           ),
         ],
       ),
