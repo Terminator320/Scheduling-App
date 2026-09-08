@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-21
 **Status:** SHIPPED. Implemented 2026-08-21 (release 1.48.0+77), backend
-deployed the same day at `903161e1` — plus `d99b6673` hours later, which
+deployed the same day at `1c89892a` — plus `229b6e24` hours later, which
 restored account creation that deploy had broken. Evidence in the code:
 `AuthFailureStartingPasswordReused` in `lib/features/auth/domain/auth_failure.dart`,
 the random starting password in `functions/employee_accounts.js`, and no

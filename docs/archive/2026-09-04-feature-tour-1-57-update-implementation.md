@@ -2,8 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** SHIPPED — all 10 tasks implemented 2026-09-05 (`00e063df` ->
-`2685d5ec`), released in 1.58.0+87. App-side only; nothing to deploy. The tour
+**Status:** SHIPPED — all 10 tasks implemented 2026-09-05 (`4c82eb60` ->
+`4ab95819`), released in 1.58.0+87. App-side only; nothing to deploy. The tour
 now runs 52 steps across 12 scopes with per-STEP seen flags (`tour_seen_steps`).
 Design doc: `docs/plans/2026-09-04-feature-tour-1-57-update.md`.
 

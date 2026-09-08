@@ -134,7 +134,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   dropped from `appointments/{id}/images` — `storagePath`/`fileName`/`uploadedAt`
   only. Functions and storage were out of scope because neither changed;
   `firestore:indexes` stayed out for the same reason as the CONTRACT row below.
-- **DEPLOYED 2026-08-22 (`3f13d50c` tree): the photo-subcollection CONTRACT
+- **DEPLOYED 2026-08-22 (`cc008388` tree): the photo-subcollection CONTRACT
   step** — functions, `firestore:rules` and storage. 25/25 successful updates,
   0 creates, 0 deletions, so neither known abort fired. It DELETED
   `appointment_image_tokens.js` (an internal module, never an export, so the
@@ -144,14 +144,14 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   REMOVAL, which never applies without `--force`, so the target could only have
   produced a drift report and pulled the orphaned `signupCodes` TTL policy into
   scope.
-- **DEPLOYED 2026-08-22 (`d99b6673`): the starting-password symbol class.**
-  `createEmployeeAccount` had been failing outright since `903161e1`; no
+- **DEPLOYED 2026-08-22 (`229b6e24`): the starting-password symbol class.**
+  `createEmployeeAccount` had been failing outright since `1c89892a`; no
   allowlist, cap or response shape moved, so §4a had nothing to check.
-- **DEPLOYED 2026-08-22 (`903161e1`): simplified auth** — functions, rules and
+- **DEPLOYED 2026-08-22 (`1c89892a`): simplified auth** — functions, rules and
   storage. No export change (25 → 25). The required pre-flight was re-queried
   at deploy time rather than trusted: zero `invited` users, verified two ways,
   so removing the mailbox guard exposed nobody.
-- **DEPLOYED 2026-08-15 (`6b3fcf7c`, merged as `be56f118`): the Wave stale-link
+- **DEPLOYED 2026-08-15 (`ccb703e0`, merged as `86bbc462`): the Wave stale-link
   relink — the second Wave deploy of that day and the one that actually
   unblocked the two dead-lettered upserts.** A `waveCustomerId` pointing at a
   customer DELETED in Wave came back as a top-level `NOT_FOUND`, which is
@@ -160,7 +160,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   search forced on, and `writeSyncSuccess`'s `replacesLink` carve-out lets the
   healed link persist onto an already-linked doc. `functions/wave/customers.js`
   only; no export, rules, index or payload change.
-- **DEPLOYED 2026-08-15 (`e84a66fd`): the Wave enum-coercion fix.** `wave/` only,
+- **DEPLOYED 2026-08-15 (`c167fcbf`): the Wave enum-coercion fix.** `wave/` only,
   25 → 25. `toCountryCode`/`toProvinceCode` could emit values outside Wave's
   GraphQL ENUM vocabulary (a province typed into the country box; a US state
   prefixed `CA-`), which fails variable coercion and dead-letters the job
@@ -170,7 +170,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   PII-free `errorDetail`, and `waveRetryFailedJobs`' response gains a `failed`
   key. **A real but different bug from the relink above** — it was not what the
   two dead-lettered jobs were dying of.
-- **DEPLOYED 2026-08-15 (`6d41dd3c`): the 2026-08-15 audit, 25 → 25 with no
+- **DEPLOYED 2026-08-15 (`201b93b9`): the 2026-08-15 audit, 25 → 25 with no
   export change.** `waveUpsertCustomer` and `runWaveDaily` MOVED module
   (`wave/callables.js` → the new `wave/triggers.js`) while keeping their export
   names, so both deployed as UPDATES and neither known abort fired — the
@@ -185,7 +185,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   over 500 chars would now be un-updatable from the app. If an opaque
   `permission-denied` appears on an ordinary client save, check that field
   first. Full record: `docs/DEPLOYMENT.md`.
-- **DEPLOYED 2026-08-14 (`d3e22377`): the three-deletion swap, net 25 → 25.**
+- **DEPLOYED 2026-08-14 (`9bda14cb`): the three-deletion swap, net 25 → 25.**
   Deleted `waveSyncWorker`, `waveScheduledImport` and `sendOverdueJobPrompts`;
   added `waveRetryFailedJobs`, `cascadeDeleteAppointmentImages` and
   `recountAppointmentPictures`, plus `firestore.rules` and `firestore:indexes`.
@@ -232,7 +232,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   running older bodies. The count is still 25 and still matches, which is
   exactly the trap named below — a count check looks clean while the deployed
   code is behind. **The pending delta is NOT cosmetic** (re-measured 2026-08-28
-  against `dab81bb0`, the last recorded deploy): `firestore.rules` **+36/-11**,
+  against `f0c341a7`, the last recorded deploy): `firestore.rules` **+36/-11**,
   a new 119-line `functions/client_address_utils.js`, and behaviour changes in
   `client_propagation.js` (+17), `day_slice_utils.js` (+44), `client_name_utils.js`
   and `wave/mappers.js` (-56). This bullet previously called it "dead-code
@@ -245,7 +245,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   `changeEmployeeEmail` landed 2026-08-04 (26 → 27); **the shim was retired
   2026-08-08 (27 → 25)** once every device was on 1.40+, deleting those two
   callables. `revokeInvite` and `previewInvite` DID exist in code — P4b added
-  them (`461f84ba`) and P4c removed them (`ea375b1b`) — but they were never
+  them (`5f33ca63`) and P4c removed them (`b0e0fe4e`) — but they were never
   deployed to prod. (v2, Node.js 24, 256 MB; `us-central1`
   except `validateUploadedImage` in `us-east1`). The 2026-07-18 deploy shipped
   `placesReverseGeocode`, the travel-aware `sendUpcomingJobReminders` rebuild,
@@ -370,7 +370,7 @@ per billing account. `sendOverdueJobPrompts` (was `every 15 minutes`) is merged
 into `sendUpcomingJobReminders`, `waveScheduledImport` (was `every 24 hours`)
 into `sendDailyJobDigest`, and `waveSyncWorker` (was `every 5 minutes`) is gone
 entirely because the Wave push is event-driven now. **All three were deleted
-from prod by the 2026-08-14 deploy (`d3e22377`)**, and each still leaves an
+from prod by the 2026-08-14 deploy (`9bda14cb`)**, and each still leaves an
 orphaned Cloud Scheduler entry that must be deleted by hand — see
 `docs/DEPLOYMENT.md`, "DONE 2026-08-14: a THREE-deletion deploy". Adding a
 fourth scheduled function starts costing money.
@@ -397,7 +397,7 @@ APP — and as of **2026-08-08 the signup-code flow is gone from the backend too
 `invites.js`, `signup_code_utils.js`, `createEmployeeInvite` and
 `redeemSignupCode` were deleted with the rest of the `#compat-1.37.1` shim.
 `revokeInvite` and `previewInvite` were never deployed, but they DID exist in
-code between P4b (`461f84ba`) and P4c (`ea375b1b`).
+code between P4b (`5f33ca63`) and P4c (`b0e0fe4e`).
 **`redeemSignupCode` was the last unauthenticated callable in the
 codebase**; every remaining one requires auth. All four callables
 below share `APP_CHECK = {enforceAppCheck: true}`. Full design:
@@ -436,7 +436,7 @@ the shared `Welcome123!` had been satisfying it by accident, and without it
 every call died at `provisionAuthAccount` with
 `PASSWORD_DOES_NOT_MEET_REQUIREMENTS` — account creation was down outright,
 through four prod failures, with App Check and auth VALID on each (fixed
-`d99b6673`, deployed 2026-08-22). `PASSWORD_SYMBOLS` is deliberately kept OUT
+`229b6e24`, deployed 2026-08-22). `PASSWORD_SYMBOLS` is deliberately kept OUT
 of `PASSWORD_ALPHABET` so a mint carries exactly ONE symbol — the admin
 dictates the value aloud — and the set avoids bracket pairs, dash/underscore
 confusion and URL- or shell-significant glyphs. It is drawn **once per call** and handed to whichever
@@ -1069,7 +1069,7 @@ case. The pure `clientsToRecount(before, after)` is exported for jest. Served by
 `(clientId ASC, dayIndex ASC)` composite — the run subtraction is a second
 `count()` over `dayIndex > 1`, which the automatic single-field index on
 `clientId` cannot serve. That index is deployed and LIVE; do not delete it.
-**Deployed 2026-08-01** (`d916b16`).
+**Deployed 2026-08-01** (`16332b3`).
 
 A booking batch can land up to 16 writes carrying one `clientId` at once (a
 multi-day run's day-documents, a repeat series' occurrences), so those are
@@ -1103,7 +1103,7 @@ bug this gate exists to prevent. Guard order is auth → `assertAdmin` →
 throws synchronously on one) → `enforceDurableRateLimit` (20/hr per admin uid) →
 work. The pure `performDeleteClient(db, clientId)` is exported for jest.
 Archive — not delete — is the normal way a client leaves the roster.
-**Deployed 2026-08-03** (`1c6a949`), verified ACTIVE.
+**Deployed 2026-08-03** (`ef3a9cf`), verified ACTIVE.
 
 ## Appointment photos → subcollection
 
@@ -1182,7 +1182,7 @@ reads the rules-locked `wave` collection directly. The integration's invariants
 (import timestamps, outbox transactionality, cadence) live in the Wave bullet of
 CLAUDE.md; the original ultra-review findings are archived at
 `docs/archive/WAVE_REVIEW_FINDINGS.md`. (An older `WAVE_INTEGRATION_PLAN.md` was
-deleted in `189772a` — don't restore the pointer.)
+deleted in `39feb0f` — don't restore the pointer.)
 
 All four Wave callables run the guards in the documented order — auth →
 `assertAdmin` → `assertPayloadShape` → rate limit. `assertAdmin` above the

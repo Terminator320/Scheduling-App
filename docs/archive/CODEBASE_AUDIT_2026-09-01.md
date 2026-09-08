@@ -2,7 +2,7 @@
 
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
 `firestore.indexes.json`, `test/`) **plus production telemetry** (Crashlytics,
-Cloud Functions logs, Firestore). Baseline: `112e1c2a` (working tree clean).
+Cloud Functions logs, Firestore). Baseline: `5a22338e` (working tree clean).
 
 This audit deliberately looked past the static layer, because the 2026-08-31
 pass had already closed everything there and its real findings all came from
@@ -45,12 +45,12 @@ root cause you fixed on 2026-08-31.
 
 | Issue | Volume | Status |
 |---|---|---|
-| `deadline-exceeded` from `placesReverseGeocode` (grouped under a stale `permission-denied` title) | 22 events / 3 users | Fixed by `54d3cf0c`, ships in 1.55.0+84 |
+| `deadline-exceeded` from `placesReverseGeocode` (grouped under a stale `permission-denied` title) | 22 events / 3 users | Fixed by `8a448e0f`, ships in 1.55.0+84 |
 | `MapsFailureRateLimit` in `getPlaceDetails` on suggestion tap | 4 events / 2 users, new in 1.54.0 | Same root cause |
 
 The breadcrumbs show **15 failed reverse-geocode callables in 10 ms**, twice.
 All three Places callables share `fetchPlacesJson` (`functions/places.js:104`),
-which had no timeout before `54d3cf0c` — so requests the client abandoned at
+which had no timeout before `8a448e0f` — so requests the client abandoned at
 10 s kept running server-side and still consumed their rate-limit slot. That
 explains the `getPlaceDetails` 40-per-15-min exhaustion too.
 
@@ -64,7 +64,7 @@ callable protocol reject them before any handler runs. Not a defect — the
 defense is working — but they are logged at ERROR and bury real errors. See I17.
 
 **Wave dead-letters** — all stopped 2026-08-30 18:15 UTC; your fixes
-(`112f893f`, `36d73daa`) landed 19:27 UTC. Nothing since. One loose end: memory
+(`4dc086e5`, `ca40c40a`) landed 19:27 UTC. Nothing since. One loose end: memory
 records that an admin must press "Retry failed" once to drain the parked
 `customerUpsert__o0KcOnJSgjvMHYpmcZ44` job. I could not verify the queue state —
 the Firestore MCP query returns `read_time cannot be in the future` (a tool

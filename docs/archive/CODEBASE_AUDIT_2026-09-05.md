@@ -2,7 +2,7 @@
 
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
 `firestore.indexes.json`, `test/`, `.claude/rules/`, `docs/`).
-Baseline: `f884e120` (branch `redesgin`), working tree clean.
+Baseline: `394d67af` (branch `redesgin`), working tree clean.
 
 The previous rolling audit was archived to
 `docs/archive/CODEBASE_AUDIT_2026-09-03-rolling.md` — its still-open items
@@ -28,7 +28,7 @@ matters:
   true for ANY digit, so a pure-number name always reads as a business and the
   whole lift would stop working. The gate is a NANP-shape test instead
   (7, or 10 through 15 digits — 8 and 9 are neither a local nor a full number),
-  which rejects `3101-5696` while keeping all six worked examples `b7c888a8`
+  which rejects `3101-5696` while keeping all six worked examples `03935e5e`
   pinned, including the 11-digit typo.
 - **I8** — only `debouncer_test.dart` was a margin race, and it is on
   `fake_async` now. The other three named files are NOT the same shape and were
@@ -74,15 +74,15 @@ layer is the normal state for this repo, not a sign the sweep missed something.
 ### Top 3 to look at first
 
 1. **B1** — the `liftPhoneFromName` Dart↔JS hand-mirror drifted in today's
-   `b7c888a8`. A Wave customer named by a 7-digit or 11–15-digit number imports
+   `03935e5e`. A Wave customer named by a 7-digit or 11–15-digit number imports
    with an empty `phone`, and nothing in the app can dial them.
 2. **B2 / I-perf** — attaching a client to a job now reads that client's entire
    appointment history (up to 1000 docs, up to 2 sequential round trips) to
    render two lines, and re-fires on every local write while the sheet is open.
-   Regression from `04ee8f61`; this is the app's core booking flow.
+   Regression from `472eb60c`; this is the app's core booking flow.
 3. **I1 / I3** — two docs describe live Firestore indexes as deleted or
    unnecessary. This repo has already suffered a 2-day invisible outage from
-   exactly this (`3eebcc93`, "restore the endTime composite the last audit
+   exactly this (`42adbabc`, "restore the endTime composite the last audit
    deleted"). These are instructions to delete working infrastructure.
 
 ### Verified clean (so the next pass doesn't re-walk them)
@@ -187,7 +187,7 @@ ordering already recorded in your notes, restated because it gates the build:
 - **Where:** `lib/features/clients/domain/policies/client_name_policy.dart:250-266`
   vs `functions/client_name_utils.js:387-402` (whose JSDoc at `:417` explicitly
   reads `HAND-MIRROR of ClientNamePolicy.liftPhoneFromName`)
-- **Problem:** today's `b7c888a8` added a whole-field branch to Dart
+- **Problem:** today's `03935e5e` added a whole-field branch to Dart
   `_matchPhone` — if the trimmed name has no character outside `[\d\s().\-]` and
   7–15 digits, it is lifted into the phone field. The JS twin was not changed
   and still only matches via `PHONE_CANDIDATE` requiring **exactly 10** digits.
@@ -218,7 +218,7 @@ ordering already recorded in your notes, restated because it gates the build:
   whose own doc comment says it is *"for the Job history section"* — to produce
   exactly two things: a de-duplicated address list and one "last visit" label.
   It costs N document reads where N is the client's whole archive (capped 1000),
-  in ⌈N/500⌉ sequential round trips. Before `04ee8f61` this path cost **zero**
+  in ⌈N/500⌉ sequential round trips. Before `472eb60c` this path cost **zero**
   extra reads. It fires on attaching a client, changing to a different one, and
   opening the edit body of any client job.
 - **Amplifier:** the provider calls `ref.invalidateSelf()` on **every**
@@ -343,13 +343,13 @@ ordering already recorded in your notes, restated because it gates the build:
 - **Where:** `.claude/rules/appointments.md:547-556`
 - **Opportunity:** it states the `(employeeIds CONTAINS, endTime ASC)` composite
   "was DELETED 2026-08-28" as a redundant prefix. That index is **live** in
-  `firestore.indexes.json` today, and commit `3eebcc93` is literally *"restore
+  `firestore.indexes.json` today, and commit `42adbabc` is literally *"restore
   the endTime composite the last audit deleted"* — the deletion broke the travel
   sweep for two days, invisibly. The rule still carries the prefix-redundancy
   reasoning that caused it, and only conditionally suggests restoring. Your own
   memory already records this as a lesson; the rule file does not.
 - **Suggested improvement:** rewrite to "Deleted 2026-08-28 and **restored
-  2026-08-31** (`3eebcc93`) after it broke the travel sweep for two days. It is
+  2026-08-31** (`42adbabc`) after it broke the travel sweep for two days. It is
   live — do not delete it as a prefix again."
 
 ### I2 — `functions/CLAUDE.md` says 25 exports; there are 29, and three modules are undocumented · impact: high · confidence: high (verified)
@@ -436,8 +436,8 @@ ordering already recorded in your notes, restated because it gates the build:
 - **Opportunity:** `clients_filterAllAddresses`, `clients_buildingUnits`,
   `clients_searchByNameBusinessPhoneEmailAddress`, `clients_addNamedClient`,
   `clients_filterByType` have zero member-access and zero string-literal
-  references across `lib/` and `test/`. Orphaned by `d84cae53` (clients rebuild)
-  and `eb200e68` (ClientPicker replaced ClientSearchField).
+  references across `lib/` and `test/`. Orphaned by `b2adc705` (clients rebuild)
+  and `0c427487` (ClientPicker replaced ClientSearchField).
   `docs/archive/2026-08-29-clients-address-filter.md` still describes
   `clients_buildingUnits` as live.
 - **Suggested improvement:** a deliberate l10n pass — delete from **both** ARBs
@@ -450,11 +450,11 @@ ordering already recorded in your notes, restated because it gates the build:
   (`clientBuildingKeysProvider`), `clients_repository.dart:90`,
   `firebase_clients_repository.dart:267` (`fetchBuildingKeys`)
 - **Opportunity:** the provider has zero `ref.watch/read/listen/invalidate` and
-  zero overrides across `lib/` and `test/`. Orphaned by `d84cae53`, which moved
+  zero overrides across `lib/` and `test/`. Orphaned by `b2adc705`, which moved
   `ClientsFilterSheet` onto `clientBuildingsProvider`. Its repository method's
   only non-test caller is the dead provider, but it has 6 test references
   (`firebase_clients_repository_test.dart:670-805`) — so it *reads* as live, and
-  a future caller could re-add the ~700-doc scan `d84cae53` just moved off the
+  a future caller could re-add the ~700-doc scan `b2adc705` just moved off the
   tab-open path. `clients_providers.dart:79` and `.claude/rules/clients.md:102-109`
   both still describe `ClientsListView` watching it.
 - **Must survive:** the private `_CachedClientScanWindow.buildingKeys` getter
@@ -592,7 +592,7 @@ ordering already recorded in your notes, restated because it gates the build:
   rationale comments "were deleted", on the basis that 160 comment lines remain
   and the count only moved 168 → 160. That reasoning only looked at the last two
   commits. The real history is `546 → 168` in one commit
-  (`73d37147` → `6c1e3dd5`) — roughly 378 comment lines genuinely were removed,
+  (`82972d7b` → `31336881`) — roughly 378 comment lines genuinely were removed,
   exactly as the rule says. **The rule is accurate and needs no change**, and the
   absence of those blocks is correctly not a finding. Recording this so a future
   audit doesn't re-raise it.

@@ -129,7 +129,7 @@ they are no longer active audit work.
 ## Found on 2026-09-02 while closing the list — the branch was NOT green
 
 The 2026-09-01 work was recorded as "3141 flutter, green". It was not: HEAD
-(`74f71aa6`) carried **two failing tests** in
+(`e78230fc`) carried **two failing tests** in
 `test/features/calendar/screens/main_calendar_screen_test.dart`, both introduced
 with the week-view / crew-filter commits, and reproduced in a clean worktree at
 HEAD with none of the 2026-09-02 work applied. One was a real product bug.
@@ -167,6 +167,6 @@ claim, not a fact.
 
 `notifyappointmentchanges` crash-looped on 2026-09-01 between 17:22 and 17:24
 UTC — "Could not load the function, shutting down", `exit(1)`, failed startup
-probes — during the `02f540eb` deploy rollout. It recovered at 17:25 and every
+probes — during the `a808fe03` deploy rollout. It recovered at 17:25 and every
 instance start since has succeeded. A bad revision during rollout, not a
 standing fault; no action.

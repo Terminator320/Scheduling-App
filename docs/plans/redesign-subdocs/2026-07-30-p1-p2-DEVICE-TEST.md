@@ -42,7 +42,7 @@
 > - **History shows an admin the Edit affordance on a completed job** (as the
 >   action bar's bottom button, not the top chip).
 >
-> §0.1's `d4b487f` pin is historical — check out the tip of `redesgin`.
+> §0.1's `d9816fe` pin is historical — check out the tip of `redesgin`.
 
 Neither P1 (foundation/navigation) nor P2 (calendar) has ever run on hardware.
 This is the single pass that covers both.
@@ -58,7 +58,7 @@ Mac can go straight there.
 ## 0. Before the first launch (do these in order)
 
 - [x] **0.1 — Pull the branch.**
-      `git fetch && git checkout redesgin && git pull` → HEAD should be `d4b487f`.
+      `git fetch && git checkout redesgin && git pull` → HEAD should be `d9816fe`.
 - [x] **0.2 — Copy the two gitignored files across.** Neither is in git:
       - `dev/.env` — 8 keys. Bundled as an asset; **the app will not start without it.**
       - `ios/GoogleService-Info.plist` — note it lives at the **`ios/` root, NOT `ios/Runner/`.**
@@ -454,7 +454,7 @@ Switch to dark (Settings, or system) and re-check:
 > check", not as a regression with a known-good baseline.
 >
 > **This does NOT cover the P5 block below**, which is still `none run` — but it
-> is no longer blocked: the deploy landed **2026-08-11** at `70579d22`
+> is no longer blocked: the deploy landed **2026-08-11** at `258cc91a`
 > (functions, rules, storage), so those 18 checks are now runnable and a
 > `permission-denied` among them is a real finding rather than the expected
 > symptom of a missing deploy. Nor does it retire the loose end from the P4 pass: the
@@ -478,7 +478,7 @@ place, overflow errors will actually print.
 
 **Sign in as a TECHNICIAN, not an admin.** The admin branch of `allow update`
 masks a broken self clause completely, so an admin pass proves nothing here.
-**The required deploy has run** — 2026-08-11 at `70579d22`, functions + rules +
+**The required deploy has run** — 2026-08-11 at `258cc91a`, functions + rules +
 storage, verified against the deploy log in `docs/DEPLOYMENT.md`. So a
 `permission-denied` on any check below is now a **real finding**, not the
 expected symptom of a missed deploy. (Before that deploy every check here could
@@ -513,7 +513,7 @@ only have failed, which is why the block reads `none run`.)
   with their reasons**. Several checks here (2.2 off-month dots, 4.4 the dim
   asymmetry, 9.3 sub-48px columns, 9.6 no landscape collapse) will *look* wrong
   to a fresh reader and are deliberate. Read that before "fixing" one.
-- The behaviour is on `redesgin` @ `d4b487f`. Static gates are already green
+- The behaviour is on `redesgin` @ `d9816fe`. Static gates are already green
   (analyze 0 issues, 1173 tests) — a failure here is a device/integration issue,
   not something the suite would have caught.
 - **Do not fix and push from the Mac without re-running `flutter analyze` and

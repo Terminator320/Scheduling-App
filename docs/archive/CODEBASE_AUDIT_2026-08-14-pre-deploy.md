@@ -1,16 +1,16 @@
 # Codebase Audit — 2026-08-14 (pre-deploy pass)
 
-> **STATUS: all 27 findings CLOSED at `a30eb3ef`** (2026-08-14), and the three
+> **STATUS: all 27 findings CLOSED at `10545972`** (2026-08-14), and the three
 > follow-ups it left were done 2026-08-15 — rules + indexes deployed and the
 > legal pages republished, all verified live.
 >
 > **Restored from git history 2026-08-15.** This snapshot and its sibling
 > `-first-pass` were overwritten in place by the next sweep instead of being
 > archived, which is why neither appeared here until now; the content below is
-> the file exactly as it stood at `d1542a3d`.
+> the file exactly as it stood at `669f2e31`.
 
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
-`firestore.indexes.json`, `docs/`, `.claude/`). Baseline: `4b500e84` on
+`firestore.indexes.json`, `docs/`, `.claude/`). Baseline: `2ca8013b` on
 `redesgin`, working tree carrying the /doctor-pass docs changes.
 
 **Context: this audit was run immediately before deploying the pending backend
@@ -51,7 +51,7 @@ Checked against the real project, not the docs:
 
 | Check | Result |
 |---|---|
-| Functions live in prod | **25** — matches `78d89478` |
+| Functions live in prod | **25** — matches `45302651` |
 | Export set vs. local | **3 removed / 3 added**, count unchanged at 25 |
 | `firestore.rules` compiles | ✅ zero errors (runbook expected 3 warnings — there are none) |
 | `storage.rules` compiles | ✅ zero errors |

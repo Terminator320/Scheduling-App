@@ -1,6 +1,6 @@
 # Codebase Audit — 2026-08-02 (post-P4c)
 
-**Branch:** `redesgin` (clean tree at `6a16aab`) · **Baseline:** 1434 Flutter tests /
+**Branch:** `redesgin` (clean tree at `95279ed`) · **Baseline:** 1434 Flutter tests /
 689 jest tests passing, `flutter analyze` clean (0 errors/warnings), `dart fix` nothing
 to fix, Functions ESLint green.
 **Method:** deterministic static scan + five parallel deep reviewers (security, bugs,
@@ -306,7 +306,7 @@ local.
   (`nav_myDetails`) is P5 pre-staging — owner call. **EN/FR lockstep is perfect: 568/568,
   zero drift.**
 - **16 never-adopted design tokens** in `design_tokens.dart`, all traced to the P1 redesign
-  commit `bc220cd`: 6 consts (`AppSpacing.cardGap`, `AppRadius.rHero`/`rInput`/`rSwatch`,
+  commit `71c9a12`: 6 consts (`AppSpacing.cardGap`, `AppRadius.rHero`/`rInput`/`rSwatch`,
   `AppMotion.riseIn`/`dropdownSheet`) and 10 fully-wired-but-unread `ThemeExtension` fields
   (`AppCardStyle.dialogShadow`/`fabShadow`/`thumbShadow`/`knobShadow`,
   `AppPalette.barTint`/`brandNavy`/`noticeAmber`, `AppMonoType.numeralKpi`/`numeralSection`/

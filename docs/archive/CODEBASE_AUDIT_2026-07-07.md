@@ -1,7 +1,7 @@
 # Codebase Audit — 2026-07-07
 
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`, `test/`).
-Baseline: working tree (clean) on `moblie` @ `efac0d6`.
+Baseline: working tree (clean) on `moblie` @ `627ca52`.
 
 ## Summary
 - **Scanned:** 207 source Dart files in `lib/`, the `functions/` Node.js modules,

@@ -314,7 +314,7 @@ rejecting an unknown argument and `printTargetBanner` owns the banner, but
 nothing owned the six lines WIRING them together — resolve `dryRun` once and
 hand the same value to both. Thirteen scripts spelled that sequence out by
 hand, which is thirteen chances to print a banner that disagrees with the run:
-commit `3059ac0a` is exactly that drift, and repo history has a backfill whose
+commit `56744d1f` is exactly that drift, and repo history has a backfill whose
 `--dry-run` wrote everything anyway. These scripts touch prod, so the banner
 must be printed BEFORE the first read — `applicationDefault()` resolves
 whatever credentials are ambient and nothing on the command line says which

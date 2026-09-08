@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Status:** SHIPPED — implemented 2026-08-27, released 1.53.0+82, rules
-deployed 2026-08-29 (`d5aa3a21`). Design doc:
+deployed 2026-08-29 (`77c6a66f`). Design doc:
 `docs/plans/2026-08-27-per-day-appointments.md`.
 
 **Goal:** A multi-day job books as one appointment per day, so marking day 1 complete no longer closes days 2–5.

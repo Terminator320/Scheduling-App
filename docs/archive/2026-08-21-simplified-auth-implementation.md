@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Status:** SHIPPED — all tasks implemented 2026-08-21 and deployed the same
-day (`903161e1`, then `d99b6673`), released as 1.48.0+77. The unticked boxes
+day (`1c89892a`, then `229b6e24`), released as 1.48.0+77. The unticked boxes
 below are the execution record, not outstanding work. Design doc:
 `docs/plans/2026-08-21-simplified-auth-design.md`.
 
@@ -422,7 +422,7 @@ git commit -m "feat(functions): per-account starting password, employee-only cre
 - Modify: `functions/__tests__/employee_accounts_callables.test.js`
 
 > **CORRECTION (2026-08-21):** this file ALREADY EXISTS — committed since
-> 2026-08-11 (`a90474cc`), and it already covers `changeEmployeeEmail`'s guard
+> 2026-08-11 (`96a514a2`), and it already covers `changeEmployeeEmail`'s guard
 > order with its own `jest.mock("../security")` harness. The plan originally
 > said "Create", which would have destroyed that suite. **Read it first**,
 > reuse its existing mocks and helpers, and APPEND the two new `describe`

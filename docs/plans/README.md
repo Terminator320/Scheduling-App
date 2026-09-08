@@ -31,13 +31,13 @@ at the top of each file, not its boxes.
 | `2026-07-19-siri-app-intents-implementation.md` | Phases 1–3 built; **no device pass ever run**. |
 | `2026-07-20-siri-phase4-write-actions.md` | **NOT STARTED.** Mac + Apple-portal session. |
 | `2026-08-28-address-street-locality-split.md` | **Shipped and deployed; the prod backfill's LIVE run is the one thing open.** `backfill-client-address-street.js` has only dry-run against prod (2026-08-28: 714 scanned, 114 reduced). Cleanup, not a defect — the app renders both stored shapes. |
-| `2026-08-30-wave-validated-contract-design.md` | **Phase 1 built and deployed 2026-08-30** (`485c88cb`, report-only). Phases 2–4 deliberately unwritten until the prod replay lands. |
+| `2026-08-30-wave-validated-contract-design.md` | **Phase 1 built and deployed 2026-08-30** (`fe9edc51`, report-only). Phases 2–4 deliberately unwritten until the prod replay lands. |
 | `2026-08-30-wave-validated-contract-implementation.md` | Phase 1's task list. Its last step — `functions/scripts/audit-wave-contract.js` against prod — **has never run**; this box has no ADC. |
 | `2026-09-04-carplay-driving-task.md` | **PLAN, not started.** Written 2026-09-04, awaiting owner review. |
-| `2026-09-04-clients-page-search-first.md` | **Implemented 2026-09-05** (`68ae7d37` + `d84cae53`), released 1.58.0+87. **Backend undeployed** — two `clients` composites must be READY and `backfill-client-sort-fields.js` must run before the sorts work. Supersedes the archived address-filter doc. |
+| `2026-09-04-clients-page-search-first.md` | **Implemented 2026-09-05** (`767ec99e` + `b2adc705`), released 1.58.0+87. **Backend undeployed** — two `clients` composites must be READY and `backfill-client-sort-fields.js` must run before the sorts work. Supersedes the archived address-filter doc. |
 | `2026-09-04-clients-page-search-first-implementation.md` | Its task list. Same deploy gate. |
-| `2026-09-05-add-job-client-picker.md` | **Built and released the same day** as 1.58.0+87 (`d7e8294f`). Its banner claimed "no code written" until this sweep. **Not usable in prod** until `searchClients` deploys. |
-| `2026-09-05-add-job-client-picker-implementation.md` | Its task list, boxes ticked in `f884e120`. Same deploy gate. |
+| `2026-09-05-add-job-client-picker.md` | **Built and released the same day** as 1.58.0+87 (`101d0c0a`). Its banner claimed "no code written" until this sweep. **Not usable in prod** until `searchClients` deploys. |
+| `2026-09-05-add-job-client-picker-implementation.md` | Its task list, boxes ticked in `394d67af`. Same deploy gate. |
 | `APP_STORE_SUBMISSION.md` | **The live release runbook**, now for updates rather than a launch — the app shipped. Its unticked boxes have never been reconciled against four shipped submissions, so read one as *unknown*, not *outstanding* (§7). |
 
 ---
@@ -47,7 +47,7 @@ at the top of each file, not its boxes.
 ### 1. The backend deploy — CLOSED 2026-09-06
 
 The P5/multi-day deploy this section was written for landed 2026-08-11 at
-`70579d22` (release 1.45.0+72), which unblocked the P5 device block in §4 and
+`258cc91a` (release 1.45.0+72), which unblocked the P5 device block in §4 and
 shipping an app build carrying the P5 UI — the ordering hazard was that the
 rules clause had to be live first, or every self save fails `permission-denied`.
 
@@ -204,8 +204,8 @@ and read as though nothing was outstanding):
   Step 2, the backfill, ran and was re-run at the CONTRACT step 2026-08-22:
   `copied 14 photos across 11 appointments` (not the superseded `13 / 10` from
   2026-08-15). Copy-only and idempotent.
-  **Step 3 shipped in 1.49.0+78 on 2026-08-22** (`7ace6528` “retire the
-  pictures array”, released as `9cdc60d4` “photos live only in the
+  **Step 3 shipped in 1.49.0+78 on 2026-08-22** (`db6686f4` “retire the
+  pictures array”, released as `647660a5` “photos live only in the
   subcollection”). The gate was never “ship the NEXT build” — it was the fleet
   ageing off builds that touch the array, and that is settled on the SAME
   evidence that retired `#compat-1.47.0`: the owner confirmed the whole fleet
@@ -287,7 +287,7 @@ the consent checkbox stamps `termsAcceptedAt` against text nobody has read.
 ### 8. Function SDK downgrade — found and FIXED 2026-08-10, keep it from recurring
 
 `functions/package.json` had been **downgraded** on 2026-08-08 (commit
-`11e1db9b`, "updating") from `firebase-admin ^13.6.0` / `firebase-functions
+`0b57e02c`, "updating") from `firebase-admin ^13.6.0` / `firebase-functions
 ^7.3.2` to `^10.3.0` / `^4.9.0`, with `node_modules` and the lockfile to match.
 Production was unaffected — it runs the tree that declared 13.6/7.3.2 — but the
 next `firebase deploy` would have installed from that file, and under those
@@ -299,7 +299,7 @@ deploy would have silently broken the one guarantee stopping a client with job
 history from being deleted.
 
 `package.json` + `package-lock.json` were restored from the deployed tree
-(`5a42743e`) and reinstalled: firebase-functions 7.3.2, firebase-admin 13.10.0,
+(`b398294d`) and reinstalled: firebase-functions 7.3.2, firebase-admin 13.10.0,
 `@google-cloud/firestore` 7.11.6, `Query.prototype.count` present. `npm run
 lint` clean.
 

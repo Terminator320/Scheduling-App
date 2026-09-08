@@ -15,12 +15,12 @@
 
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
 `firestore.indexes.json`, `lib/l10n/*.arb`, `pubspec.yaml`, `functions/package.json`).
-Baseline: working tree at `55ea3cb3` on `redesgin`, tree clean at start.
+Baseline: working tree at `4ec9ad8a` on `redesgin`, tree clean at start.
 
 This is the second pass of the day. The first pass (archived as
-`docs/archive/CODEBASE_AUDIT_2026-08-11-first-pass.md`, baseline `8bf07c6e`) was implemented
-in `a90474cc`; two commits have landed since — `84a1bf6f` (P7 dashboard +
-History restyle + the rules span bound) and `55ea3cb3` (personal jobs keep an
+`docs/archive/CODEBASE_AUDIT_2026-08-11-first-pass.md`, baseline `102a6b21`) was implemented
+in `96a514a2`; two commits have landed since — `93f850e8` (P7 dashboard +
+History restyle + the rules span bound) and `4ec9ad8a` (personal jobs keep an
 address). Both are unreviewed, and most of what follows is in them.
 
 ## Summary
@@ -42,7 +42,7 @@ address). Both are unreviewed, and most of what follows is in them.
 | File:line | Change | Why |
 |---|---|---|
 | `lib/features/calendar/domain/policies/appointment_form_validator.dart:49` | `isAllDay` doc: "Only reachable on a personal job" → offered on every job, defaulted on for an untimed personal block | Stale since the 2026-08-03 owner call that put all-day on every job. In a repo where comments carry the spec, a false one is a trap |
-| `lib/features/calendar/widgets/views/details_edit_body.dart:110` | Dropped "and address" from the mid-life-conversion comment | `55ea3cb3` stopped wiping the address; the comment still claimed it did |
+| `lib/features/calendar/widgets/views/details_edit_body.dart:110` | Dropped "and address" from the mid-life-conversion comment | `4ec9ad8a` stopped wiping the address; the comment still claimed it did |
 
 > Full detail is in `git diff`. Nothing below this line was auto-changed.
 > `docs/audits/CODEBASE_AUDIT.md` was moved to
@@ -57,9 +57,9 @@ There are **zero** `TODO(pre-ship)` markers left anywhere in `lib/` or
 No destructive testing scaffolding survives. One release-gating item remains:
 
 - [x] **The backend is still not deployed, and it now carries three passes of
-  security work.** `a90474cc` (S1 `assertFreshReauth` on `changeEmployeeEmail`'s
+  security work.** `96a514a2` (S1 `assertFreshReauth` on `changeEmployeeEmail`'s
   SELF branch, budget 20/h → 5/h; B4 multi-day Live Activity skip; B5 crew
-  colour) and `84a1bf6f` (the `isValidAppointmentSpan` rules bound) are both
+  colour) and `93f850e8` (the `isValidAppointmentSpan` rules bound) are both
   local-only. Until they deploy, a self sign-in-email change is protected **only**
   by `SelfEmailService`'s client-side re-auth ordering — a direct callable
   invocation with a valid ID token bypasses it, which is the account-takeover
@@ -107,7 +107,7 @@ No destructive testing scaffolding survives. One release-gating item remains:
 
 ### S4 — employees' personal-appointment addresses now reach the admin's App Group snapshot · severity: low · confidence: medium (privacy-scope owner call)
 - **Where:** `lib/features/siri/domain/schedule_snapshot.dart:43`
-- **Risk:** `55ea3cb3` changed personal jobs from `address: ''` to a real
+- **Risk:** `4ec9ad8a` changed personal jobs from `address: ''` to a real
   address. The Siri snapshot is business-wide for admins and the App Group
   payload stays readable **while the device is locked** — which is exactly why
   `functions/CLAUDE.md` deliberately excludes notes, phone and pictures from it.
@@ -130,7 +130,7 @@ No destructive testing scaffolding survives. One release-gating item remains:
 
 ### B1 — flipping Personal ON carries the selected client's street address onto the block, from off-screen · severity: medium-high · confidence: high
 - **Where:** `lib/features/calendar/widgets/sections/appointment_form_fields.dart:199` (`_setPersonal`)
-- **Problem:** `55ea3cb3` removed `controllers.address.clear()` from
+- **Problem:** `4ec9ad8a` removed `controllers.address.clear()` from
   `_setPersonal`, on the stated grounds that the field "stays on screen … so
   whatever it holds is visible and editable rather than stale". That is not true
   in the add flow: the switch is at `:275` (first row of WHO) and the address
@@ -379,7 +379,7 @@ survived that check:
 - **`dashboard_providers.dart:71-95`** — the P7 `archived` exclusion and the
   `createdAt`-null ordering in `newClientDatesProvider`/`recentNewClientsProvider`.
 - **`event_details_save_pipeline.dart`** — the personal↔client **conversion**
-  directions after `55ea3cb3`. Existing tests pin that a personal job *may* save
+  directions after `4ec9ad8a`. Existing tests pin that a personal job *may* save
   an address, not what conversion keeps or clears. This is B1's blast radius.
 
 ### I4 — the load-bearing de-registration order is hand-written at 3 sites, and only 1 is tested · impact: medium-high · confidence: high

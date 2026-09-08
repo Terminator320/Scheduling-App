@@ -505,7 +505,7 @@ rules from `09` apply), owner/company sign-up (web, out of scope).
 > **SHIPPED AND DEPLOYED 2026-08-11 — implementation plan and its decision log:
 > `redesign-subdocs/2026-08-10-p5-my-details.md`. NOT device-verified.** All
 > three phases are built and green (1795 flutter / 850 jest), and the backend
-> went out at `70579d22` (functions, rules, storage — see the deploy log in
+> went out at `258cc91a` (functions, rules, storage — see the deploy log in
 > `docs/DEPLOYMENT.md`), so the ordering hazard is discharged and an app build
 > carrying this UI is safe to ship. What remains is to verify as a
 > **technician** — the whole self-service path is unreachable as an admin.

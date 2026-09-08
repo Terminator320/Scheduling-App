@@ -2,9 +2,9 @@
 
 > **Restored from git history 2026-08-15.** This snapshot was overwritten in
 > place by the pre-deploy pass that followed it, rather than archived; the
-> content below is the file exactly as it stood at `4b500e84`. Its ⚠️
+> content below is the file exactly as it stood at `2ca8013b`. Its ⚠️
 > pre-deploy item — deleting three live Cloud Functions — was carried out in
-> the 2026-08-14 deploy (`d3e22377`).
+> the 2026-08-14 deploy (`9bda14cb`).
 
 > **STATUS: implemented same day**, on the owner's "do all" instruction —
 > everything below EXCEPT the ⚠️ pre-deploy item, which is a destructive
@@ -27,13 +27,13 @@
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
 `firestore.indexes.json`, `lib/l10n/*.arb`, `pubspec.yaml`,
 `functions/package.json`, `docs/`, `ios/Runner/Info.plist`).
-Baseline: working tree at `bf316828` on `redesgin`. Tree was dirty at start —
+Baseline: working tree at `0edf80b7` on `redesgin`. Tree was dirty at start —
 `CLAUDE.md` carries one uncommitted owner edit (a testing-rules doc
 correction). Nothing in this audit was auto-applied, so that edit is still the
 only change in `git status`.
 
-The four commits since the last audit (`c56a53dc`, `5d4b280c`, `1250552d`,
-`bf316828` — 7717 insertions across 84 files) are unreviewed, and **most of
+The four commits since the last audit (`b395a7cf`, `1edd4dec`, `0f783ce7`,
+`0edf80b7` — 7717 insertions across 84 files) are unreviewed, and **most of
 what follows is in them**: the photo subcollection migration, the
 `ClientNamePolicy` reversal, the Wave scheduler consolidation, and the
 dashboard's new-clients rewrite.
@@ -638,7 +638,7 @@ it would break the guard-order mocks.
   repo with no ceiling"** — no longer true; see I2.
 - **Q6 — one orphaned l10n key: `dashboard_newClientsTotal`
   (`lib/l10n/app_en.arb:2225`).** Zero references in `lib/`; orphaned by
-  `bf316828`, which rewrote the new-clients caption. Flagged for a deliberate
+  `0edf80b7`, which rewrote the new-clients caption. Flagged for a deliberate
   l10n pass rather than deleted, per the audit rules. This is the **only**
   orphaned key — EN/FR parity is otherwise exact.
 - **Q7 — two stale docs.**

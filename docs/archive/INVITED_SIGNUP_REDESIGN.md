@@ -16,7 +16,7 @@
 
 ## 1. Problem
 
-Commit `612a1cc` hardened `resolveMyInvite` (`functions/account.js`) to return
+Commit `db2b498` hardened `resolveMyInvite` (`functions/account.js`) to return
 `{found:false}` for any caller whose token isn't `email_verified`, closing an
 invite-metadata leak. But `createEmployeeAccount`
 (`lib/features/auth/services/auth_service.dart`) calls

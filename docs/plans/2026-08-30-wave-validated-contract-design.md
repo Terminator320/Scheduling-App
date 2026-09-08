@@ -1,6 +1,6 @@
 # Wave sync: the validated contract
 
-**State: PHASE 1 BUILT AND DEPLOYED 2026-08-30 (`485c88cb`, report-only);
+**State: PHASE 1 BUILT AND DEPLOYED 2026-08-30 (`fe9edc51`, report-only);
 Phases 2-4 not started and deliberately unwritten.** Owner-approved through
 three review sections. Phase 1 is `functions/wave/customer_contract.js`,
 recording `wave.problems` without changing what enqueues; the next phase waits
